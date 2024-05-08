@@ -1,0 +1,10 @@
+fastapi
+fastapi-utils
+hjson
+opencv-contrib-python==4.5.5.64
+pydantic~=1.10.15
+uvicorn[standard]
+websocket
+websockets
+wxasync
+wxpython

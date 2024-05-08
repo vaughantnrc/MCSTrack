@@ -1,0 +1,7 @@
+{
+  "serial_identifier": "example_detector",
+  "camera_connection": {
+    "usb_id": 1
+  },
+  "camera_intrinsic_parameters": {}
+}
