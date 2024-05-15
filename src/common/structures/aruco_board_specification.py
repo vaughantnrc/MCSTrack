@@ -1,48 +1,28 @@
-from typing import Any, Dict, List
 from pydantic import BaseModel, validator
 from .vec3 import Vec3
 import json, hjson
 
 class BoardMarker(BaseModel):
     marker_id: int
-    points: List[Vec3]
+    points: list[Vec3]
 
-    @validator('points', pre=True, each_item=True)
-    def validate_points(cls, value):
-        if isinstance(value, dict):
-            return Vec3(**value)
-        if isinstance(value, Vec3):
-            return value
-        raise ValueError("Invalid type for point")
-
-    def as_dict(self) -> Dict[str, Any]:
-        return {
-            "marker_id": self.marker_id,
-            "points": [point.as_dict() for point in self.points]
-        }
+    @validator
+    def check_points_length(cls, values):
+        points = values.get('points')
+        if points is not None and len(points) != 4:
+            raise ValueError("The list of points must have exactly four elements")
+        return values
 
 
-class ArucoBoardSpecification(BaseModel):
-    board_markers: List[BoardMarker]
+class Board(BaseModel):
+    board_markers: list[BoardMarker]
 
-    @validator('board_markers', pre=True, each_item=True)
-    def validate_board_markers(cls, value):
-        if isinstance(value, dict):
-            return BoardMarker(**value)
-        if isinstance(value, BoardMarker):
-            return value
-        raise ValueError("Invalid type for board marker")
-
-    def as_dict(self) -> Dict[str, Any]:
-        return {"board_markers": [board_marker.as_dict() for board_marker in self.board_markers]}
-
-
-def read_file(input_filepath: str) -> ArucoBoardSpecification:
+def read_file(input_filepath: str) -> Board:
     with open(input_filepath, 'r') as file:
         data = hjson.load(file)
-    return ArucoBoardSpecification(**data)
+    return Board(**data)
 
 
-def write_file(output_filepath: str, output_board: ArucoBoardSpecification) -> None:
+def write_file(output_filepath: str, output_board: Board) -> None:
     with open(output_filepath, 'w') as file:
         json.dump(output_board.as_dict(), file, indent=4)
