@@ -1,12 +1,11 @@
 from .base_panel import \
     BasePanel
-from .feedback import \
-    ImagePanel
 from .parameters import \
     ParameterSelector, \
     ParameterSpinboxFloat, \
     ParameterSpinboxInteger
 from .specialized import \
+    GraphicsRenderer, \
     TrackingTable, \
     TrackingTableRow
 from src.calibrator.api import \
@@ -29,6 +28,7 @@ from src.common.structures import \
     ImageResolution, \
     IntrinsicParameters, \
     MarkerSnapshot, \
+    Matrix4x4, \
     Pose
 from src.connector import \
     Connector
@@ -68,6 +68,8 @@ ACTIVE_PHASE_STARTING_LIST_INTRINSICS: Final[int] = 3  # This and next phase to 
 ACTIVE_PHASE_STARTING_GET_INTRINSICS: Final[int] = 4
 ACTIVE_PHASE_STARTING_FINAL: Final[int] = 5
 ACTIVE_PHASE_STOPPING: Final[int] = 6
+
+POSE_REPRESENTATIVE_MODEL: Final[str] = "coordinate_axes"
 
 
 # TODO: There is a lot of general logic that probably best be moved to the Connector class,
@@ -261,10 +263,11 @@ class PoseSolverPanel(BasePanel):
             window=control_border_panel,
             flags=wx.SizerFlags(35).Expand())
 
-        self._image_panel = ImagePanel(parent=self)
-        self._image_panel.SetBackgroundColour(colour=wx.BLACK)
+        self._renderer = GraphicsRenderer(parent=self)
+        self._renderer.load_models_into_context_from_data_path()
+        self._renderer.add_scene_object("coordinate_axes", Matrix4x4())
         horizontal_split_sizer.Add(
-            window=self._image_panel,
+            window=self._renderer,
             flags=wx.SizerFlags(65).Expand())
 
         self.SetSizerAndFit(sizer=horizontal_split_sizer)
@@ -330,6 +333,10 @@ class PoseSolverPanel(BasePanel):
         if not self._is_solving:
             return
         self._tracked_target_poses.clear()
+        self._renderer.clear_scene_objects()
+        self._renderer.add_scene_object(  # Reference
+            model_key=POSE_REPRESENTATIVE_MODEL,
+            transform_to_world=Matrix4x4())
         table_rows: list[TrackingTableRow] = list()
         for pose in response.target_poses:
             label: str = str()
@@ -343,6 +350,9 @@ class PoseSolverPanel(BasePanel):
                 z=pose.object_to_reference_matrix[2, 3])
             table_rows.append(table_row)
             self._tracked_target_poses.append(pose)
+            self._renderer.add_scene_object(
+                model_key=POSE_REPRESENTATIVE_MODEL,
+                transform_to_world=pose.object_to_reference_matrix)
         for pose in response.detector_poses:
             table_row: TrackingTableRow = TrackingTableRow(
                 target_id=pose.target_id,
@@ -352,6 +362,9 @@ class PoseSolverPanel(BasePanel):
                 z=pose.object_to_reference_matrix[2, 3])
             table_rows.append(table_row)
             self._tracked_target_poses.append(pose)
+            self._renderer.add_scene_object(
+                model_key=POSE_REPRESENTATIVE_MODEL,
+                transform_to_world=pose.object_to_reference_matrix)
         self._tracking_table.update_contents(row_contents=table_rows)
         if len(table_rows) > 0:
             self._tracking_table.Enable(True)
@@ -629,6 +642,8 @@ class PoseSolverPanel(BasePanel):
 
     def update_loop(self) -> None:
         super().update_loop()
+
+        self._renderer.render()
 
         self._is_updating = True
 
