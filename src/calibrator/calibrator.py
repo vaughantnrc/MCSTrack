@@ -89,6 +89,21 @@ class Calibrator(MCastComponent):
             self.add_status_message(severity="critical", message=message)
             raise RuntimeError(message)
 
+    def supported_request_types(self) -> dict[type[MCastRequest], Callable[[dict], MCastResponse]]:
+        return_value: dict[type[MCastRequest], Callable[[dict], MCastResponse]] = super().supported_request_types()
+        return_value.update({
+            AddCalibrationImageRequest: self.add_calibration_image,
+            CalibrateRequest: self.calibrate,
+            DeleteStagedRequest: self.delete_staged,
+            GetCalibrationImageRequest: self.get_calibration_image,
+            GetCalibrationResultRequest: self.get_calibration_result,
+            ListCalibrationDetectorResolutionsRequest: self.list_calibration_detector_resolutions,
+            ListCalibrationImageMetadataRequest: self.list_calibration_image_metadata_list,
+            ListCalibrationResultMetadataRequest: self.list_calibration_result_metadata_list,
+            UpdateCalibrationImageMetadataRequest: self.update_calibration_image_metadata,
+            UpdateCalibrationResultMetadataRequest: self.update_calibration_result_metadata})
+        return return_value
+
     def add_calibration_image(self, **kwargs) -> AddCalibrationImageResponse | ErrorResponse:
         request: AddCalibrationImageRequest = get_kwarg(
             kwargs=kwargs,
