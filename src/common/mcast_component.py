@@ -97,6 +97,7 @@ class MCastComponent(abc.ABC):
                 message=message)
             raise ParsingError(message) from None
 
+        print(parsable_dict)
         for supported_type in supported_types:
             if parsable_dict["parsable_type"] == supported_type.parsable_type_identifier():
                 request: ParsableDynamicSingle
