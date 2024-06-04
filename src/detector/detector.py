@@ -150,47 +150,17 @@ class Detector(MCastComponent):
             StopCaptureRequest: self.stop_capture,
 
             # Calibrator Requests
-            AddCalibrationImageRequest: self.add_calibration_image,
-            CalibrateRequest: self.calibrate,
-            DeleteStagedRequest: self.delete_staged,
-            GetCalibrationImageRequest: self.get_calibration_image,
-            GetCalibrationResultRequest: self.get_calibration_result,
-            ListCalibrationDetectorResolutionsRequest: self.list_calibration_detector_resolutions,
-            ListCalibrationImageMetadataRequest: self.list_calibration_image_metadata_list,
-            ListCalibrationResultMetadataRequest: self.list_calibration_result_metadata_list,
-            UpdateCalibrationImageMetadataRequest: self.update_calibration_image_metadata,
-            UpdateCalibrationResultMetadataRequest: self.update_calibration_result_metadata})
+            AddCalibrationImageRequest: self._calibrator.add_calibration_image,
+            CalibrateRequest: self._calibrator.calibrate,
+            DeleteStagedRequest: self._calibrator.delete_staged,
+            GetCalibrationImageRequest: self._calibrator.get_calibration_image,
+            GetCalibrationResultRequest: self._calibrator.get_calibration_result,
+            ListCalibrationDetectorResolutionsRequest: self._calibrator.list_calibration_detector_resolutions,
+            ListCalibrationImageMetadataRequest: self._calibrator.list_calibration_image_metadata_list,
+            ListCalibrationResultMetadataRequest: self._calibrator.list_calibration_result_metadata_list,
+            UpdateCalibrationImageMetadataRequest: self._calibrator.update_calibration_image_metadata,
+            UpdateCalibrationResultMetadataRequest: self._calibrator.update_calibration_result_metadata})
         return return_value
-
-    def add_calibration_image(self, **kwargs) -> AddCalibrationImageResponse | ErrorResponse:
-        return self._calibrator.add_calibration_image(**kwargs)
-
-    def calibrate(self, **kwargs) -> CalibrateResponse | ErrorResponse:
-        return self._calibrator.calibrate(**kwargs)
-
-    def delete_staged(self, **kwargs) -> EmptyResponse:
-        return self._calibrator.delete_staged(**kwargs)
-
-    def get_calibration_image(self, **kwargs) -> GetCalibrationImageResponse | ErrorResponse:
-        return self._calibrator.get_calibration_image(**kwargs)
-
-    def get_calibration_result(self, **kwargs) -> GetCalibrationResultResponse | ErrorResponse:
-        return self._calibrator.get_calibration_result(**kwargs)
-
-    def list_calibration_detector_resolutions(self, **kwargs) -> ListCalibrationDetectorResolutionsResponse:
-        return self._calibrator.list_calibration_detector_resolutions(**kwargs)
-
-    def list_calibration_image_metadata_list(self, **kwargs) -> ListCalibrationImageMetadataResponse:
-        return self._calibrator.list_calibration_image_metadata_list(**kwargs)
-
-    def list_calibration_result_metadata_list(self, **kwargs) -> ListCalibrationResultMetadataResponse:
-        return self._calibrator.list_calibration_result_metadata_list(**kwargs)
-
-    def update_calibration_image_metadata(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        return self._calibrator.update_calibration_image_metadata(**kwargs)
-
-    def update_calibration_result_metadata(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        return self._calibrator.update_calibration_result_metadata(**kwargs)
 
     def set_capture_device(self, **kwargs) -> EmptyResponse | ErrorResponse:
         """
