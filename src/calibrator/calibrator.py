@@ -58,7 +58,7 @@ import uuid
 logger = logging.getLogger(__name__)
 
 
-class Calibrator(MCastComponent):
+class Calibrator:
 
     _configuration: CalibratorConfiguration
     _calibration_map: dict[DetectorResolution, CalibrationMapValue]
