@@ -151,6 +151,7 @@ class CalibratorPanel(BasePanel):
             sizer=control_sizer)
 
         self._image_table = CalibrationImageTable(parent=control_panel)
+        self._image_table.SetMaxSize((-1, self._image_table.GetSize().GetHeight()))
         control_sizer.Add(
             window=self._image_table,
             flags=wx.SizerFlags(0).Expand())
@@ -663,3 +664,7 @@ class CalibratorPanel(BasePanel):
                     self._result_state_selector.Enable(True)
                     self._result_state_selector.selector.SetStringSelection(result_metadata.state.name)
                     self._result_update_button.Enable(True)
+        self.Layout()
+        self.Refresh()
+        self.Update()
+
