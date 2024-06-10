@@ -31,6 +31,8 @@ from typing import Callable, Final, Optional, TypeVar
 from pydantic import BaseModel, Field
 import uuid
 
+EPSILON: Final[float] = 0.0001
+
 KeyType = TypeVar("KeyType")
 ValueType = TypeVar("ValueType")
 
@@ -628,14 +630,14 @@ class PoseSolver:
         point_bottom_right = numpy.array(object_points[2])
         point_bottom_left = numpy.array(object_points[3])
         marker_side = numpy.linalg.norm(point_top_right - point_top_left)
-        if marker_side <= PoseSolverParameters.EPSILON:
+        if marker_side <= EPSILON:
             raise RuntimeError("Input marker points must define a square of side length larger than zero.")
         marker_diag = numpy.sqrt(numpy.square(marker_side) * 2)
-        if abs(numpy.linalg.norm(point_bottom_right - point_top_right) - marker_side) > self._parameters.EPSILON or \
-           abs(numpy.linalg.norm(point_bottom_left - point_bottom_right) - marker_side) > self._parameters.EPSILON or \
-           abs(numpy.linalg.norm(point_top_left - point_bottom_left) - marker_side) > self._parameters.EPSILON or \
-           abs(numpy.linalg.norm(point_top_left - point_bottom_right) - marker_diag) > self._parameters.EPSILON or \
-           abs(numpy.linalg.norm(point_top_right - point_bottom_left) - marker_diag) > self._parameters.EPSILON:
+        if abs(numpy.linalg.norm(point_bottom_right - point_top_right) - marker_side) > EPSILON or \
+           abs(numpy.linalg.norm(point_bottom_left - point_bottom_right) - marker_side) > EPSILON or \
+           abs(numpy.linalg.norm(point_top_left - point_bottom_left) - marker_side) > EPSILON or \
+           abs(numpy.linalg.norm(point_top_left - point_bottom_right) - marker_diag) > EPSILON or \
+           abs(numpy.linalg.norm(point_top_right - point_bottom_left) - marker_diag) > EPSILON:
             raise RuntimeError("Input marker points do not form a square.")
 
         # Calculate the rotation that creates the beta version of the pose
@@ -1141,3 +1143,4 @@ class PoseSolver:
             self._target_extrapolation_poses_by_target_id[target_id].append(pose)
 
             self._poses_by_target_id[target_id] = pose
+

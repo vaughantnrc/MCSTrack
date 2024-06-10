@@ -35,4 +35,3 @@ class PoseSolverParameters(BaseModel):
     # SOLVEPNP_P3P appears to return nan's on rare occasion
     # SOLVEPNP_SQPNP appears to return nan's on rare occasion
     # SOLVEPNP_IPPE_SQUARE does not seem to work very well at all, translation is much smaller than expected
-    EPSILON: float = Field(0.0001)
