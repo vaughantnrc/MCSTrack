@@ -449,7 +449,7 @@ class PoseSolverPanel(BasePanel):
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="ACTIVE_PHASE_STARTING_CAPTURE complete")
-            calibrator_labels: list[str] = self._connector.get_connected_calibrator_labels()
+            calibrator_labels: list[str] = self._connector.get_connected_detector_labels()
             request_series: MCastRequestSeries = MCastRequestSeries(
                 series=[ListCalibrationDetectorResolutionsRequest()])
             self._active_request_ids.append(self._connector.request_series_push(
@@ -482,7 +482,7 @@ class PoseSolverPanel(BasePanel):
                         severity="error",
                         message=f"No calibration available for detector {detector_label} "
                                 f"at resolution {str(image_resolution)}. No intrinsics will be set.")
-            calibrator_labels: list[str] = self._connector.get_connected_calibrator_labels()
+            calibrator_labels: list[str] = self._connector.get_connected_detector_labels()
             request_series: MCastRequestSeries = MCastRequestSeries(series=requests)
             self._active_request_ids.append(self._connector.request_series_push(
                 connection_label=calibrator_labels[0],
@@ -495,7 +495,7 @@ class PoseSolverPanel(BasePanel):
             requests: list[MCastRequest] = list()
             for detector_label, result_identifier in self._detector_calibration_labels.items():
                 requests.append(GetCalibrationResultRequest(result_identifier=result_identifier))
-            calibrator_labels: list[str] = self._connector.get_connected_calibrator_labels()
+            calibrator_labels: list[str] = self._connector.get_connected_detector_labels()
             request_series: MCastRequestSeries = MCastRequestSeries(series=requests)
             self._active_request_ids.append(self._connector.request_series_push(
                 connection_label=calibrator_labels[0],
@@ -583,7 +583,7 @@ class PoseSolverPanel(BasePanel):
         self._update_controls()
 
     def on_tracking_start_pressed(self, _event: wx.CommandEvent) -> None:
-        calibrator_labels: list[str] = self._connector.get_connected_calibrator_labels()
+        calibrator_labels: list[str] = self._connector.get_connected_detector_labels()
         if len(calibrator_labels) > 1:
             self.status_message_source.enqueue_status_message(
                 severity="warning",
@@ -734,3 +734,4 @@ class PoseSolverPanel(BasePanel):
                     self._tracking_table.set_selected_row_index(None)
                 else:
                     self._tracking_display_textbox.Enable(True)
+
