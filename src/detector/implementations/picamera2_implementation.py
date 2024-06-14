@@ -1,10 +1,8 @@
 from src.detector.api import \
     GetCaptureDeviceResponse, \
-    GetCaptureImageRequest, \
-    GetCaptureImageResponse, \
     GetCapturePropertiesResponse, \
-    SetCaptureDeviceRequest, \
     SetCapturePropertiesRequest
+from src.detector.exceptions import UpdateCaptureError
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -20,7 +18,6 @@ from picamera2.controls import Controls
 import datetime
 import logging
 import numpy
-from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +60,14 @@ class PiCamera(AbstractCameraInterface):
         if self._captured_image is not None:
             self._captured_image = numpy.empty()
 
-    def internal_update_capture(self) -> tuple[str,str] | None:
+    def internal_update_capture(self) -> None:
         self._captured_image = self._camera.capture_array()
 
         if self._captured_image is None:
             message: str = "Failed to grab frame."
             self._status.capture_errors.append(message)
             self._capture_status.status = CaptureStatus.Status.FAILURE
-            return ("error", message)
+            raise UpdateCaptureError(severity="error", message=message)
 
         self._captured_timestamp_utc = datetime.datetime.utcnow()
 

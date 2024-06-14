@@ -2,9 +2,8 @@ import abc
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
-    MCastResponse, \
     get_kwarg, \
-    MCastComponent
+    MCastResponse
 from src.detector.api import \
     GetCaptureDeviceResponse, \
     GetCapturePropertiesResponse, \
@@ -25,7 +24,7 @@ class AbstractCameraInterface(abc.ABC):
     def __del__(self):
         pass
 
-    def internal_update_capture(self) -> tuple[str,str] | None:
+    def internal_update_capture(self) -> None:
         pass
 
     def set_capture_device(self, **kwargs) -> EmptyResponse | ErrorResponse:

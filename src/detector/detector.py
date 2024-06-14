@@ -14,6 +14,7 @@ from src.detector.api import \
     SetDetectionParametersRequest, \
     StartCaptureRequest, \
     StopCaptureRequest
+from src.detector.exceptions import UpdateCaptureError
 from src.detector.fileio import DetectorConfiguration
 from src.calibrator import Calibrator
 from src.calibrator.fileio import CalibratorConfiguration
@@ -31,27 +32,13 @@ from src.calibrator.api import \
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
-    get_kwarg, \
     MCastComponent, \
     MCastRequest, \
     MCastResponse
-from src.common.structures import \
-    CornerRefinementMethod, \
-    CORNER_REFINEMENT_METHOD_DICTIONARY_INT_TO_TEXT, \
-    CORNER_REFINEMENT_METHOD_DICTIONARY_TEXT_TO_INT, \
-    DetectionParameters, \
-    MarkerSnapshot, \
-    MarkerCornerImagePoint
 from src.common.structures.capture_status import CaptureStatus
 from src.common.structures.marker_status import MarkerStatus
-
-import base64
-import cv2.aruco
-import datetime
 import logging
-import numpy
-import os
-from typing import Any, Callable
+from typing import Callable
 
 from src.detector.implementations import \
     AbstractMarkerInterface, \
@@ -131,9 +118,12 @@ class Detector(MCastComponent):
     
     # Camera
     def internal_update_capture(self):
-        (severity, msg) = self._camera_interface.internal_update_capture()
-        if msg:
-            self.add_status_message(severity, msg)
+        try:
+            self._camera_interface.internal_update_capture()
+        except UpdateCaptureError as e:
+            self.add_status_message(
+                severity=e.severity,
+                message=e.message)
 
     def set_capture_device(self, **kwargs) -> EmptyResponse | ErrorResponse:
         return self._camera_interface.set_capture_device(**kwargs)
