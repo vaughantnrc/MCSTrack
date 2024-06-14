@@ -51,6 +51,7 @@ from src.pose_solver.api import \
     StopPoseSolverRequest
 import datetime
 import logging
+import platform
 from typing import Final, Optional
 import uuid
 import wx
@@ -103,6 +104,7 @@ class PoseSolverPanel(BasePanel):
     _tracking_start_button: wx.Button
     _tracking_stop_button: wx.Button
     _tracking_table: TrackingTable
+    _renderer: GraphicsRenderer | None
 
     _is_solving: bool
     _is_updating: bool
@@ -263,12 +265,16 @@ class PoseSolverPanel(BasePanel):
             window=control_border_panel,
             flags=wx.SizerFlags(35).Expand())
 
-        self._renderer = GraphicsRenderer(parent=self)
-        self._renderer.load_models_into_context_from_data_path()
-        self._renderer.add_scene_object("coordinate_axes", Matrix4x4())
-        horizontal_split_sizer.Add(
-            window=self._renderer,
-            flags=wx.SizerFlags(65).Expand())
+        if platform.system() == "Linux":
+            logger.warning("OpenGL context creation does not currently work well in Linux. Rendering is disabled.")
+            self._renderer = None
+        else:
+            self._renderer = GraphicsRenderer(parent=self)
+            horizontal_split_sizer.Add(
+                window=self._renderer,
+                flags=wx.SizerFlags(65).Expand())
+            self._renderer.load_models_into_context_from_data_path()
+            self._renderer.add_scene_object("coordinate_axes", Matrix4x4())
 
         self.SetSizerAndFit(sizer=horizontal_split_sizer)
 
@@ -333,10 +339,11 @@ class PoseSolverPanel(BasePanel):
         if not self._is_solving:
             return
         self._tracked_target_poses.clear()
-        self._renderer.clear_scene_objects()
-        self._renderer.add_scene_object(  # Reference
-            model_key=POSE_REPRESENTATIVE_MODEL,
-            transform_to_world=Matrix4x4())
+        if self._renderer is not None:
+            self._renderer.clear_scene_objects()
+            self._renderer.add_scene_object(  # Reference
+                model_key=POSE_REPRESENTATIVE_MODEL,
+                transform_to_world=Matrix4x4())
         table_rows: list[TrackingTableRow] = list()
         for pose in response.target_poses:
             label: str = str()
@@ -350,9 +357,10 @@ class PoseSolverPanel(BasePanel):
                 z=pose.object_to_reference_matrix[2, 3])
             table_rows.append(table_row)
             self._tracked_target_poses.append(pose)
-            self._renderer.add_scene_object(
-                model_key=POSE_REPRESENTATIVE_MODEL,
-                transform_to_world=pose.object_to_reference_matrix)
+            if self._renderer is not None:
+                self._renderer.add_scene_object(
+                    model_key=POSE_REPRESENTATIVE_MODEL,
+                    transform_to_world=pose.object_to_reference_matrix)
         for pose in response.detector_poses:
             table_row: TrackingTableRow = TrackingTableRow(
                 target_id=pose.target_id,
@@ -362,9 +370,10 @@ class PoseSolverPanel(BasePanel):
                 z=pose.object_to_reference_matrix[2, 3])
             table_rows.append(table_row)
             self._tracked_target_poses.append(pose)
-            self._renderer.add_scene_object(
-                model_key=POSE_REPRESENTATIVE_MODEL,
-                transform_to_world=pose.object_to_reference_matrix)
+            if self._renderer is not None:
+                self._renderer.add_scene_object(
+                    model_key=POSE_REPRESENTATIVE_MODEL,
+                    transform_to_world=pose.object_to_reference_matrix)
         self._tracking_table.update_contents(row_contents=table_rows)
         if len(table_rows) > 0:
             self._tracking_table.Enable(True)
@@ -643,7 +652,8 @@ class PoseSolverPanel(BasePanel):
     def update_loop(self) -> None:
         super().update_loop()
 
-        self._renderer.render()
+        if self._renderer is not None:
+            self._renderer.render()
 
         self._is_updating = True
 
