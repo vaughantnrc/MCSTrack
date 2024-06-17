@@ -1,10 +1,9 @@
 from src.detector.api import \
     GetCaptureDeviceResponse, \
-    GetCaptureImageRequest, \
-    GetCaptureImageResponse, \
     GetCapturePropertiesResponse, \
     SetCaptureDeviceRequest, \
     SetCapturePropertiesRequest
+from src.detector.exceptions import UpdateCaptureError
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -14,13 +13,11 @@ from src.common.structures.capture_status import CaptureStatus
 
 from src.detector.implementations import AbstractCameraInterface
 
-import base64
 import cv2
 import datetime
 import logging
 import numpy
 import os
-from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +57,7 @@ class USBWebcamWithOpenCV(AbstractCameraInterface):
             message: str = "Failed to grab frame."
             self._status.capture_errors.append(message)
             self._capture_status.status = CaptureStatus.Status.FAILURE
-            return ("error", message)
+            raise UpdateCaptureError(severity="error", message=message)
 
         retrieved_frame: bool
         retrieved_frame, self._captured_image = self._capture.retrieve()
@@ -69,7 +66,7 @@ class USBWebcamWithOpenCV(AbstractCameraInterface):
             logger.error(message)
             self._status.capture_errors.append(message)
             self._capture_status.status = CaptureStatus.Status.FAILURE
-            return ("error", message)
+            raise UpdateCaptureError(severity="error", message=message)
 
         self._captured_timestamp_utc = datetime.datetime.utcnow()
 
