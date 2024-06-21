@@ -47,7 +47,7 @@ from typing import Callable, Final, TypeVar
 import uuid
 
 logger = logging.getLogger(__name__)
-LiveConnectionType = TypeVar('LiveConnectionType', bound=Connection)
+ConnectionType = TypeVar('ConnectionType', bound=Connection)
 
 
 class Connector(MCastComponent):
@@ -113,7 +113,7 @@ class Connector(MCastComponent):
             raise ValueError(f"Unrecognized component role {component_address.role}.")
 
     def _advance_startup_state(self) -> None:
-        if self._startup_state == Connector.StartupState.STARTING_CAPTURE:
+        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.STARTING_CAPTURE:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="STARTING_CAPTURE complete")
@@ -127,25 +127,25 @@ class Connector(MCastComponent):
                     connection_label=detector_label,
                     request_series=request_series))
             self._startup_state = Connector.StartupState.GET_RESOLUTIONS
-        elif self._startup_state == Connector.StartupState.GET_RESOLUTIONS:
+        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.GET_RESOLUTIONS:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="GET_RESOLUTIONS complete")
             for detector_label in self.get_connected_detector_labels():
-                live_detector_connection: DetectorConnection = self.get_live_connection(
+                detector_connection: DetectorConnection = self.get_connection(
                     connection_label=detector_label,
                     connection_type=DetectorConnection)
-                if live_detector_connection is None:
+                if detector_connection is None:
                     self.status_message_source.enqueue_status_message(
                         severity="error",
-                        message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                        message=f"Failed to find DetectorConnection with label {detector_label}.")
                     continue
                 requests: list[MCastRequest] = list()
                 target_resolution: DetectorResolution = DetectorResolution(
                     detector_serial_identifier=detector_label,
-                    image_resolution=live_detector_connection.current_resolution)
+                    image_resolution=detector_connection.current_resolution)
                 found_target_resolution: bool = False
-                for detector_resolution in live_detector_connection.calibrated_resolutions:
+                for detector_resolution in detector_connection.calibrated_resolutions:
                     if detector_resolution == target_resolution:
                         requests.append(
                             ListCalibrationResultMetadataRequest(
@@ -156,35 +156,35 @@ class Connector(MCastComponent):
                     self.status_message_source.enqueue_status_message(
                         severity="error",
                         message=f"No calibration available for detector {detector_label} "
-                                f"at resolution {str(live_detector_connection.current_resolution)}. "
+                                f"at resolution {str(detector_connection.current_resolution)}. "
                                 "No intrinsics will be set.")
                 request_series: MCastRequestSeries = MCastRequestSeries(series=requests)
                 self._pending_request_ids.append(self.request_series_push(
                     connection_label=detector_label,
                     request_series=request_series))
             self._startup_state = Connector.StartupState.LIST_INTRINSICS
-        elif self._startup_state == Connector.StartupState.LIST_INTRINSICS:
+        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.LIST_INTRINSICS:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="LIST_INTRINSICS complete")
             for detector_label in self.get_connected_detector_labels():
-                live_detector_connection: DetectorConnection = self.get_live_connection(
+                detector_connection: DetectorConnection = self.get_connection(
                     connection_label=detector_label,
                     connection_type=DetectorConnection)
-                if live_detector_connection is None:
+                if detector_connection is None:
                     self.status_message_source.enqueue_status_message(
                         severity="error",
-                        message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                        message=f"Failed to find DetectorConnection with label {detector_label}.")
                     continue
                 request_series: MCastRequestSeries = MCastRequestSeries(
                     series=[
                         GetCalibrationResultRequest(
-                            result_identifier=live_detector_connection.calibration_result_identifier)])
+                            result_identifier=detector_connection.calibration_result_identifier)])
                 self._pending_request_ids.append(self.request_series_push(
                     connection_label=detector_label,
                     request_series=request_series))
             self._startup_state = Connector.StartupState.GET_INTRINSICS
-        elif self._startup_state == Connector.StartupState.GET_INTRINSICS:
+        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.GET_INTRINSICS:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="GET_INTRINSICS complete")
@@ -196,23 +196,23 @@ class Connector(MCastComponent):
                 for pose_solver_label in pose_solver_labels:
                     requests: list[MCastRequest] = list()
                     for detector_label in self.get_connected_detector_labels():
-                        live_detector_connection: DetectorConnection = self.get_live_connection(
+                        detector_connection: DetectorConnection = self.get_connection(
                             connection_label=detector_label,
                             connection_type=DetectorConnection)
-                        if live_detector_connection is None:
+                        if detector_connection is None:
                             self.status_message_source.enqueue_status_message(
                                 severity="error",
-                                message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                                message=f"Failed to find DetectorConnection with label {detector_label}.")
                             continue
                         requests.append(SetIntrinsicParametersRequest(
                             detector_label=detector_label,
-                            intrinsic_parameters=live_detector_connection.current_intrinsic_parameters))
+                            intrinsic_parameters=detector_connection.current_intrinsic_parameters))
                     request_series: MCastRequestSeries = MCastRequestSeries(series=requests)
                     self._pending_request_ids.append(self.request_series_push(
                         connection_label=pose_solver_label,
                         request_series=request_series))
                 self._startup_state = Connector.StartupState.SET_INTRINSICS
-        elif self._startup_state == Connector.StartupState.SET_INTRINSICS:
+        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.SET_INTRINSICS:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="SET_INTRINSICS complete")
@@ -241,14 +241,14 @@ class Connector(MCastComponent):
                 return_value.append(connection_label)
         return return_value
 
-    def get_live_connection(
+    def get_connection(
         self,
         connection_label: str,
-        connection_type: type[LiveConnectionType]
-    ) -> LiveConnectionType | None:
+        connection_type: type[ConnectionType]
+    ) -> ConnectionType | None:
         if connection_label not in self._connections:
             return None
-        connection: LiveConnectionType = self._connections[connection_label]
+        connection: ConnectionType = self._connections[connection_label]
         if not isinstance(connection, connection_type):
             return None
         return connection
@@ -260,12 +260,12 @@ class Connector(MCastComponent):
         """
         returns None if the detector does not exist, or if it has not been started.
         """
-        live_detector_connection: DetectorConnection = self.get_live_connection(
+        detector_connection: DetectorConnection = self.get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
-        if live_detector_connection is None:
+        if detector_connection is None:
             return None
-        return live_detector_connection.current_intrinsic_parameters
+        return detector_connection.current_intrinsic_parameters
 
     def get_live_detector_frame(
         self,
@@ -274,15 +274,15 @@ class Connector(MCastComponent):
         """
         returns None if the detector does not exist, or has not been started, or if it has not yet gotten frames.
         """
-        live_detector_connection: DetectorConnection = self.get_live_connection(
+        detector_connection: DetectorConnection = self.get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
-        if live_detector_connection is None:
+        if detector_connection is None:
             return None
         return DetectorFrame(
-            detected_marker_snapshots=live_detector_connection.detected_marker_snapshots,
-            rejected_marker_snapshots=live_detector_connection.rejected_marker_snapshots,
-            timestamp_utc_iso8601=live_detector_connection.marker_snapshot_timestamp.isoformat())
+            detected_marker_snapshots=detector_connection.detected_marker_snapshots,
+            rejected_marker_snapshots=detector_connection.rejected_marker_snapshots,
+            timestamp_utc_iso8601=detector_connection.marker_snapshot_timestamp.isoformat())
 
     def get_live_pose_solver_frame(
         self,
@@ -291,15 +291,15 @@ class Connector(MCastComponent):
         """
         returns None if the pose solver does not exist, or has not been started, or if it has not yet gotten frames.
         """
-        live_pose_solver_connection: PoseSolverConnection = self.get_live_connection(
+        pose_solver_connection: PoseSolverConnection = self.get_connection(
             connection_label=pose_solver_label,
             connection_type=PoseSolverConnection)
-        if live_pose_solver_connection is None:
+        if pose_solver_connection is None:
             return None
         return PoseSolverFrame(
-            detector_poses=live_pose_solver_connection.detector_poses,
-            target_poses=live_pose_solver_connection.target_poses,
-            timestamp_utc_iso8601=live_pose_solver_connection.poses_timestamp.isoformat())
+            detector_poses=pose_solver_connection.detector_poses,
+            target_poses=pose_solver_connection.target_poses,
+            timestamp_utc_iso8601=pose_solver_connection.poses_timestamp.isoformat())
 
     def handle_error_response(
         self,
@@ -314,15 +314,15 @@ class Connector(MCastComponent):
         response: GetCapturePropertiesResponse,
         detector_label: str
     ) -> None:
-        live_detector_connection: DetectorConnection = self.get_live_connection(
+        detector_connection: DetectorConnection = self.get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
-        if live_detector_connection is None:
+        if detector_connection is None:
             self.status_message_source.enqueue_status_message(
                 severity="error",
-                message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
-        live_detector_connection.current_resolution = ImageResolution(
+        detector_connection.current_resolution = ImageResolution(
             x_px=response.resolution_x_px,
             y_px=response.resolution_y_px)
 
@@ -331,32 +331,32 @@ class Connector(MCastComponent):
         response: GetCalibrationResultResponse
     ) -> None:
         detector_label: str = response.intrinsic_calibration.detector_serial_identifier
-        live_detector_connection: DetectorConnection = self.get_live_connection(
+        detector_connection: DetectorConnection = self.get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
-        if live_detector_connection is None:
+        if detector_connection is None:
             self.status_message_source.enqueue_status_message(
                 severity="error",
-                message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
-        live_detector_connection.current_intrinsic_parameters = response.intrinsic_calibration.calibrated_values
+        detector_connection.current_intrinsic_parameters = response.intrinsic_calibration.calibrated_values
 
     def handle_response_get_marker_snapshots(
         self,
         response: GetMarkerSnapshotsResponse,
         detector_label: str
     ):
-        live_detector_connection: DetectorConnection = self.get_live_connection(
+        detector_connection: DetectorConnection = self.get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
-        if live_detector_connection is None:
+        if detector_connection is None:
             self.status_message_source.enqueue_status_message(
                 severity="error",
-                message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
-        live_detector_connection.detected_marker_snapshots = response.detected_marker_snapshots
-        live_detector_connection.rejected_marker_snapshots = response.rejected_marker_snapshots
-        live_detector_connection.marker_snapshot_timestamp = \
+        detector_connection.detected_marker_snapshots = response.detected_marker_snapshots
+        detector_connection.rejected_marker_snapshots = response.rejected_marker_snapshots
+        detector_connection.marker_snapshot_timestamp = \
             datetime.datetime.utcnow()  # TODO: This should come from the detector
 
     def handle_response_get_poses(
@@ -364,17 +364,17 @@ class Connector(MCastComponent):
         response: GetPosesResponse,
         pose_solver_label: str
     ) -> None:
-        live_pose_solver_connection: PoseSolverConnection = self.get_live_connection(
+        pose_solver_connection: PoseSolverConnection = self.get_connection(
             connection_label=pose_solver_label,
             connection_type=PoseSolverConnection)
-        if live_pose_solver_connection is None:
+        if pose_solver_connection is None:
             self.status_message_source.enqueue_status_message(
                 severity="error",
-                message=f"Failed to find LivePoseSolverConnection with label {pose_solver_label}.")
+                message=f"Failed to find PoseSolverConnection with label {pose_solver_label}.")
             return
-        live_pose_solver_connection.detector_poses = response.detector_poses
-        live_pose_solver_connection.target_poses = response.target_poses
-        live_pose_solver_connection.poses_timestamp = \
+        pose_solver_connection.detector_poses = response.detector_poses
+        pose_solver_connection.target_poses = response.target_poses
+        pose_solver_connection.poses_timestamp = \
             datetime.datetime.utcnow()  # TODO: This should come from the pose solver
 
     def handle_response_list_calibration_detector_resolutions(
@@ -382,15 +382,15 @@ class Connector(MCastComponent):
         response: ListCalibrationDetectorResolutionsResponse,
         detector_label: str
     ) -> None:
-        live_detector_connection: DetectorConnection = self.get_live_connection(
+        detector_connection: DetectorConnection = self.get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
-        if live_detector_connection is None:
+        if detector_connection is None:
             self.status_message_source.enqueue_status_message(
                 severity="error",
-                message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
-        live_detector_connection.calibrated_resolutions = response.detector_resolutions
+        detector_connection.calibrated_resolutions = response.detector_resolutions
 
     def handle_response_list_calibration_result_metadata(
         self,
@@ -408,15 +408,15 @@ class Connector(MCastComponent):
             timestamp: datetime.datetime = datetime.datetime.fromisoformat(result_metadata.timestamp_utc)
             if timestamp > newest_timestamp:
                 newest_result_id = result_metadata.identifier
-        live_detector_connection: DetectorConnection = self.get_live_connection(
+        detector_connection: DetectorConnection = self.get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
-        if live_detector_connection is None:
+        if detector_connection is None:
             self.status_message_source.enqueue_status_message(
                 severity="error",
-                message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
-        live_detector_connection.calibration_result_identifier = newest_result_id
+        detector_connection.calibration_result_identifier = newest_result_id
 
     def handle_response_unknown(
         self,
@@ -575,7 +575,8 @@ class Connector(MCastComponent):
         for connection in connections:
             await connection.update()
 
-        if self._status == Connector.Status.STARTING:
+        if self._status == Connector.Status.STARTING and \
+           self._startup_state == Connector.StartupState.STARTING_CAPTURE:
             startup_finished: bool = True
             for connection in connections:
                 if self._startup_mode == Connector.StartupMode.DETECTING_ONLY and \
@@ -597,34 +598,34 @@ class Connector(MCastComponent):
 
         if self.is_running():
             for detector_label in self.get_connected_detector_labels():
-                live_detector_connection: DetectorConnection = self.get_live_connection(
+                detector_connection: DetectorConnection = self.get_connection(
                     connection_label=detector_label,
                     connection_type=DetectorConnection)
-                if live_detector_connection is None:
+                if detector_connection is None:
                     self.status_message_source.enqueue_status_message(
                         severity="error",
-                        message=f"Failed to find LiveDetectorConnection with label {detector_label}.")
+                        message=f"Failed to find DetectorConnection with label {detector_label}.")
                     continue
-                if live_detector_connection.request_id is not None:
-                    _, live_detector_connection.request_id = self.update_request(
-                        request_id=live_detector_connection.request_id)
-                if live_detector_connection.request_id is None:
-                    live_detector_connection.request_id = self.request_series_push(
+                if detector_connection.request_id is not None:
+                    _, detector_connection.request_id = self.update_request(
+                        request_id=detector_connection.request_id)
+                if detector_connection.request_id is None:
+                    detector_connection.request_id = self.request_series_push(
                         connection_label=detector_label,
                         request_series=MCastRequestSeries(series=[GetMarkerSnapshotsRequest()]))
             for pose_solver_label in self.get_connected_pose_solver_labels():
-                live_pose_solver_connection: PoseSolverConnection = self.get_live_connection(
+                pose_solver_connection: PoseSolverConnection = self.get_connection(
                     connection_label=pose_solver_label,
                     connection_type=PoseSolverConnection)
-                if live_pose_solver_connection is None:
+                if pose_solver_connection is None:
                     self.status_message_source.enqueue_status_message(
                         severity="error",
-                        message=f"Failed to find LivePoseSolverConnection with label {pose_solver_label}.")
+                        message=f"Failed to find PoseSolverConnection with label {pose_solver_label}.")
                     continue
-                if live_pose_solver_connection.request_id is not None:
-                    _, live_pose_solver_connection.request_id = self.update_request(
-                        request_id=live_pose_solver_connection.request_id)
-                if live_pose_solver_connection.request_id is None:
+                if pose_solver_connection.request_id is not None:
+                    _, pose_solver_connection.request_id = self.update_request(
+                        request_id=pose_solver_connection.request_id)
+                if pose_solver_connection.request_id is None:
                     solver_request_list: list[MCastRequest] = list()
                     detector_labels: list[str] = self.get_connected_detector_labels()
                     for detector_label in detector_labels:
@@ -632,15 +633,15 @@ class Connector(MCastComponent):
                             detector_label=detector_label)
                         current_detector_frame_timestamp: datetime.datetime = current_detector_frame.timestamp_utc()
                         current_is_new: bool = False
-                        if detector_label in live_pose_solver_connection.detector_timestamps:
+                        if detector_label in pose_solver_connection.detector_timestamps:
                             old_detector_frame_timestamp = \
-                                live_pose_solver_connection.detector_timestamps[detector_label]
+                                pose_solver_connection.detector_timestamps[detector_label]
                             if current_detector_frame_timestamp > old_detector_frame_timestamp:
                                 current_is_new = True
                         else:
                             current_is_new = True
                         if current_is_new:
-                            live_pose_solver_connection.detector_timestamps[detector_label] = \
+                            pose_solver_connection.detector_timestamps[detector_label] = \
                                 current_detector_frame_timestamp
                             marker_request: AddMarkerCornersRequest = AddMarkerCornersRequest(
                                 detected_marker_snapshots=current_detector_frame.detected_marker_snapshots,
@@ -650,7 +651,7 @@ class Connector(MCastComponent):
                             solver_request_list.append(marker_request)
                     solver_request_list.append(GetPosesRequest())
                     request_series: MCastRequestSeries = MCastRequestSeries(series=solver_request_list)
-                    live_pose_solver_connection.request_id = self.request_series_push(
+                    pose_solver_connection.request_id = self.request_series_push(
                         connection_label=pose_solver_label,
                         request_series=request_series)
 

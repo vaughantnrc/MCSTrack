@@ -30,7 +30,7 @@ class Connection(abc.ABC):
         # This is the normal progression cycle ending back in "Inactive"
         INACTIVE: Final[str] = "Inactive"
         CONNECTING: Final[str] = "Connecting"
-        INITIALIZING: Final[str] = "Registering"
+        INITIALIZING: Final[str] = "Initializing"
         RUNNING: Final[str] = "Running"
         RECONNECTING: Final[str] = "Reconnecting"  # Only if connection gets lost
         NORMAL_DEINITIALIZING: Final[str] = "Deinitializing"   # normal means not in a failure state
@@ -190,7 +190,7 @@ class Connection(abc.ABC):
         """
         Returns true if startup has completed successfully, or if it failed but finished cleanup.
         """
-        return self.is_active or self._state == Connection.State.FAILURE
+        return self.is_active() or self._state == Connection.State.FAILURE
 
     def is_active(self) -> bool:
         return self._state == Connection.State.RUNNING or self._state == Connection.State.RECONNECTING
@@ -241,6 +241,7 @@ class Connection(abc.ABC):
             response_series_as_str: str = await self._socket.recv()
             response_series_as_dict: dict = json.loads(response_series_as_str)
             response_series: MCastResponseSeries = _response_series_converter(response_series_as_dict)
+            response_series.responder = self._component_address.label
             self._response_series_queue[self._current_request_id] = response_series
             self._current_request_id = None
             # TODO: Migrate this outside the class
