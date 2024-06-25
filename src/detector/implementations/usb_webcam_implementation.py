@@ -1,7 +1,5 @@
 from src.detector.api import \
-    GetCaptureDeviceResponse, \
     GetCapturePropertiesResponse, \
-    SetCaptureDeviceRequest, \
     SetCapturePropertiesRequest
 from src.detector.exceptions import UpdateCaptureError
 from src.common import \
@@ -70,29 +68,6 @@ class USBWebcamWithOpenCV(AbstractCameraInterface):
 
         self._captured_timestamp_utc = datetime.datetime.utcnow()
 
-    def set_capture_device(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        """
-        :key request: SetCaptureDeviceRequest
-        """
-
-        request: SetCaptureDeviceRequest = get_kwarg(
-            kwargs=kwargs,
-            key="request",
-            arg_type=SetCaptureDeviceRequest)
-
-        input_device_id: int | str = request.capture_device_id
-        if input_device_id.isnumeric():
-            input_device_id = int(input_device_id)
-        if self._capture_device_id != input_device_id:
-            self._capture_device_id = input_device_id
-            if self._capture is not None:
-                self._capture.release()
-                self._capture = self._detect_os_and_open_video(input_device_id)
-                if not self._capture.isOpened():
-                    return ErrorResponse(
-                        message=f"Failed to open capture device {input_device_id}")
-        return EmptyResponse()
-
     # noinspection DuplicatedCode
     def set_capture_properties(self, **kwargs) -> EmptyResponse:
         """
@@ -124,9 +99,6 @@ class USBWebcamWithOpenCV(AbstractCameraInterface):
             if request.gamma is not None:
                 self._capture.set(cv2.CAP_PROP_GAMMA, float(request.gamma))
         return EmptyResponse()
-
-    def get_capture_device(self, **_kwargs) -> GetCaptureDeviceResponse:
-        return GetCaptureDeviceResponse(capture_device_id=str(self._capture_device_id))
 
     def get_capture_properties(self, **_kwargs) -> GetCapturePropertiesResponse | ErrorResponse:
         if self._capture is None:

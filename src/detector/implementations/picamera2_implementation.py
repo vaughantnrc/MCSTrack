@@ -1,5 +1,4 @@
 from src.detector.api import \
-    GetCaptureDeviceResponse, \
     GetCapturePropertiesResponse, \
     SetCapturePropertiesRequest
 from src.detector.exceptions import UpdateCaptureError
@@ -71,9 +70,6 @@ class PiCamera(AbstractCameraInterface):
 
         self._captured_timestamp_utc = datetime.datetime.utcnow()
 
-    def set_capture_device(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        return EmptyResponse()
-
     # noinspection DuplicatedCode
     def set_capture_properties(self, **kwargs) -> EmptyResponse:
         """
@@ -109,9 +105,6 @@ class PiCamera(AbstractCameraInterface):
             self._camera.set_controls(self._camera_controls)
             self._camera.start()
         return EmptyResponse()
-
-    def get_capture_device(self, **_kwargs) -> GetCaptureDeviceResponse:
-        return GetCaptureDeviceResponse(capture_device_id=str("N/A"))
 
     def get_capture_properties(self, **_kwargs) -> GetCapturePropertiesResponse | ErrorResponse:
         if self._captured_image is None:

@@ -1,6 +1,4 @@
 from src.detector.api import \
-    GetCaptureDeviceRequest, \
-    GetCaptureDeviceResponse, \
     GetCaptureImageRequest, \
     GetCaptureImageResponse, \
     GetCapturePropertiesRequest, \
@@ -9,7 +7,6 @@ from src.detector.api import \
     GetDetectionParametersResponse, \
     GetMarkerSnapshotsRequest, \
     GetMarkerSnapshotsResponse, \
-    SetCaptureDeviceRequest, \
     SetCapturePropertiesRequest, \
     SetDetectionParametersRequest, \
     StartCaptureRequest, \
@@ -92,12 +89,10 @@ class Detector(MCastComponent):
         return_value.update({
 
             # Detector Requests
-            GetCaptureDeviceRequest: self.get_capture_device,
             GetCaptureImageRequest: self.get_capture_image,
             GetCapturePropertiesRequest: self.get_capture_properties,
             GetDetectionParametersRequest: self.get_detection_parameters,
             GetMarkerSnapshotsRequest: self.get_marker_snapshots,
-            SetCaptureDeviceRequest: self.set_capture_device,
             SetCapturePropertiesRequest: self.set_capture_properties,
             SetDetectionParametersRequest: self.set_detection_parameters,
             StartCaptureRequest: self.start_capture,
@@ -125,14 +120,8 @@ class Detector(MCastComponent):
                 severity=e.severity,
                 message=e.message)
 
-    def set_capture_device(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        return self._camera_interface.set_capture_device(**kwargs)
-        
     def set_capture_properties(self, **kwargs) -> EmptyResponse:
         return self._camera_interface.set_capture_properties(**kwargs)
-
-    def get_capture_device(self, **_kwargs) -> GetCaptureDeviceResponse:
-        return self._camera_interface.get_capture_device(**_kwargs)
 
     def get_capture_properties(self, **_kwargs) -> GetCapturePropertiesResponse | ErrorResponse:
         return self._camera_interface.get_capture_properties(**_kwargs)

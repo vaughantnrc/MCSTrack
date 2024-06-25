@@ -15,6 +15,7 @@ from src.common import \
     MCastResponseSeries, \
     StatusMessageSource
 from src.common.structures import \
+    ComponentRoleLabel, \
     COMPONENT_ROLE_LABEL_DETECTOR, \
     COMPONENT_ROLE_LABEL_POSE_SOLVER, \
     DetectorFrame, \
@@ -43,7 +44,7 @@ from src.pose_solver.api import \
 import datetime
 from enum import IntEnum, StrEnum
 import logging
-from typing import Callable, Final, TypeVar
+from typing import Callable, Final, get_args, TypeVar
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -52,11 +53,11 @@ ConnectionType = TypeVar('ConnectionType', bound=Connection)
 
 class Connector(MCastComponent):
 
-    class Status(IntEnum):
-        STOPPED: Final[int] = 0
-        STARTING: Final[int] = 1
-        RUNNING: Final[int] = 2
-        STOPPING: Final[int] = 3
+    class Status(StrEnum):
+        STOPPED: Final[int] = "Idle"
+        STARTING: Final[int] = "Starting"
+        RUNNING: Final[int] = "Running"
+        STOPPING: Final[int] = "Stopping"
 
     class StartupMode(StrEnum):
         DETECTING_ONLY: Final[str] = "detecting_only"
@@ -117,7 +118,7 @@ class Connector(MCastComponent):
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="STARTING_CAPTURE complete")
-            detector_labels: list[str] = self.get_connected_detector_labels()
+            detector_labels: list[str] = self.get_active_detector_labels()
             for detector_label in detector_labels:
                 request_series: MCastRequestSeries = MCastRequestSeries(
                     series=[
@@ -131,8 +132,8 @@ class Connector(MCastComponent):
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="GET_RESOLUTIONS complete")
-            for detector_label in self.get_connected_detector_labels():
-                detector_connection: DetectorConnection = self.get_connection(
+            for detector_label in self.get_active_detector_labels():
+                detector_connection: DetectorConnection = self._get_connection(
                     connection_label=detector_label,
                     connection_type=DetectorConnection)
                 if detector_connection is None:
@@ -167,8 +168,8 @@ class Connector(MCastComponent):
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="LIST_INTRINSICS complete")
-            for detector_label in self.get_connected_detector_labels():
-                detector_connection: DetectorConnection = self.get_connection(
+            for detector_label in self.get_active_detector_labels():
+                detector_connection: DetectorConnection = self._get_connection(
                     connection_label=detector_label,
                     connection_type=DetectorConnection)
                 if detector_connection is None:
@@ -192,11 +193,11 @@ class Connector(MCastComponent):
                 self._startup_state = Connector.StartupState.INITIAL
                 self._status = Connector.Status.RUNNING  # We're done
             else:
-                pose_solver_labels: list[str] = self.get_connected_pose_solver_labels()
+                pose_solver_labels: list[str] = self.get_active_pose_solver_labels()
                 for pose_solver_label in pose_solver_labels:
                     requests: list[MCastRequest] = list()
-                    for detector_label in self.get_connected_detector_labels():
-                        detector_connection: DetectorConnection = self.get_connection(
+                    for detector_label in self.get_active_detector_labels():
+                        detector_connection: DetectorConnection = self._get_connection(
                             connection_label=detector_label,
                             connection_type=DetectorConnection)
                         if detector_connection is None:
@@ -222,26 +223,47 @@ class Connector(MCastComponent):
     def contains_connection_label(self, label: str) -> bool:
         return label in self._connections
 
+    def get_active_detector_labels(self) -> list[str]:
+        """
+        See get_component_labels.
+        """
+        return self.get_component_labels(role=COMPONENT_ROLE_LABEL_DETECTOR, active=True)
+
+    def get_active_pose_solver_labels(self) -> list[str]:
+        """
+        See get_component_labels.
+        """
+        return self.get_component_labels(role=COMPONENT_ROLE_LABEL_POSE_SOLVER, active=True)
+
+    def get_component_labels(
+        self,
+        role: str | None = None,
+        active: bool | None = None
+    ) -> list[str]:
+        """
+        Return the list of all labels corresponding to components of the given `role`, and given `active` state.
+        None provided to `role` or `active` is treated as a wildcard (i.e. not filtered on that criteria).
+        """
+        if role is not None:
+            valid_roles: list[str] = list(get_args(ComponentRoleLabel))
+            if role not in valid_roles:
+                raise ValueError(f"role must be among the valid values {str(valid_roles)}")
+        return_value: list[str] = list()
+        for connection_label, connection in self._connections.items():
+            if role is not None and connection.get_role() != role:
+                continue
+            if active is not None and connection.is_active() != active:
+                continue
+            return_value.append(connection_label)
+        return return_value
+
     def get_connection_reports(self) -> list[ConnectionReport]:
         return_value: list[ConnectionReport] = list()
         for connection in self._connections.values():
             return_value.append(connection.get_report())
         return return_value
 
-    def get_connected_detector_labels(self) -> list[str]:
-        return self.get_connected_role_labels(role=COMPONENT_ROLE_LABEL_DETECTOR)
-
-    def get_connected_pose_solver_labels(self) -> list[str]:
-        return self.get_connected_role_labels(role=COMPONENT_ROLE_LABEL_POSE_SOLVER)
-
-    def get_connected_role_labels(self, role: str) -> list[str]:
-        return_value: list[str] = list()
-        for connection_label, connection in self._connections.items():
-            if connection.get_role() == role and connection.is_active():
-                return_value.append(connection_label)
-        return return_value
-
-    def get_connection(
+    def _get_connection(
         self,
         connection_label: str,
         connection_type: type[ConnectionType]
@@ -260,7 +282,7 @@ class Connector(MCastComponent):
         """
         returns None if the detector does not exist, or if it has not been started.
         """
-        detector_connection: DetectorConnection = self.get_connection(
+        detector_connection: DetectorConnection = self._get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
         if detector_connection is None:
@@ -274,7 +296,7 @@ class Connector(MCastComponent):
         """
         returns None if the detector does not exist, or has not been started, or if it has not yet gotten frames.
         """
-        detector_connection: DetectorConnection = self.get_connection(
+        detector_connection: DetectorConnection = self._get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
         if detector_connection is None:
@@ -291,7 +313,7 @@ class Connector(MCastComponent):
         """
         returns None if the pose solver does not exist, or has not been started, or if it has not yet gotten frames.
         """
-        pose_solver_connection: PoseSolverConnection = self.get_connection(
+        pose_solver_connection: PoseSolverConnection = self._get_connection(
             connection_label=pose_solver_label,
             connection_type=PoseSolverConnection)
         if pose_solver_connection is None:
@@ -300,6 +322,9 @@ class Connector(MCastComponent):
             detector_poses=pose_solver_connection.detector_poses,
             target_poses=pose_solver_connection.target_poses,
             timestamp_utc_iso8601=pose_solver_connection.poses_timestamp.isoformat())
+
+    def get_status(self) -> Status:
+        return self._status
 
     def handle_error_response(
         self,
@@ -314,7 +339,7 @@ class Connector(MCastComponent):
         response: GetCapturePropertiesResponse,
         detector_label: str
     ) -> None:
-        detector_connection: DetectorConnection = self.get_connection(
+        detector_connection: DetectorConnection = self._get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
         if detector_connection is None:
@@ -331,7 +356,7 @@ class Connector(MCastComponent):
         response: GetCalibrationResultResponse
     ) -> None:
         detector_label: str = response.intrinsic_calibration.detector_serial_identifier
-        detector_connection: DetectorConnection = self.get_connection(
+        detector_connection: DetectorConnection = self._get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
         if detector_connection is None:
@@ -346,7 +371,7 @@ class Connector(MCastComponent):
         response: GetMarkerSnapshotsResponse,
         detector_label: str
     ):
-        detector_connection: DetectorConnection = self.get_connection(
+        detector_connection: DetectorConnection = self._get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
         if detector_connection is None:
@@ -364,7 +389,7 @@ class Connector(MCastComponent):
         response: GetPosesResponse,
         pose_solver_label: str
     ) -> None:
-        pose_solver_connection: PoseSolverConnection = self.get_connection(
+        pose_solver_connection: PoseSolverConnection = self._get_connection(
             connection_label=pose_solver_label,
             connection_type=PoseSolverConnection)
         if pose_solver_connection is None:
@@ -382,7 +407,7 @@ class Connector(MCastComponent):
         response: ListCalibrationDetectorResolutionsResponse,
         detector_label: str
     ) -> None:
-        detector_connection: DetectorConnection = self.get_connection(
+        detector_connection: DetectorConnection = self._get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
         if detector_connection is None:
@@ -408,7 +433,7 @@ class Connector(MCastComponent):
             timestamp: datetime.datetime = datetime.datetime.fromisoformat(result_metadata.timestamp_utc)
             if timestamp > newest_timestamp:
                 newest_result_id = result_metadata.identifier
-        detector_connection: DetectorConnection = self.get_connection(
+        detector_connection: DetectorConnection = self._get_connection(
             connection_label=detector_label,
             connection_type=DetectorConnection)
         if detector_connection is None:
@@ -490,10 +515,13 @@ class Connector(MCastComponent):
                 success = False
         return success
 
+    def is_idle(self):
+        return self._status == Connector.Status.STOPPED
+
     def is_running(self):
         return self._status == Connector.Status.RUNNING
 
-    def is_in_transition(self):
+    def is_transitioning(self):
         return self._status == Connector.Status.STARTING or self._status == Connector.Status.STOPPING
 
     def remove_connection(
@@ -519,10 +547,13 @@ class Connector(MCastComponent):
     def response_series_pop(
         self,
         request_series_id: uuid.UUID
-    ) -> MCastResponseSeries | None:
+    ) -> tuple[uuid.UUID | None, MCastResponseSeries | None]:
         """
         Only "pop" if there is a response (not None).
-        Return value is the response series itself (or None)
+        Return value is a tuple whose elements comprise:
+          - UUID of the request if no response has been received, or None
+          - MCastResponseSeries if a response has been received, or None
+        The dual return values allow easier reassignment of completed request ID's in calling code
         """
         for connection in self._connections.values():
             response_result: Connection.PopResponseSeriesResult = connection.pop_response_series_if_responded(
@@ -530,9 +561,9 @@ class Connector(MCastComponent):
             if response_result.status == Connection.PopResponseSeriesResult.Status.UNTRACKED:
                 continue
             elif response_result.status == Connection.PopResponseSeriesResult.Status.RESPONDED:
-                return response_result.response_series
+                return None, response_result.response_series
             else:  # queued, in progress
-                return None  # This connection is indeed tracking the desired request series, but is awaiting response
+                return request_series_id, None  # Connection is tracking desired request series, but awaiting response
         # Cannot be found
         raise ResponseSeriesNotExpected()
 
@@ -597,8 +628,8 @@ class Connector(MCastComponent):
                 self._status = Connector.Status.STOPPED
 
         if self.is_running():
-            for detector_label in self.get_connected_detector_labels():
-                detector_connection: DetectorConnection = self.get_connection(
+            for detector_label in self.get_active_detector_labels():
+                detector_connection: DetectorConnection = self._get_connection(
                     connection_label=detector_label,
                     connection_type=DetectorConnection)
                 if detector_connection is None:
@@ -613,8 +644,8 @@ class Connector(MCastComponent):
                     detector_connection.request_id = self.request_series_push(
                         connection_label=detector_label,
                         request_series=MCastRequestSeries(series=[GetMarkerSnapshotsRequest()]))
-            for pose_solver_label in self.get_connected_pose_solver_labels():
-                pose_solver_connection: PoseSolverConnection = self.get_connection(
+            for pose_solver_label in self.get_active_pose_solver_labels():
+                pose_solver_connection: PoseSolverConnection = self._get_connection(
                     connection_label=pose_solver_label,
                     connection_type=PoseSolverConnection)
                 if pose_solver_connection is None:
@@ -627,7 +658,7 @@ class Connector(MCastComponent):
                         request_id=pose_solver_connection.request_id)
                 if pose_solver_connection.request_id is None:
                     solver_request_list: list[MCastRequest] = list()
-                    detector_labels: list[str] = self.get_connected_detector_labels()
+                    detector_labels: list[str] = self.get_active_detector_labels()
                     for detector_label in detector_labels:
                         current_detector_frame: DetectorFrame = self.get_live_detector_frame(
                             detector_label=detector_label)
@@ -678,8 +709,8 @@ class Connector(MCastComponent):
         - value that request_id shall take for subsequent iterations (None means a response series has been received)
         """
 
-        response_series: MCastResponseSeries | None = self.response_series_pop(
-            request_series_id=request_id)
+        response_series: MCastResponseSeries | None
+        _, response_series = self.response_series_pop(request_series_id=request_id)
         if response_series is None:
             return False, request_id  # try again next loop
 

@@ -44,7 +44,7 @@ class ControllerFrame(wx.Frame):
             send_to_logger=True)
         self._connector = connector
 
-        self.SetMinSize(wx.Size(640, 480))
+        self.SetMinSize(wx.Size(800, 600))
 
         frame_panel = wx.Panel(self)
         self._notebook = wx.Notebook(frame_panel)

@@ -13,7 +13,6 @@ from src.common.structures import \
     IntrinsicParameters, \
     MarkerSnapshot
 from src.detector.api import \
-    GetCaptureDeviceResponse, \
     GetCaptureImageResponse, \
     GetCapturePropertiesResponse, \
     GetDetectionParametersResponse, \
@@ -103,7 +102,6 @@ class DetectorConnection(Connection):
             ErrorResponse,
             GetCalibrationImageResponse,
             GetCalibrationResultResponse,
-            GetCaptureDeviceResponse,
             GetCaptureImageResponse,
             GetCapturePropertiesResponse,
             GetDetectionParametersResponse,

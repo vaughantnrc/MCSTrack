@@ -123,8 +123,8 @@ class BasePanel(wx.Panel):
         - value that request_id shall take for subsequent iterations (None means a response series has been received)
         """
 
-        response_series: MCastResponseSeries | None = self._connector.response_series_pop(
-            request_series_id=request_id)
+        response_series: MCastResponseSeries | None
+        _, response_series = self._connector.response_series_pop(request_series_id=request_id)
         if response_series is None:
             return False, request_id  # try again next loop
 
