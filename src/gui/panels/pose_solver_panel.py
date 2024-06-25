@@ -222,26 +222,15 @@ class PoseSolverPanel(BasePanel):
         response_series: MCastResponseSeries,
         task_description: Optional[str] = None,
         expected_response_count: Optional[int] = None
-    ) -> bool:
-        success: bool = super().handle_response_series(
-            response_series=response_series,
-            task_description=task_description,
-            expected_response_count=expected_response_count)
-        if not success:
-            return False
-
-        success: bool = True
+    ) -> None:
         response: MCastResponse
         for response in response_series.series:
             if isinstance(response, AddTargetMarkerResponse):
-                success = True  # we don't currently do anything with this response in this interface
+                pass  # we don't currently do anything with this response in this interface
             elif isinstance(response, ErrorResponse):
                 self.handle_error_response(response=response)
-                success = False
             elif not isinstance(response, EmptyResponse):
                 self.handle_unknown_response(response=response)
-                success = False
-        return success
 
     def on_page_select(self) -> None:
         super().on_page_select()
