@@ -177,13 +177,14 @@ class Connector(MCastComponent):
                         severity="error",
                         message=f"Failed to find DetectorConnection with label {detector_label}.")
                     continue
-                request_series: MCastRequestSeries = MCastRequestSeries(
-                    series=[
-                        GetCalibrationResultRequest(
-                            result_identifier=detector_connection.calibration_result_identifier)])
-                self._pending_request_ids.append(self.request_series_push(
-                    connection_label=detector_label,
-                    request_series=request_series))
+                if detector_connection.calibration_result_identifier is not None:
+                    request_series: MCastRequestSeries = MCastRequestSeries(
+                        series=[
+                            GetCalibrationResultRequest(
+                                result_identifier=detector_connection.calibration_result_identifier)])
+                    self._pending_request_ids.append(self.request_series_push(
+                        connection_label=detector_label,
+                        request_series=request_series))
             self._startup_state = Connector.StartupState.GET_INTRINSICS
         if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.GET_INTRINSICS:
             self.status_message_source.enqueue_status_message(
@@ -205,9 +206,10 @@ class Connector(MCastComponent):
                                 severity="error",
                                 message=f"Failed to find DetectorConnection with label {detector_label}.")
                             continue
-                        requests.append(SetIntrinsicParametersRequest(
-                            detector_label=detector_label,
-                            intrinsic_parameters=detector_connection.current_intrinsic_parameters))
+                        if detector_connection.current_intrinsic_parameters is not None:
+                            requests.append(SetIntrinsicParametersRequest(
+                                detector_label=detector_label,
+                                intrinsic_parameters=detector_connection.current_intrinsic_parameters))
                     request_series: MCastRequestSeries = MCastRequestSeries(series=requests)
                     self._pending_request_ids.append(self.request_series_push(
                         connection_label=pose_solver_label,

@@ -396,6 +396,9 @@ class PoseSolverPanel(BasePanel):
         if self._connector.is_transitioning() or (self._control_blocking_request_id is not None):
             return  # We're waiting for something
         self._pose_solver_selector.Enable(True)
+        selected_pose_solver: str = self._pose_solver_selector.selector.GetStringSelection()
+        if selected_pose_solver is None or len(selected_pose_solver) <= 0:
+            return
         self._reference_marker_id_spinbox.Enable(True)
         self._reference_target_submit_button.Enable(True)
         self._tracked_marker_id_spinbox.Enable(True)

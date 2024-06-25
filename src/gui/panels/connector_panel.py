@@ -194,7 +194,7 @@ class ConnectorPanel(BasePanel):
         self._start_detectors_only_button.Bind(
             event=wx.EVT_BUTTON,
             handler=self.on_start_detectors_only_pressed)
-        self._start_detectors_only_button.Bind(
+        self._start_detectors_solvers_button.Bind(
             event=wx.EVT_BUTTON,
             handler=self.on_start_detectors_solvers_pressed)
         self._stop_button.Bind(
