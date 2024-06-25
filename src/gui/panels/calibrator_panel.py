@@ -57,7 +57,6 @@ logger = logging.getLogger(__name__)
 class CalibratorPanel(BasePanel):
 
     _connector: Connector
-    _active_request_id: uuid.UUID | None
 
     _detector_selector: ParameterSelector
     _detector_resolution_selector: ParameterSelector
@@ -75,10 +74,10 @@ class CalibratorPanel(BasePanel):
     _result_update_button: wx.Button
     _image_panel: ImagePanel
 
+    _control_blocking_request_id: uuid.UUID | None
     _is_updating: bool  # Some things should only trigger during explicit user events
     _calibration_in_progress: bool
     _force_last_result_selected: bool
-
     _detector_resolutions: list[ImageResolution]
     _image_metadata_list: list[CalibrationImageMetadata]
     _result_metadata_list: list[CalibrationResultMetadata]
@@ -97,13 +96,13 @@ class CalibratorPanel(BasePanel):
             name=name)
         self._connector = connector
 
-        self._active_request_id = None
-        self._detector_resolutions = list()
-        self._image_metadata_list = list()
-        self._result_metadata_list = list()
+        self._control_blocking_request_id = None
         self._is_updating = False
         self._calibration_in_progress = False
         self._force_last_result_selected = False
+        self._detector_resolutions = list()
+        self._image_metadata_list = list()
+        self._result_metadata_list = list()
 
         horizontal_split_sizer: wx.BoxSizer = wx.BoxSizer(orient=wx.HORIZONTAL)
 
@@ -284,15 +283,7 @@ class CalibratorPanel(BasePanel):
         response_series: MCastResponseSeries,
         task_description: Optional[str] = None,
         expected_response_count: Optional[int] = None
-    ) -> bool:
-        success: bool = super().handle_response_series(
-            response_series=response_series,
-            task_description=task_description,
-            expected_response_count=expected_response_count)
-        if not success:
-            return False
-
-        success: bool = True
+    ) -> None:
         response: MCastResponse
         for response in response_series.series:
             if isinstance(response, CalibrateResponse):
@@ -309,35 +300,31 @@ class CalibratorPanel(BasePanel):
                 self._handle_response_list_calibration_result_metadata(response=response)
             elif isinstance(response, ErrorResponse):
                 self.handle_error_response(response=response)
-                success = False
             elif not isinstance(response, EmptyResponse):
                 self.handle_unknown_response(response=response)
-                success = False
-        return success
 
     def on_page_select(self) -> None:
         super().on_page_select()
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
-        available_detector_labels: list[str] = self._connector.get_connected_detector_labels()
+        available_detector_labels: list[str] = self._connector.get_active_detector_labels()
         self._detector_selector.set_options(option_list=available_detector_labels)
         if selected_detector_label in available_detector_labels:
             self._detector_selector.selector.SetStringSelection(selected_detector_label)
         else:
             self._detector_selector.selector.SetStringSelection(str())
-        self._update_controls()
+        self._update_ui_controls()
 
     def update_loop(self) -> None:
         super().update_loop()
         self._is_updating = True
-        ui_needs_update: bool = False
-        if self._active_request_id is not None:
-            _, self._active_request_id = self.update_request(
-                request_id=self._active_request_id)
-            if self._active_request_id is None:
-                ui_needs_update = True
+        response_series: MCastResponseSeries | None
+        if self._control_blocking_request_id is not None:
+            self._control_blocking_request_id, response_series = self._connector.response_series_pop(
+                request_series_id=self._control_blocking_request_id)
+            if response_series is not None:  # self._control_blocking_request_id will be None
+                self.handle_response_series(response_series)
+                self._update_ui_controls()
         self._is_updating = False
-        if ui_needs_update:
-            self._update_controls()
 
     def _handle_response_calibrate(
         self,
@@ -391,7 +378,7 @@ class CalibratorPanel(BasePanel):
         self._detector_resolutions = sorted(self._detector_resolutions)
 
         self._detector_resolution_selector.set_options([str(res) for res in self._detector_resolutions])
-        self._update_controls()
+        self._update_ui_controls()
 
     def _handle_response_list_calibration_image_metadata(
         self,
@@ -424,11 +411,11 @@ class CalibratorPanel(BasePanel):
             ListCalibrationResultMetadataRequest(
                 detector_serial_identifier=selected_detector_label,
                 image_resolution=selected_image_resolution)])
-        self._active_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._connector.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._calibration_in_progress = True
-        self._update_controls()
+        self._update_ui_controls()
 
     def _on_detector_selected(self, _event: wx.CommandEvent) -> None:
         self._detector_resolutions = list()
@@ -438,10 +425,10 @@ class CalibratorPanel(BasePanel):
         self._result_display_textbox.SetValue(str())
         detector_label: str = self._detector_selector.selector.GetStringSelection()
         request_series: MCastRequestSeries = MCastRequestSeries(series=[ListCalibrationDetectorResolutionsRequest()])
-        self._active_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._connector.request_series_push(
             connection_label=detector_label,
             request_series=request_series)
-        self._update_controls()
+        self._update_ui_controls()
 
     def _on_detector_load_pressed(self, _event: wx.CommandEvent) -> None:
         self._image_metadata_list = list()
@@ -458,10 +445,10 @@ class CalibratorPanel(BasePanel):
             ListCalibrationResultMetadataRequest(
                 detector_serial_identifier=selected_detector_label,
                 image_resolution=selected_image_resolution)])
-        self._active_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._connector.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
-        self._update_controls()
+        self._update_ui_controls()
 
     def _on_detector_resolution_selected(self, _event: wx.CommandEvent) -> None:
         self._image_metadata_list = list()
@@ -476,7 +463,7 @@ class CalibratorPanel(BasePanel):
                 break
         if not found:
             self._detector_resolution_selector.selector.SetStringSelection(str())
-        self._update_controls()
+        self._update_ui_controls()
 
     def _on_image_metadata_selected(self, _event: wx.grid.GridEvent) -> None:
         if self._is_updating:
@@ -487,10 +474,10 @@ class CalibratorPanel(BasePanel):
             request_series: MCastRequestSeries = MCastRequestSeries(series=[
                 GetCalibrationImageRequest(image_identifier=image_identifier)])
             detector_label: str = self._detector_selector.selector.GetStringSelection()
-            self._active_request_id = self._connector.request_series_push(
+            self._control_blocking_request_id = self._connector.request_series_push(
                 connection_label=detector_label,
                 request_series=request_series)
-        self._update_controls()
+        self._update_ui_controls()
 
     def _on_image_update_pressed(self, _event: wx.CommandEvent) -> None:
         self._calibrate_status_textbox.SetValue(str())
@@ -511,10 +498,10 @@ class CalibratorPanel(BasePanel):
             ListCalibrationImageMetadataRequest(
                 detector_serial_identifier=detector_label,
                 image_resolution=image_resolution)])
-        self._active_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = selfu._connector.request_series_push(
             connection_label=detector_label,
             request_series=request_series)
-        self._update_controls()
+        self._update_ui_controls()
 
     def _on_result_metadata_selected(self, _event: wx.grid.GridEvent) -> None:
         if self._is_updating:
@@ -526,10 +513,10 @@ class CalibratorPanel(BasePanel):
             request_series: MCastRequestSeries = MCastRequestSeries(series=[
                 GetCalibrationResultRequest(result_identifier=result_identifier)])
             detector_label: str = self._detector_selector.selector.GetStringSelection()
-            self._active_request_id = self._connector.request_series_push(
+            self._control_blocking_request_id = self._connector.request_series_push(
                 connection_label=detector_label,
                 request_series=request_series)
-        self._update_controls()
+        self._update_ui_controls()
 
     def _on_result_update_pressed(self, _event: wx.CommandEvent) -> None:
         self._result_display_textbox.SetValue(str())
@@ -548,12 +535,12 @@ class CalibratorPanel(BasePanel):
             ListCalibrationResultMetadataRequest(
                 detector_serial_identifier=detector_label,
                 image_resolution=image_resolution)])
-        self._active_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._connector.request_series_push(
             connection_label=detector_label,
             request_series=request_series)
-        self._update_controls()
+        self._update_ui_controls()
 
-    def _update_controls(self) -> None:
+    def _update_ui_controls(self) -> None:
         self._detector_selector.Enable(False)
         self._detector_resolution_selector.Enable(False)
         self._detector_load_button.Enable(False)
@@ -572,7 +559,7 @@ class CalibratorPanel(BasePanel):
         self._result_state_selector.Enable(False)
         self._result_state_selector.selector.SetStringSelection(str())
         self._result_update_button.Enable(False)
-        if self._active_request_id is not None:
+        if self._control_blocking_request_id is not None:
             return  # We're waiting for something
         self._detector_selector.Enable(True)
         if len(self._detector_resolutions) <= 0:

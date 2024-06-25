@@ -14,9 +14,9 @@ from src.common.structures import \
     COMPONENT_ROLE_LABEL_POSE_SOLVER, \
     StatusMessage
 from src.connector import \
-    ComponentConnectionStatic, \
+    ComponentAddress, \
     Connector, \
-    ConnectionTableRow
+    ConnectionReport
 from ipaddress import IPv4Address
 from pydantic import ValidationError
 from typing import Final
@@ -36,10 +36,15 @@ class ConnectorPanel(BasePanel):
     _parameter_port: ParameterSpinboxInteger
     _add_new_button: wx.Button
     _connection_table: ConnectionTable
-    _connect_button: wx.Button
-    _disconnect_button: wx.Button
     _remove_button: wx.Button
+    _connector_status_textbox: wx.TextCtrl
+    _start_detectors_only_button: wx.Button
+    _start_detectors_solvers_button: wx.Button
+    _stop_button: wx.Button
     _log_panel: LogPanel
+
+    _controller_status: str  # last status reported by Controller
+    _connection_reports: list[ConnectionReport]
     _is_updating: bool  # Some things should only trigger during explicit user events
 
     def __init__(
@@ -118,20 +123,39 @@ class ConnectorPanel(BasePanel):
             flags=wx.SizerFlags(0).Expand())
         control_sizer.AddSpacer(size=BasePanel.DEFAULT_SPACING_PX_VERTICAL)
 
-        self._connect_button: wx.Button = self.add_control_button(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Connect")
-
-        self._disconnect_button: wx.Button = self.add_control_button(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Disconnect")
-
         self._remove_button: wx.Button = self.add_control_button(
             parent=control_panel,
             sizer=control_sizer,
             label="Remove")
+
+        self.add_horizontal_line_to_spacer(
+            parent=control_panel,
+            sizer=control_sizer)
+
+        self._connector_status_textbox = wx.TextCtrl(
+            parent=control_panel,
+            style=wx.TE_READONLY | wx.TE_RICH)
+        self._connector_status_textbox.SetEditable(False)
+        self._connector_status_textbox.SetBackgroundColour(colour=wx.Colour(red=249, green=249, blue=249, alpha=255))
+        control_sizer.Add(
+            window=self._connector_status_textbox,
+            flags=wx.SizerFlags(0).Expand())
+        control_sizer.AddSpacer(size=BasePanel.DEFAULT_SPACING_PX_VERTICAL)
+
+        self._start_detectors_only_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Start Detectors Only")
+
+        self._start_detectors_solvers_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Start Detectors And Solvers")
+
+        self._stop_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Stop")
 
         control_spacer_sizer: wx.BoxSizer = wx.BoxSizer(orient=wx.HORIZONTAL)
         control_sizer.Add(
@@ -164,23 +188,25 @@ class ConnectorPanel(BasePanel):
         self._connection_table.table.Bind(
             event=wx.grid.EVT_GRID_SELECT_CELL,
             handler=self.on_connection_selected)
-        self._connect_button.Bind(
-            event=wx.EVT_BUTTON,
-            handler=self.on_connect_pressed)
-        self._disconnect_button.Bind(
-            event=wx.EVT_BUTTON,
-            handler=self.on_disconnect_pressed)
         self._remove_button.Bind(
             event=wx.EVT_BUTTON,
             handler=self.on_remove_pressed)
+        self._start_detectors_only_button.Bind(
+            event=wx.EVT_BUTTON,
+            handler=self.on_start_detectors_only_pressed)
+        self._start_detectors_solvers_button.Bind(
+            event=wx.EVT_BUTTON,
+            handler=self.on_start_detectors_solvers_pressed)
+        self._stop_button.Bind(
+            event=wx.EVT_BUTTON,
+            handler=self.on_stop_pressed)
         self.add_new_button.Enable(enable=False)
-        self._disable_connection_modification_buttons()
+
+        self._controller_status = str()
+        self._connection_reports = list()
         self._is_updating = False
 
-    def _disable_connection_modification_buttons(self):
-        self._connect_button.Enable(enable=False)
-        self._disconnect_button.Enable(enable=False)
-        self._remove_button.Enable(enable=False)
+        self.update_controller_buttons()
 
     def on_add_new_parameters_changed(self, _event: wx.CommandEvent) -> None:
         label: str = self._parameter_label.textbox.GetValue()
@@ -213,10 +239,10 @@ class ConnectorPanel(BasePanel):
                 severity="error",
                 message=message)
             return
-        connection: ComponentConnectionStatic
+        component_address: ComponentAddress
         try:
             selected_role_index: int = self._parameter_role.selector.GetSelection()
-            connection: ComponentConnectionStatic = ComponentConnectionStatic(
+            component_address: ComponentAddress = ComponentAddress(
                 label=label,
                 role=self._parameter_role.selector.GetString(n=selected_role_index),
                 ip_address=ip_address,
@@ -227,44 +253,79 @@ class ConnectorPanel(BasePanel):
                 severity="error",
                 message=message)
             return
-        self._connector.add_connection(connection_static=connection)
+        self._connector.add_connection(component_address=component_address)
+        self.update_controller_buttons()
         self._parameter_label.textbox.SetValue(value=str())
-
-    def on_connect_pressed(self, _event: wx.CommandEvent):
-        selected_row_label: str | None = self._connection_table.get_selected_row_label()
-        self._connector.begin_connecting(label=selected_row_label)
-
-    def on_disconnect_pressed(self, _event: wx.CommandEvent):
-        selected_row_label: str | None = self._connection_table.get_selected_row_label()
-        self._connector.begin_disconnecting(label=selected_row_label)
 
     def on_connection_selected(self, event: wx.grid.GridEvent):
         if self._is_updating:
             return  # updates may repopulate the grid automatically, we are only interested in user-initiated events
         if event.Selecting():
-            self._connect_button.Enable(enable=True)
-            self._disconnect_button.Enable(enable=True)
             self._remove_button.Enable(enable=True)
         else:
-            self._disable_connection_modification_buttons()
+            self._remove_button.Enable(enable=False)
+
+    def on_start_detectors_only_pressed(self, _event: wx.CommandEvent) -> None:
+        self._connector.start_up(mode=Connector.StartupMode.DETECTING_ONLY)
+        self.update_controller_buttons()
+
+    def on_start_detectors_solvers_pressed(self, _event: wx.CommandEvent) -> None:
+        self._connector.start_up(mode=Connector.StartupMode.DETECTING_AND_SOLVING)
+        self.update_controller_buttons()
+
+    def on_stop_pressed(self, _event: wx.CommandEvent) -> None:
+        self._connector.shut_down()
+        self.update_controller_buttons()
 
     def on_remove_pressed(self, _event: wx.CommandEvent):
         selected_row_label: str | None = self._connection_table.get_selected_row_label()
         self._connector.remove_connection(label=selected_row_label)
-        self._disable_connection_modification_buttons()
+        self.update_connection_table_display()
+        self.update_controller_buttons()
+        self._remove_button.Enable(enable=False)
 
     def update_loop(self):
         super().update_loop()
         self._is_updating = True
-        self.update_loop_connection_table()
+        self.update_connection_table_display()
+        controller_status: str = self._connector.get_status()
+        if controller_status != self._controller_status:
+            self._controller_status = controller_status
+            self._connector_status_textbox.SetValue(f"Controller Status: {controller_status}")
+            self.update_controller_buttons()
         self.update_loop_log_table()
         self._is_updating = False
 
-    def update_loop_connection_table(self):
+    def update_controller_buttons(self):
+        self._start_detectors_only_button.Enable(enable=False)
+        self._start_detectors_solvers_button.Enable(enable=False)
+        self._stop_button.Enable(enable=False)
+        if self._connector.is_running():
+            self._stop_button.Enable(enable=True)
+        elif self._connector.is_idle():
+            detector_list: list = self._connector.get_component_labels(role=COMPONENT_ROLE_LABEL_DETECTOR)
+            contains_detectors: bool = len(detector_list) > 0
+            if contains_detectors:
+                self._start_detectors_only_button.Enable(enable=True)
+                self._start_detectors_solvers_button.Enable(enable=True)
+
+    def update_connection_table_display(self) -> None:
+        # Return if there is no change
+        connection_reports: list[ConnectionReport] = self._connector.get_connection_reports()
+        if len(connection_reports) == len(self._connection_reports):
+            identical: bool = True
+            for connection_report in connection_reports:
+                contained: bool = connection_report in self._connection_reports
+                if not contained:
+                    identical = False
+                    break
+            if identical:
+                return
+        # There has been a change so update internal variables and UI
+        self._connection_reports = connection_reports
+        self._connection_table.update_contents(row_contents=self._connection_reports)
         selected_row_index: int | None = self._connection_table.get_selected_row_index()
-        updated_connections: list[ConnectionTableRow] = self._connector.get_connection_table_rows()
-        self._connection_table.update_contents(row_contents=updated_connections)
-        if selected_row_index is not None and selected_row_index >= len(updated_connections):
+        if selected_row_index is not None and selected_row_index >= len(self._connection_reports):
             selected_row_index = None
         self._connection_table.set_selected_row_index(selected_row_index)
 

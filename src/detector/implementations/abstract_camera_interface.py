@@ -5,7 +5,6 @@ from src.common import \
     get_kwarg, \
     MCastResponse
 from src.detector.api import \
-    GetCaptureDeviceResponse, \
     GetCapturePropertiesResponse, \
     GetCaptureImageResponse, \
     GetCaptureImageRequest
@@ -27,13 +26,7 @@ class AbstractCameraInterface(abc.ABC):
     def internal_update_capture(self) -> None:
         pass
 
-    def set_capture_device(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        pass
-        
     def set_capture_properties(self, **kwargs) -> EmptyResponse:
-        pass
-
-    def get_capture_device(self, **_kwargs) -> GetCaptureDeviceResponse:
         pass
 
     def get_capture_properties(self, **_kwargs) -> GetCapturePropertiesResponse | ErrorResponse:

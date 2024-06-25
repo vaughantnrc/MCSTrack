@@ -44,7 +44,7 @@ class ControllerFrame(wx.Frame):
             send_to_logger=True)
         self._connector = connector
 
-        self.SetMinSize(wx.Size(640, 480))
+        self.SetMinSize(wx.Size(800, 600))
 
         frame_panel = wx.Panel(self)
         self._notebook = wx.Notebook(frame_panel)
@@ -119,7 +119,7 @@ class ControllerFrame(wx.Frame):
 async def connector_frame_repeat(connector: Connector):
     # noinspection PyBroadException
     try:
-        await connector.do_update_frames_for_connections()
+        await connector.update()
     except Exception as e:
         connector.add_status_message(
             severity="error",
