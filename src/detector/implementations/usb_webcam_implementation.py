@@ -6,7 +6,7 @@ from src.common import \
     EmptyResponse, \
     ErrorResponse, \
     get_kwarg, \
-    MCastResponse
+    MCTResponse
 from src.common.structures.capture_status import CaptureStatus
 
 from src.detector.implementations import AbstractCameraInterface
@@ -117,7 +117,7 @@ class USBWebcamWithOpenCV(AbstractCameraInterface):
                 gamma=int(self._capture.get(cv2.CAP_PROP_GAMMA)))
         # TODO: Get powerline_frequency_hz and backlight_compensation
 
-    def start_capture(self, **kwargs) -> MCastResponse:
+    def start_capture(self, **kwargs) -> MCTResponse:
         if isinstance(self._capture_device_id, str) and self._capture_device_id.isnumeric():
             self._capture_device_id.isnumeric = int(self._capture_device_id)
         if self._capture is not None:
@@ -134,7 +134,7 @@ class USBWebcamWithOpenCV(AbstractCameraInterface):
         self._capture_status.status = CaptureStatus.Status.RUNNING
         return EmptyResponse()
 
-    def stop_capture(self, **kwargs) -> MCastResponse:
+    def stop_capture(self, **kwargs) -> MCTResponse:
         if self._capture is not None:
             self._capture.release()
             self._capture = None

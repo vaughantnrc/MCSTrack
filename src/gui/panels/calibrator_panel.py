@@ -34,15 +34,15 @@ from src.common import \
     EmptyResponse, \
     ImageCoding, \
     ImageUtils, \
-    MCastRequestSeries, \
-    MCastResponse, \
-    MCastResponseSeries, \
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries, \
     StatusMessageSource
 from src.common.structures import \
     DetectorResolution, \
     ImageResolution
-from src.connector import \
-    Connector
+from src.controller import \
+    MCTController
 from io import BytesIO
 import logging
 from typing import Optional
@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 class CalibratorPanel(BasePanel):
 
-    _connector: Connector
+    _controller: MCTController
 
     _detector_selector: ParameterSelector
     _detector_resolution_selector: ParameterSelector
@@ -85,16 +85,15 @@ class CalibratorPanel(BasePanel):
     def __init__(
         self,
         parent: wx.Window,
-        connector: Connector,
+        controller: MCTController,
         status_message_source: StatusMessageSource,
         name: str = "CalibratorPanel"
     ):
         super().__init__(
             parent=parent,
-            connector=connector,
             status_message_source=status_message_source,
             name=name)
-        self._connector = connector
+        self._controller = controller
 
         self._control_blocking_request_id = None
         self._is_updating = False
@@ -280,11 +279,11 @@ class CalibratorPanel(BasePanel):
 
     def handle_response_series(
         self,
-        response_series: MCastResponseSeries,
+        response_series: MCTResponseSeries,
         task_description: Optional[str] = None,
         expected_response_count: Optional[int] = None
     ) -> None:
-        response: MCastResponse
+        response: MCTResponse
         for response in response_series.series:
             if isinstance(response, CalibrateResponse):
                 self._handle_response_calibrate(response=response)
@@ -306,7 +305,7 @@ class CalibratorPanel(BasePanel):
     def on_page_select(self) -> None:
         super().on_page_select()
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
-        available_detector_labels: list[str] = self._connector.get_active_detector_labels()
+        available_detector_labels: list[str] = self._controller.get_active_detector_labels()
         self._detector_selector.set_options(option_list=available_detector_labels)
         if selected_detector_label in available_detector_labels:
             self._detector_selector.selector.SetStringSelection(selected_detector_label)
@@ -317,9 +316,9 @@ class CalibratorPanel(BasePanel):
     def update_loop(self) -> None:
         super().update_loop()
         self._is_updating = True
-        response_series: MCastResponseSeries | None
+        response_series: MCTResponseSeries | None
         if self._control_blocking_request_id is not None:
-            self._control_blocking_request_id, response_series = self._connector.response_series_pop(
+            self._control_blocking_request_id, response_series = self._controller.response_series_pop(
                 request_series_id=self._control_blocking_request_id)
             if response_series is not None:  # self._control_blocking_request_id will be None
                 self.handle_response_series(response_series)
@@ -404,14 +403,14 @@ class CalibratorPanel(BasePanel):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         selected_image_resolution: ImageResolution = \
             ImageResolution.from_str(self._detector_resolution_selector.selector.GetStringSelection())
-        request_series: MCastRequestSeries = MCastRequestSeries(series=[
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[
             CalibrateRequest(
                 detector_serial_identifier=selected_detector_label,
                 image_resolution=selected_image_resolution),
             ListCalibrationResultMetadataRequest(
                 detector_serial_identifier=selected_detector_label,
                 image_resolution=selected_image_resolution)])
-        self._control_blocking_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._calibration_in_progress = True
@@ -424,8 +423,8 @@ class CalibratorPanel(BasePanel):
         self._calibrate_status_textbox.SetValue(str())
         self._result_display_textbox.SetValue(str())
         detector_label: str = self._detector_selector.selector.GetStringSelection()
-        request_series: MCastRequestSeries = MCastRequestSeries(series=[ListCalibrationDetectorResolutionsRequest()])
-        self._control_blocking_request_id = self._connector.request_series_push(
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[ListCalibrationDetectorResolutionsRequest()])
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=detector_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -438,14 +437,14 @@ class CalibratorPanel(BasePanel):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         selected_image_resolution: ImageResolution = \
             ImageResolution.from_str(self._detector_resolution_selector.selector.GetStringSelection())
-        request_series: MCastRequestSeries = MCastRequestSeries(series=[
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[
             ListCalibrationImageMetadataRequest(
                 detector_serial_identifier=selected_detector_label,
                 image_resolution=selected_image_resolution),
             ListCalibrationResultMetadataRequest(
                 detector_serial_identifier=selected_detector_label,
                 image_resolution=selected_image_resolution)])
-        self._control_blocking_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -471,10 +470,10 @@ class CalibratorPanel(BasePanel):
         image_index: int = self._image_table.get_selected_row_index()
         image_identifier: str | None = self._image_metadata_list[image_index].identifier
         if image_identifier is not None:
-            request_series: MCastRequestSeries = MCastRequestSeries(series=[
+            request_series: MCTRequestSeries = MCTRequestSeries(series=[
                 GetCalibrationImageRequest(image_identifier=image_identifier)])
             detector_label: str = self._detector_selector.selector.GetStringSelection()
-            self._control_blocking_request_id = self._connector.request_series_push(
+            self._control_blocking_request_id = self._controller.request_series_push(
                 connection_label=detector_label,
                 request_series=request_series)
         self._update_ui_controls()
@@ -489,7 +488,7 @@ class CalibratorPanel(BasePanel):
         image_state: CalibrationImageState = \
             CalibrationImageState[self._image_state_selector.selector.GetStringSelection()]
         image_label: str = self._image_label_textbox.textbox.GetValue()
-        request_series: MCastRequestSeries = MCastRequestSeries(series=[
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[
             UpdateCalibrationImageMetadataRequest(
                 image_identifier=image_identifier,
                 image_state=image_state,
@@ -498,7 +497,7 @@ class CalibratorPanel(BasePanel):
             ListCalibrationImageMetadataRequest(
                 detector_serial_identifier=detector_label,
                 image_resolution=image_resolution)])
-        self._control_blocking_request_id = selfu._connector.request_series_push(
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=detector_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -510,10 +509,10 @@ class CalibratorPanel(BasePanel):
         result_index: int = self._result_table.get_selected_row_index()
         result_identifier: str | None = self._result_metadata_list[result_index].identifier
         if result_identifier is not None:
-            request_series: MCastRequestSeries = MCastRequestSeries(series=[
+            request_series: MCTRequestSeries = MCTRequestSeries(series=[
                 GetCalibrationResultRequest(result_identifier=result_identifier)])
             detector_label: str = self._detector_selector.selector.GetStringSelection()
-            self._control_blocking_request_id = self._connector.request_series_push(
+            self._control_blocking_request_id = self._controller.request_series_push(
                 connection_label=detector_label,
                 request_series=request_series)
         self._update_ui_controls()
@@ -527,7 +526,7 @@ class CalibratorPanel(BasePanel):
         result_identifier: str = self._result_metadata_list[result_index].identifier
         result_state: CalibrationResultState = \
             CalibrationResultState[self._result_state_selector.selector.GetStringSelection()]
-        request_series: MCastRequestSeries = MCastRequestSeries(series=[
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[
             UpdateCalibrationResultMetadataRequest(
                 result_identifier=result_identifier,
                 result_state=result_state),
@@ -535,7 +534,7 @@ class CalibratorPanel(BasePanel):
             ListCalibrationResultMetadataRequest(
                 detector_serial_identifier=detector_label,
                 image_resolution=image_resolution)])
-        self._control_blocking_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=detector_label,
             request_series=request_series)
         self._update_ui_controls()

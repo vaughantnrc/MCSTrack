@@ -1,13 +1,13 @@
-from src.common.exceptions import ParsingError
+from src.common.exceptions import MCTParsingError
 import abc
 from pydantic import ValidationError
 from typing import TypeVar
 
 
-ParsableDynamic = TypeVar('ParsableDynamic', bound='MCastParsable')
+ParsableDynamic = TypeVar('ParsableDynamic', bound='MCTParsable')
 
 
-class MCastParsable(abc.ABC):
+class MCTParsable(abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
@@ -21,14 +21,14 @@ class MCastParsable(abc.ABC):
     ) -> list[ParsableDynamic]:
         if "series" not in parsable_series_dict or not isinstance(parsable_series_dict["series"], list):
             message: str = "parsable_series_dict did not contain field series. Input is improperly formatted."
-            raise ParsingError(message)
+            raise MCTParsingError(message)
 
         output_series: list[ParsableDynamic] = list()
         for parsable_dict in parsable_series_dict["series"]:
             if not isinstance(parsable_dict, dict):
                 message: str = "series contained a non-dict element. Input is improperly formatted."
-                raise ParsingError(message)
-            output_series.append(MCastParsable.parse_dynamic_single(
+                raise MCTParsingError(message)
+            output_series.append(MCTParsable.parse_dynamic_single(
                 parsable_dict=parsable_dict,
                 supported_types=supported_types))
 
@@ -41,7 +41,7 @@ class MCastParsable(abc.ABC):
     ) -> ParsableDynamic:
         if "parsable_type" not in parsable_dict or not isinstance(parsable_dict["parsable_type"], str):
             message: str = "parsable_dict did not contain parsable_type. Input is improperly formatted."
-            raise ParsingError(message) from None
+            raise MCTParsingError(message) from None
 
         for supported_type in supported_types:
             if parsable_dict["parsable_type"] == supported_type.parsable_type_identifier():
@@ -49,8 +49,8 @@ class MCastParsable(abc.ABC):
                 try:
                     request = supported_type(**parsable_dict)
                 except ValidationError as e:
-                    raise ParsingError(f"A request of type {supported_type} was ill-formed: {str(e)}") from None
+                    raise MCTParsingError(f"A request of type {supported_type} was ill-formed: {str(e)}") from None
                 return request
 
         message: str = "parsable_type did not match any expected value. Input is improperly formatted."
-        raise ParsingError(message)
+        raise MCTParsingError(message)

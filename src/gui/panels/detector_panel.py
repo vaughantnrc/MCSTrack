@@ -15,9 +15,9 @@ from src.common import \
     EmptyResponse, \
     ImageCoding, \
     ImageUtils, \
-    MCastRequestSeries, \
-    MCastResponse, \
-    MCastResponseSeries, \
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries, \
     StandardResolutions, \
     StatusMessageSource
 from src.common.structures import \
@@ -26,8 +26,8 @@ from src.common.structures import \
     DetectorFrame, \
     ImageResolution, \
     MarkerSnapshot
-from src.connector import \
-    Connector
+from src.controller import \
+    MCTController
 from src.detector.api import \
     GetCaptureImageRequest, \
     GetCaptureImageResponse, \
@@ -69,7 +69,7 @@ _CAPTURE_FORMAT: CaptureFormat = ".jpg"
 
 class DetectorPanel(BasePanel):
 
-    _connector: Connector
+    _controller: MCTController
 
     _control_blocking_request_id: uuid.UUID | None
     _live_preview_request_id: uuid.UUID | None
@@ -137,16 +137,15 @@ class DetectorPanel(BasePanel):
     def __init__(
         self,
         parent: wx.Window,
-        connector: Connector,
+        controller: MCTController,
         status_message_source: StatusMessageSource,
         name: str = "DetectorPanel"
     ):
         super().__init__(
             parent=parent,
-            connector=connector,
             status_message_source=status_message_source,
             name=name)
-        self._connector = connector
+        self._controller = controller
         self._capture_active = False
         self._live_preview_request_id = None
         self._control_blocking_request_id = None
@@ -660,27 +659,27 @@ class DetectorPanel(BasePanel):
                 severity="error",
                 message=f"Requested to add a calibration image but there is no live image. Returning.")
             return
-        request_series: MCastRequestSeries = MCastRequestSeries(
+        request_series: MCTRequestSeries = MCTRequestSeries(
             series=[
                 AddCalibrationImageRequest(
                     detector_serial_identifier=selected_detector_label,
                     format=_CAPTURE_FORMAT,
                     image_base64=self._live_image_base64)])
-        self._live_preview_request_id = self._connector.request_series_push(
+        self._live_preview_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
 
     def begin_capture_snapshot(self):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
-        request_series: MCastRequestSeries = MCastRequestSeries(
+        request_series: MCTRequestSeries = MCTRequestSeries(
             series=[
                 GetCaptureImageRequest(
                     format=_CAPTURE_FORMAT),
                 GetMarkerSnapshotsRequest(
                     detected_marker_snapshots=True,
                     rejected_marker_snapshots=True)])
-        self._live_preview_request_id = self._connector.request_series_push(
+        self._live_preview_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
 
@@ -688,7 +687,7 @@ class DetectorPanel(BasePanel):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         resolution_str: str = self._capture_param_resolution.selector.GetStringSelection()
         image_resolution = ImageResolution.from_str(in_str=resolution_str)
-        request_series: MCastRequestSeries = MCastRequestSeries(
+        request_series: MCTRequestSeries = MCTRequestSeries(
             series=[
                 SetCapturePropertiesRequest(
                     resolution_x_px=image_resolution.x_px,
@@ -701,7 +700,7 @@ class DetectorPanel(BasePanel):
                     sharpness=self._capture_param_sharpness.spinbox.GetValue(),
                     gamma=self._capture_param_gamma.spinbox.GetValue()),
                 GetCapturePropertiesRequest()])  # sync
-        self._control_blocking_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -741,21 +740,21 @@ class DetectorPanel(BasePanel):
             use_aruco_3_detection=self._detection_param_use_aruco_3_detection.checkbox.GetValue(),
             min_marker_length_ratio_original_img=self._detection_param_min_marker_length_ratio_orig.spinbox.GetValue(),
             min_side_length_canonical_img=self._detection_param_min_side_length_canonical_img.spinbox.GetValue())
-        request_series: MCastRequestSeries = MCastRequestSeries(series=[
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[
             SetDetectionParametersRequest(parameters=params),
             GetDetectionParametersRequest()])  # sync
-        self._control_blocking_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
 
     def handle_response_series(
         self,
-        response_series: MCastResponseSeries,
+        response_series: MCTResponseSeries,
         task_description: Optional[str] = None,
         expected_response_count: Optional[int] = None
     ) -> None:
-        response: MCastResponse
+        response: MCTResponse
         for response in response_series.series:
             if isinstance(response, AddCalibrationImageResponse):
                 self._handle_add_calibration_image_response(response=response)
@@ -931,7 +930,7 @@ class DetectorPanel(BasePanel):
 
     def on_page_select(self):
         super().on_page_select()
-        available_detector_labels: list[str] = self._connector.get_active_detector_labels()
+        available_detector_labels: list[str] = self._controller.get_active_detector_labels()
         self._detector_selector.set_options(option_list=available_detector_labels)
         self._update_ui_controls()
 
@@ -999,15 +998,15 @@ class DetectorPanel(BasePanel):
     def update_loop(self):
         super().update_loop()
 
-        response_series: MCastResponseSeries | None
+        response_series: MCTResponseSeries | None
         if self._control_blocking_request_id is not None:
-            self._control_blocking_request_id, response_series = self._connector.response_series_pop(
+            self._control_blocking_request_id, response_series = self._controller.response_series_pop(
                 request_series_id=self._control_blocking_request_id)
             if response_series is not None:  # self._control_blocking_request_id will be None
                 self.handle_response_series(response_series)
                 self._update_ui_controls()
         elif self._live_preview_request_id is not None:
-            self._live_preview_request_id, response_series = self._connector.response_series_pop(
+            self._live_preview_request_id, response_series = self._controller.response_series_pop(
                 request_series_id=self._live_preview_request_id)
             if response_series is not None:
                 self.handle_response_series(response_series)
@@ -1016,7 +1015,7 @@ class DetectorPanel(BasePanel):
         if detector_label is not None and len(detector_label) > 0:
             if self._preview_image_checkbox.checkbox.GetValue() and self._live_preview_request_id is None:
                 self.begin_capture_snapshot()
-            detector_frame: DetectorFrame | None = self._connector.get_live_detector_frame(
+            detector_frame: DetectorFrame | None = self._controller.get_live_detector_frame(
                 detector_label=detector_label)
             if detector_frame is not None:
                 self._live_markers_detected = detector_frame.detected_marker_snapshots

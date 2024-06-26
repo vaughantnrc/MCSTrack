@@ -6,7 +6,7 @@ from src.common import \
     EmptyResponse, \
     ErrorResponse, \
     get_kwarg, \
-    MCastResponse
+    MCTResponse
 from src.common.structures.capture_status import CaptureStatus
 
 from src.detector.implementations import AbstractCameraInterface
@@ -122,13 +122,13 @@ class PiCamera(AbstractCameraInterface):
                 sharpness=self._camera_controls.Sharpness)
             return ret
 
-    def start_capture(self, **kwargs) -> MCastResponse:
+    def start_capture(self, **kwargs) -> MCTResponse:
         self._camera.start()
         self._captured_image = self._camera.capture_array()
         self._capture_status.status = CaptureStatus.Status.RUNNING
         return EmptyResponse()
 
-    def stop_capture(self, **kwargs) -> MCastResponse:
+    def stop_capture(self, **kwargs) -> MCTResponse:
         if self._captured_image is not None:
             self._captured_image = None
         self._capture_status.status = CaptureStatus.Status.STOPPED

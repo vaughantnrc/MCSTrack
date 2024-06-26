@@ -1,7 +1,7 @@
-from .mcast_error import MCastError
+from .mct_error import MCTError
 
 
-class ParsingError(MCastError):
+class MCTParsingError(MCTError):
     message: str
 
     def __init__(

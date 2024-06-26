@@ -1,12 +1,12 @@
-from .component_address import ComponentAddress
+from .mct_component_address import MCTComponentAddress
 from .connection import Connection
 from src.common.api import \
     DequeueStatusMessagesResponse, \
     EmptyResponse, \
     ErrorResponse, \
-    MCastRequestSeries, \
-    MCastResponse, \
-    MCastResponseSeries
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries
 from src.common.structures import \
     DetectorResolution, \
     ImageResolution, \
@@ -33,7 +33,7 @@ import uuid
 
 class DetectorConnection(Connection):
 
-    # These are variables used directly by the Connector for storing data
+    # These are variables used directly by the MCTController for storing data
     request_id: uuid.UUID | None
     calibration_result_identifier: str | None
     calibrated_resolutions: list[DetectorResolution] | None
@@ -45,7 +45,7 @@ class DetectorConnection(Connection):
 
     def __init__(
         self,
-        component_address: ComponentAddress
+        component_address: MCTComponentAddress
     ):
         super().__init__(component_address=component_address)
         self.request_id = None
@@ -57,15 +57,15 @@ class DetectorConnection(Connection):
         self.rejected_marker_snapshots = list()
         self.marker_snapshot_timestamp = datetime.datetime.min
 
-    def create_deinitialization_request_series(self) -> MCastRequestSeries:
-        return MCastRequestSeries(series=[StopCaptureRequest()])
+    def create_deinitialization_request_series(self) -> MCTRequestSeries:
+        return MCTRequestSeries(series=[StopCaptureRequest()])
 
-    def create_initialization_request_series(self) -> MCastRequestSeries:
-        return MCastRequestSeries(series=[StartCaptureRequest()])
+    def create_initialization_request_series(self) -> MCTRequestSeries:
+        return MCTRequestSeries(series=[StartCaptureRequest()])
 
     def handle_deinitialization_response_series(
         self,
-        response_series: MCastResponseSeries
+        response_series: MCTResponseSeries
     ) -> Connection.DeinitializationResult:
         response_count: int = len(response_series.series)
         if response_count != 1:
@@ -80,7 +80,7 @@ class DetectorConnection(Connection):
 
     def handle_initialization_response_series(
         self,
-        response_series: MCastResponseSeries
+        response_series: MCTResponseSeries
     ) -> Connection.InitializationResult:
         response_count: int = len(response_series.series)
         if response_count != 1:
@@ -93,7 +93,7 @@ class DetectorConnection(Connection):
                 message=f"The initialization response was not of the expected type EmptyResponse.")
         return Connection.InitializationResult.SUCCESS
 
-    def supported_response_types(self) -> list[type[MCastResponse]]:
+    def supported_response_types(self) -> list[type[MCTResponse]]:
         return [
             AddCalibrationImageResponse,
             CalibrateResponse,

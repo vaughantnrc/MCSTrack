@@ -1,6 +1,6 @@
 from .exceptions import ResponseSeriesNotExpected
 from .structures import \
-    ComponentAddress, \
+    MCTComponentAddress, \
     ConnectionReport, \
     Connection, \
     DetectorConnection, \
@@ -8,11 +8,11 @@ from .structures import \
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
-    MCastComponent, \
-    MCastRequest, \
-    MCastRequestSeries, \
-    MCastResponse, \
-    MCastResponseSeries, \
+    MCTComponent, \
+    MCTRequest, \
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries, \
     StatusMessageSource
 from src.common.structures import \
     ComponentRoleLabel, \
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 ConnectionType = TypeVar('ConnectionType', bound=Connection)
 
 
-class Connector(MCastComponent):
+class MCTController(MCTComponent):
 
     class Status(StrEnum):
         STOPPED: Final[int] = "Idle"
@@ -90,18 +90,18 @@ class Connector(MCastComponent):
             send_status_messages_to_logger=send_status_messages_to_logger)
 
         self.status_message_source = StatusMessageSource(
-            source_label="connector",
+            source_label="controller",
             send_to_logger=True)
-        self._status = Connector.Status.STOPPED
-        self._startup_mode = Connector.StartupMode.DETECTING_AND_SOLVING  # Will be overwritten on startup
-        self._startup_state = Connector.StartupState.INITIAL
+        self._status = MCTController.Status.STOPPED
+        self._startup_mode = MCTController.StartupMode.DETECTING_AND_SOLVING  # Will be overwritten on startup
+        self._startup_state = MCTController.StartupState.INITIAL
 
         self._connections = dict()
         self._pending_request_ids = list()
 
     def add_connection(
         self,
-        component_address: ComponentAddress
+        component_address: MCTComponentAddress
     ) -> None:
         label = component_address.label
         if label in self._connections:
@@ -114,21 +114,21 @@ class Connector(MCastComponent):
             raise ValueError(f"Unrecognized component role {component_address.role}.")
 
     def _advance_startup_state(self) -> None:
-        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.STARTING_CAPTURE:
+        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.STARTING_CAPTURE:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="STARTING_CAPTURE complete")
             detector_labels: list[str] = self.get_active_detector_labels()
             for detector_label in detector_labels:
-                request_series: MCastRequestSeries = MCastRequestSeries(
+                request_series: MCTRequestSeries = MCTRequestSeries(
                     series=[
                         ListCalibrationDetectorResolutionsRequest(),
                         GetCapturePropertiesRequest()])
                 self._pending_request_ids.append(self.request_series_push(
                     connection_label=detector_label,
                     request_series=request_series))
-            self._startup_state = Connector.StartupState.GET_RESOLUTIONS
-        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.GET_RESOLUTIONS:
+            self._startup_state = MCTController.StartupState.GET_RESOLUTIONS
+        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.GET_RESOLUTIONS:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="GET_RESOLUTIONS complete")
@@ -141,7 +141,7 @@ class Connector(MCastComponent):
                         severity="error",
                         message=f"Failed to find DetectorConnection with label {detector_label}.")
                     continue
-                requests: list[MCastRequest] = list()
+                requests: list[MCTRequest] = list()
                 target_resolution: DetectorResolution = DetectorResolution(
                     detector_serial_identifier=detector_label,
                     image_resolution=detector_connection.current_resolution)
@@ -159,12 +159,12 @@ class Connector(MCastComponent):
                         message=f"No calibration available for detector {detector_label} "
                                 f"at resolution {str(detector_connection.current_resolution)}. "
                                 "No intrinsics will be set.")
-                request_series: MCastRequestSeries = MCastRequestSeries(series=requests)
+                request_series: MCTRequestSeries = MCTRequestSeries(series=requests)
                 self._pending_request_ids.append(self.request_series_push(
                     connection_label=detector_label,
                     request_series=request_series))
-            self._startup_state = Connector.StartupState.LIST_INTRINSICS
-        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.LIST_INTRINSICS:
+            self._startup_state = MCTController.StartupState.LIST_INTRINSICS
+        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.LIST_INTRINSICS:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="LIST_INTRINSICS complete")
@@ -178,25 +178,25 @@ class Connector(MCastComponent):
                         message=f"Failed to find DetectorConnection with label {detector_label}.")
                     continue
                 if detector_connection.calibration_result_identifier is not None:
-                    request_series: MCastRequestSeries = MCastRequestSeries(
+                    request_series: MCTRequestSeries = MCTRequestSeries(
                         series=[
                             GetCalibrationResultRequest(
                                 result_identifier=detector_connection.calibration_result_identifier)])
                     self._pending_request_ids.append(self.request_series_push(
                         connection_label=detector_label,
                         request_series=request_series))
-            self._startup_state = Connector.StartupState.GET_INTRINSICS
-        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.GET_INTRINSICS:
+            self._startup_state = MCTController.StartupState.GET_INTRINSICS
+        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.GET_INTRINSICS:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="GET_INTRINSICS complete")
-            if self._startup_mode == Connector.StartupMode.DETECTING_ONLY:
-                self._startup_state = Connector.StartupState.INITIAL
-                self._status = Connector.Status.RUNNING  # We're done
+            if self._startup_mode == MCTController.StartupMode.DETECTING_ONLY:
+                self._startup_state = MCTController.StartupState.INITIAL
+                self._status = MCTController.Status.RUNNING  # We're done
             else:
                 pose_solver_labels: list[str] = self.get_active_pose_solver_labels()
                 for pose_solver_label in pose_solver_labels:
-                    requests: list[MCastRequest] = list()
+                    requests: list[MCTRequest] = list()
                     for detector_label in self.get_active_detector_labels():
                         detector_connection: DetectorConnection = self._get_connection(
                             connection_label=detector_label,
@@ -210,17 +210,17 @@ class Connector(MCastComponent):
                             requests.append(SetIntrinsicParametersRequest(
                                 detector_label=detector_label,
                                 intrinsic_parameters=detector_connection.current_intrinsic_parameters))
-                    request_series: MCastRequestSeries = MCastRequestSeries(series=requests)
+                    request_series: MCTRequestSeries = MCTRequestSeries(series=requests)
                     self._pending_request_ids.append(self.request_series_push(
                         connection_label=pose_solver_label,
                         request_series=request_series))
-                self._startup_state = Connector.StartupState.SET_INTRINSICS
-        if len(self._pending_request_ids) <= 0 and self._startup_state == Connector.StartupState.SET_INTRINSICS:
+                self._startup_state = MCTController.StartupState.SET_INTRINSICS
+        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.SET_INTRINSICS:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="SET_INTRINSICS complete")
-            self._startup_state = Connector.StartupState.INITIAL
-            self._status = Connector.Status.RUNNING
+            self._startup_state = MCTController.StartupState.INITIAL
+            self._status = MCTController.Status.RUNNING
 
     def contains_connection_label(self, label: str) -> bool:
         return label in self._connections
@@ -447,7 +447,7 @@ class Connector(MCastComponent):
 
     def handle_response_unknown(
         self,
-        response: MCastResponse
+        response: MCTResponse
     ):
         self.status_message_source.enqueue_status_message(
             severity="error",
@@ -455,7 +455,7 @@ class Connector(MCastComponent):
 
     def handle_response_series(
         self,
-        response_series: MCastResponseSeries,
+        response_series: MCTResponseSeries,
         task_description: str | None = None,
         expected_response_count: int | None = None
     ) -> bool:
@@ -478,7 +478,7 @@ class Connector(MCastComponent):
                             f"than expected ({expected_response_count}).")
 
         success: bool = True
-        response: MCastResponse
+        response: MCTResponse
         for response in response_series.series:
             if isinstance(response, AddTargetMarkerResponse):
                 success = True  # we don't currently do anything with this response in this interface
@@ -518,13 +518,13 @@ class Connector(MCastComponent):
         return success
 
     def is_idle(self):
-        return self._status == Connector.Status.STOPPED
+        return self._status == MCTController.Status.STOPPED
 
     def is_running(self):
-        return self._status == Connector.Status.RUNNING
+        return self._status == MCTController.Status.RUNNING
 
     def is_transitioning(self):
-        return self._status == Connector.Status.STARTING or self._status == Connector.Status.STOPPING
+        return self._status == MCTController.Status.STARTING or self._status == MCTController.Status.STOPPING
 
     def remove_connection(
         self,
@@ -537,7 +537,7 @@ class Connector(MCastComponent):
     def request_series_push(
         self,
         connection_label: str,
-        request_series: MCastRequestSeries
+        request_series: MCTRequestSeries
     ) -> uuid.UUID:
         if connection_label not in self._connections:
             raise RuntimeError(f"Failed to find connection with label {connection_label}.")
@@ -549,12 +549,12 @@ class Connector(MCastComponent):
     def response_series_pop(
         self,
         request_series_id: uuid.UUID
-    ) -> tuple[uuid.UUID | None, MCastResponseSeries | None]:
+    ) -> tuple[uuid.UUID | None, MCTResponseSeries | None]:
         """
         Only "pop" if there is a response (not None).
         Return value is a tuple whose elements comprise:
           - UUID of the request if no response has been received, or None
-          - MCastResponseSeries if a response has been received, or None
+          - MCTResponseSeries if a response has been received, or None
         The dual return values allow easier reassignment of completed request ID's in calling code
         """
         for connection in self._connections.values():
@@ -573,31 +573,31 @@ class Connector(MCastComponent):
         self,
         mode: str = StartupMode.DETECTING_AND_SOLVING
     ) -> None:
-        if mode not in Connector.StartupMode:
+        if mode not in MCTController.StartupMode:
             raise ValueError(f"Unexpected mode \"{mode}\".")
-        self._startup_mode = Connector.StartupMode(mode)
+        self._startup_mode = MCTController.StartupMode(mode)
 
-        if self._status != Connector.Status.STOPPED:
-            raise RuntimeError("Cannot start up if connector isn't first stopped.")
+        if self._status != MCTController.Status.STOPPED:
+            raise RuntimeError("Cannot start up if controller isn't first stopped.")
         for connection in self._connections.values():
-            if mode == Connector.StartupMode.DETECTING_ONLY and \
+            if mode == MCTController.StartupMode.DETECTING_ONLY and \
                connection.get_role() == COMPONENT_ROLE_LABEL_POSE_SOLVER:
                 continue
             connection.start_up()
 
-        self._startup_state = Connector.StartupState.STARTING_CAPTURE
-        self._status = Connector.Status.STARTING
+        self._startup_state = MCTController.StartupState.STARTING_CAPTURE
+        self._status = MCTController.Status.STARTING
 
     def shut_down(self) -> None:
-        if self._status != Connector.Status.RUNNING:
-            raise RuntimeError("Cannot shut down if connector isn't first running.")
+        if self._status != MCTController.Status.RUNNING:
+            raise RuntimeError("Cannot shut down if controller isn't first running.")
         for connection in self._connections.values():
             if connection.is_start_up_finished():
                 connection.shut_down()
 
-        self._status = Connector.Status.STOPPING
+        self._status = MCTController.Status.STOPPING
 
-    def supported_request_types(self) -> dict[type[MCastRequest], Callable[[dict], MCastResponse]]:
+    def supported_request_types(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
         return super().supported_request_types()
 
     # Right now this function doesn't update on its own - must be called externally and regularly
@@ -608,11 +608,11 @@ class Connector(MCastComponent):
         for connection in connections:
             await connection.update()
 
-        if self._status == Connector.Status.STARTING and \
-           self._startup_state == Connector.StartupState.STARTING_CAPTURE:
+        if self._status == MCTController.Status.STARTING and \
+           self._startup_state == MCTController.StartupState.STARTING_CAPTURE:
             startup_finished: bool = True
             for connection in connections:
-                if self._startup_mode == Connector.StartupMode.DETECTING_ONLY and \
+                if self._startup_mode == MCTController.StartupMode.DETECTING_ONLY and \
                    connection.get_role() == COMPONENT_ROLE_LABEL_POSE_SOLVER:
                     continue
                 if not connection.is_start_up_finished():
@@ -620,14 +620,14 @@ class Connector(MCastComponent):
                     break
             if startup_finished:
                 self._advance_startup_state()
-        elif self._status == Connector.Status.STOPPING:
+        elif self._status == MCTController.Status.STOPPING:
             shutdown_finished: bool = True
             for connection in connections:
                 if not connection.is_shut_down():
                     shutdown_finished = False
                     break
             if shutdown_finished:
-                self._status = Connector.Status.STOPPED
+                self._status = MCTController.Status.STOPPED
 
         if self.is_running():
             for detector_label in self.get_active_detector_labels():
@@ -645,7 +645,7 @@ class Connector(MCastComponent):
                 if detector_connection.request_id is None:
                     detector_connection.request_id = self.request_series_push(
                         connection_label=detector_label,
-                        request_series=MCastRequestSeries(series=[GetMarkerSnapshotsRequest()]))
+                        request_series=MCTRequestSeries(series=[GetMarkerSnapshotsRequest()]))
             for pose_solver_label in self.get_active_pose_solver_labels():
                 pose_solver_connection: PoseSolverConnection = self._get_connection(
                     connection_label=pose_solver_label,
@@ -659,7 +659,7 @@ class Connector(MCastComponent):
                     _, pose_solver_connection.request_id = self.update_request(
                         request_id=pose_solver_connection.request_id)
                 if pose_solver_connection.request_id is None:
-                    solver_request_list: list[MCastRequest] = list()
+                    solver_request_list: list[MCTRequest] = list()
                     detector_labels: list[str] = self.get_active_detector_labels()
                     for detector_label in detector_labels:
                         current_detector_frame: DetectorFrame = self.get_live_detector_frame(
@@ -683,7 +683,7 @@ class Connector(MCastComponent):
                                 detector_timestamp_utc_iso8601=current_detector_frame.timestamp_utc_iso8601)
                             solver_request_list.append(marker_request)
                     solver_request_list.append(GetPosesRequest())
-                    request_series: MCastRequestSeries = MCastRequestSeries(series=solver_request_list)
+                    request_series: MCTRequestSeries = MCTRequestSeries(series=solver_request_list)
                     pose_solver_connection.request_id = self.request_series_push(
                         connection_label=pose_solver_label,
                         request_series=request_series)
@@ -711,7 +711,7 @@ class Connector(MCastComponent):
         - value that request_id shall take for subsequent iterations (None means a response series has been received)
         """
 
-        response_series: MCastResponseSeries | None
+        response_series: MCTResponseSeries | None
         _, response_series = self.response_series_pop(request_series_id=request_id)
         if response_series is None:
             return False, request_id  # try again next loop

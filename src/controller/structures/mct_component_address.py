@@ -3,7 +3,7 @@ from ipaddress import IPv4Address
 from pydantic import BaseModel, Field
 
 
-class ComponentAddress(BaseModel):
+class MCTComponentAddress(BaseModel):
     """
     Information used to establish a connection,
     there is nothing that should change here without a user's explicit input.

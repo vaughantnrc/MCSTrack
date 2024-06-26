@@ -6,10 +6,8 @@ from .parameters import \
     ParameterText
 from src.common import \
     ErrorResponse, \
-    MCastResponse, \
+    MCTResponse, \
     StatusMessageSource
-from src.connector import \
-    Connector
 from typing import Final
 import wx
 
@@ -26,17 +24,13 @@ class BasePanel(wx.Panel):
 
     _update_loop_running: bool
 
-    _connector: Connector
-
     def __init__(
         self,
         parent: wx.Window,
-        connector: Connector,
         status_message_source: StatusMessageSource,
         name: str
     ):
         super().__init__(parent=parent, name=name)
-        self._connector = connector
         self.panel_is_selected = False
         self.status_message_source = status_message_source
 
@@ -53,7 +47,7 @@ class BasePanel(wx.Panel):
 
     def handle_unknown_response(
         self,
-        response: MCastResponse
+        response: MCTResponse
     ):
         self.status_message_source.enqueue_status_message(
             severity="error",

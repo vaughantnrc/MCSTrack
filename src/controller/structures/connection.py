@@ -1,10 +1,10 @@
-from .component_address import ComponentAddress
+from .mct_component_address import MCTComponentAddress
 from .connection_report import ConnectionReport
 from src.common import \
-    MCastParsable, \
-    MCastRequestSeries, \
-    MCastResponse, \
-    MCastResponseSeries
+    MCTParsable, \
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries
 from src.common.structures import StatusMessage, SeverityLabel
 import abc
 import datetime
@@ -69,18 +69,18 @@ class Connection(abc.ABC):
             RESPONDED: Final[str] = "Responded"
             UNTRACKED: Final[str] = "Untracked"  # this suggests an error has occurred
         status: Status
-        response_series: MCastResponseSeries | None
+        response_series: MCTResponseSeries | None
 
         def __init__(
             self,
             status: Status,
-            response_series: MCastResponseSeries | None = None
+            response_series: MCTResponseSeries | None = None
         ):
             self.status = status
             self.response_series = response_series
 
     # treat as immutable
-    _component_address: ComponentAddress
+    _component_address: MCTComponentAddress
 
     _state: State
 
@@ -93,13 +93,13 @@ class Connection(abc.ABC):
     _deinit_request_id: uuid.UUID | None
 
     # Requests are handled one at a time, with results being appended to a Response queue
-    _request_series_queue: list[tuple[MCastRequestSeries, uuid.UUID]]
+    _request_series_queue: list[tuple[MCTRequestSeries, uuid.UUID]]
     _current_request_id: uuid.UUID | None
-    _response_series_queue: dict[uuid.UUID, MCastResponseSeries]
+    _response_series_queue: dict[uuid.UUID, MCTResponseSeries]
 
     def __init__(
         self,
-        component_address: ComponentAddress
+        component_address: MCTComponentAddress
     ):
         self._component_address = component_address
 
@@ -118,10 +118,10 @@ class Connection(abc.ABC):
         self._response_series_queue = dict()
 
     @abc.abstractmethod
-    def create_deinitialization_request_series(self) -> MCastRequestSeries: ...
+    def create_deinitialization_request_series(self) -> MCTRequestSeries: ...
 
     @abc.abstractmethod
-    def create_initialization_request_series(self) -> MCastRequestSeries: ...
+    def create_initialization_request_series(self) -> MCTRequestSeries: ...
 
     def dequeue_status_messages(self) -> list[StatusMessage]:
         status_messages = self._status_message_queue
@@ -130,7 +130,7 @@ class Connection(abc.ABC):
 
     def enqueue_request_series(
         self,
-        request_series: MCastRequestSeries
+        request_series: MCTRequestSeries
     ) -> uuid.UUID:
         """
         Returns the id that can be used to get the result (when it is ready)
@@ -174,13 +174,13 @@ class Connection(abc.ABC):
     @abc.abstractmethod
     def handle_initialization_response_series(
         self,
-        response_series: MCastResponseSeries
+        response_series: MCTResponseSeries
     ) -> InitializationResult: ...
 
     @abc.abstractmethod
     def handle_deinitialization_response_series(
         self,
-        response_series: MCastResponseSeries
+        response_series: MCTResponseSeries
     ) -> DeinitializationResult: ...
 
     def is_shut_down(self) -> bool:
@@ -220,14 +220,14 @@ class Connection(abc.ABC):
 
         def _response_series_converter(
             response_series_dict: dict
-        ) -> MCastResponseSeries:
-            series_list: list[MCastResponse] = MCastParsable.parse_dynamic_series_list(
+        ) -> MCTResponseSeries:
+            series_list: list[MCTResponse] = MCTParsable.parse_dynamic_series_list(
                 parsable_series_dict=response_series_dict,
                 supported_types=self.supported_response_types())
-            return MCastResponseSeries(series=series_list)
+            return MCTResponseSeries(series=series_list)
 
         if self._current_request_id is None and len(self._request_series_queue) > 0:
-            request_series: MCastRequestSeries
+            request_series: MCTRequestSeries
             (request_series, self._current_request_id) = self._request_series_queue.pop(0)
             request_series_as_dict: dict = request_series.dict()
             request_series_as_str: str = json.dumps(request_series_as_dict)
@@ -240,7 +240,7 @@ class Connection(abc.ABC):
         if self._current_request_id is not None:
             response_series_as_str: str = await self._socket.recv()
             response_series_as_dict: dict = json.loads(response_series_as_str)
-            response_series: MCastResponseSeries = _response_series_converter(response_series_as_dict)
+            response_series: MCTResponseSeries = _response_series_converter(response_series_as_dict)
             response_series.responder = self._component_address.label
             self._response_series_queue[self._current_request_id] = response_series
             self._current_request_id = None
@@ -274,7 +274,7 @@ class Connection(abc.ABC):
         self._next_attempt_timestamp_utc = datetime.datetime.utcnow()
 
     @abc.abstractmethod
-    def supported_response_types(self) -> list[type[MCastResponse]]: ...
+    def supported_response_types(self) -> list[type[MCTResponse]]: ...
 
     async def _try_connect(self) -> ConnectionResult:
         uri: str = f"ws://{self._component_address.ip_address}:{self._component_address.port}/websocket"

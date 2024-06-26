@@ -1,5 +1,5 @@
 from .row_selection_table import RowSelectionTable
-from src.connector import \
+from src.controller import \
     ConnectionReport
 from typing import Final
 import wx

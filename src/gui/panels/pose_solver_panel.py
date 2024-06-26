@@ -11,17 +11,17 @@ from .specialized import \
 from src.common import \
     ErrorResponse, \
     EmptyResponse, \
-    MCastRequestSeries, \
-    MCastResponse, \
-    MCastResponseSeries, \
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries, \
     StatusMessageSource
 from src.common.structures import \
     DetectorFrame, \
     Matrix4x4, \
     Pose, \
     PoseSolverFrame
-from src.connector import \
-    Connector
+from src.controller import \
+    MCTController
 from src.pose_solver.api import \
     AddTargetMarkerRequest, \
     AddTargetMarkerResponse, \
@@ -42,7 +42,7 @@ POSE_REPRESENTATIVE_MODEL: Final[str] = "coordinate_axes"
 
 class PoseSolverPanel(BasePanel):
 
-    _connector: Connector
+    _controller: MCTController
 
     _pose_solver_selector: ParameterSelector
     _reference_marker_id_spinbox: ParameterSpinboxInteger
@@ -63,16 +63,15 @@ class PoseSolverPanel(BasePanel):
     def __init__(
         self,
         parent: wx.Window,
-        connector: Connector,
+        controller: MCTController,
         status_message_source: StatusMessageSource,
         name: str = "PoseSolverPanel"
     ):
         super().__init__(
             parent=parent,
-            connector=connector,
             status_message_source=status_message_source,
             name=name)
-        self._connector = connector
+        self._controller = controller
 
         self._control_blocking_request_id = None
         self._is_updating = False
@@ -219,11 +218,9 @@ class PoseSolverPanel(BasePanel):
 
     def handle_response_series(
         self,
-        response_series: MCastResponseSeries,
-        task_description: Optional[str] = None,
-        expected_response_count: Optional[int] = None
+        response_series: MCTResponseSeries
     ) -> None:
-        response: MCastResponse
+        response: MCTResponse
         for response in response_series.series:
             if isinstance(response, AddTargetMarkerResponse):
                 pass  # we don't currently do anything with this response in this interface
@@ -235,7 +232,7 @@ class PoseSolverPanel(BasePanel):
     def on_page_select(self) -> None:
         super().on_page_select()
         selected_pose_solver_label: str = self._pose_solver_selector.selector.GetStringSelection()
-        available_pose_solver_labels: list[str] = self._connector.get_active_pose_solver_labels()
+        available_pose_solver_labels: list[str] = self._controller.get_active_pose_solver_labels()
         self._pose_solver_selector.set_options(option_list=available_pose_solver_labels)
         if selected_pose_solver_label in available_pose_solver_labels:
             self._pose_solver_selector.selector.SetStringSelection(selected_pose_solver_label)
@@ -247,23 +244,23 @@ class PoseSolverPanel(BasePanel):
         self._update_ui_controls()
 
     def on_reference_target_submit_pressed(self, _event: wx.CommandEvent) -> None:
-        request_series: MCastRequestSeries = MCastRequestSeries(series=[
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[
             (SetReferenceMarkerRequest(
                 marker_id=self._reference_marker_id_spinbox.spinbox.GetValue(),
                 marker_diameter=self._reference_marker_diameter_spinbox.spinbox.GetValue()))])
         selected_pose_solver_label: str = self._pose_solver_selector.selector.GetStringSelection()
-        self._control_blocking_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_pose_solver_label,
             request_series=request_series)
         self._update_ui_controls()
 
     def on_tracked_target_submit_pressed(self, _event: wx.CommandEvent) -> None:
-        request_series: MCastRequestSeries = MCastRequestSeries(series=[
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[
             (AddTargetMarkerRequest(
                 marker_id=self._tracked_marker_id_spinbox.spinbox.GetValue(),
                 marker_diameter=self._tracked_marker_diameter_spinbox.spinbox.GetValue()))])
         selected_pose_solver_label: str = self._pose_solver_selector.selector.GetStringSelection()
-        self._control_blocking_request_id = self._connector.request_series_push(
+        self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_pose_solver_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -291,10 +288,10 @@ class PoseSolverPanel(BasePanel):
 
         self._is_updating = True
 
-        if self._connector.is_running():
-            detector_labels: list[str] = self._connector.get_active_detector_labels()
+        if self._controller.is_running():
+            detector_labels: list[str] = self._controller.get_active_detector_labels()
             for detector_label in detector_labels:
-                retrieved_detector_frame: DetectorFrame = self._connector.get_live_detector_frame(
+                retrieved_detector_frame: DetectorFrame = self._controller.get_live_detector_frame(
                     detector_label=detector_label)
                 retrieved_detector_frame_timestamp: datetime.datetime = retrieved_detector_frame.timestamp_utc()
                 if detector_label in self._latest_detector_frames:
@@ -306,9 +303,9 @@ class PoseSolverPanel(BasePanel):
                     self._latest_detector_frames[detector_label] = retrieved_detector_frame
 
             new_poses_available: bool = False
-            pose_solver_labels: list[str] = self._connector.get_active_pose_solver_labels()
+            pose_solver_labels: list[str] = self._controller.get_active_pose_solver_labels()
             for pose_solver_label in pose_solver_labels:
-                retrieved_pose_solver_frame: PoseSolverFrame = self._connector.get_live_pose_solver_frame(
+                retrieved_pose_solver_frame: PoseSolverFrame = self._controller.get_live_pose_solver_frame(
                     pose_solver_label=pose_solver_label)
                 retrieved_pose_solver_frame_timestamp: datetime.datetime = retrieved_pose_solver_frame.timestamp_utc()
                 if pose_solver_label in self._latest_pose_solver_frames:
@@ -364,9 +361,9 @@ class PoseSolverPanel(BasePanel):
                 else:
                     self._tracking_table.Enable(False)
 
-        response_series: MCastResponseSeries | None
+        response_series: MCTResponseSeries | None
         if self._control_blocking_request_id is not None:
-            self._control_blocking_request_id, response_series = self._connector.response_series_pop(
+            self._control_blocking_request_id, response_series = self._controller.response_series_pop(
                 request_series_id=self._control_blocking_request_id)
             if response_series is not None:  # self._control_blocking_request_id will be None
                 self.handle_response_series(response_series)
@@ -382,7 +379,7 @@ class PoseSolverPanel(BasePanel):
         self._tracked_target_submit_button.Enable(False)
         self._tracking_table.Enable(False)
         self._tracking_display_textbox.Enable(False)
-        if self._connector.is_transitioning() or (self._control_blocking_request_id is not None):
+        if self._controller.is_transitioning() or (self._control_blocking_request_id is not None):
             return  # We're waiting for something
         self._pose_solver_selector.Enable(True)
         selected_pose_solver: str = self._pose_solver_selector.selector.GetStringSelection()
