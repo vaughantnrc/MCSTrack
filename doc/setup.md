@@ -1,8 +1,8 @@
-# Setup
+# Environment Setup
 
 Please see the section that pertains to your operating system below.
 
-## Windows
+### Windows
 
 Please install a recent version of Visual Studio Build Tools: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022
 
@@ -16,7 +16,7 @@ cd ../..
 pip install -r requirements.txt
 ```
 
-## Linux
+### Linux
 
 Install python3.11. If you are on a Debian-based distribution and you cannot find that version of Python, you can try the deadsnakes ppa: https://askubuntu.com/questions/1398568/installing-python-who-is-deadsnakes-and-why-should-i-trust-them
 
@@ -35,3 +35,8 @@ pip install -r requirements.txt
 
 wxPython wheel failure, try: https://wxpython.org/blog/2017-08-17-builds-for-linux-with-pip/index.html
 
+# Detector Setup
+
+This system is intended to be used over a LAN connecting Raspberry Pi -based detector(s) and a main computer. The Raspberry Pi's run the src.main_detector, while the main computer runs the src.main_pose_solver and optionally the src.gui.gui module.
+
+To setup the Raspberry Pi -based detectors, run the setup/create_image.sh script on a compatible linux system. Flash the resulting image to a microSD card (or multiple) for use.
