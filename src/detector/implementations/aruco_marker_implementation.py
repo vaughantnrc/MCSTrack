@@ -203,7 +203,7 @@ class ArucoMarker(AbstractMarkerInterface):
             response_dict["rejected_marker_snapshots"] = self._marker_rejected_snapshots
         return GetMarkerSnapshotsResponse(**response_dict)
 
-    def internal_update_marker_corners(self, captured_image) -> list[MarkerCornerImagePoint]:
+    def internal_update_marker_corners(self, captured_image) -> None:
         if self._marker_dictionary is None:
             message: str = "No marker dictionary has been set."
             logger.error(message)
@@ -258,7 +258,6 @@ class ArucoMarker(AbstractMarkerInterface):
                     corner_image_points=corner_image_points))
 
         self.marker_timestamp_utc = datetime.datetime.utcnow()
-        return corner_image_points
 
     @staticmethod
     def _marker_corner_image_point_list_from_embedded_list(

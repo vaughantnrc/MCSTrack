@@ -23,5 +23,5 @@ class AbstractMarkerInterface(abc.ABC):
     def get_marker_snapshots(self, **kwargs) -> GetMarkerSnapshotsResponse:
         pass
 
-    def internal_update_marker_corners(self, marker_status) -> list[MarkerCornerImagePoint]:
+    def internal_update_marker_corners(self, marker_status) -> None:
         pass
