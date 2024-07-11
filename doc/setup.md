@@ -1,6 +1,6 @@
 # Environment Setup
 
-Please see the section that pertains to your operating system below.
+This set up is necessary for running the pose solver and GUI. Please see the section that pertains to your operating system below.
 
 ### Windows
 
@@ -35,8 +35,15 @@ pip install -r requirements.txt
 
 wxPython wheel failure, try: https://wxpython.org/blog/2017-08-17-builds-for-linux-with-pip/index.html
 
+
 # Detector Setup
 
-This system is intended to be used over a LAN connecting Raspberry Pi -based detector(s) and a main computer. The Raspberry Pi's run the src.main_detector, while the main computer runs the src.main_pose_solver and optionally the src.gui.gui module.
+This system is intended to be used over a LAN connecting Raspberry Pi -based detector(s) and a main computer. The Raspberry Pi's run the ```src.main_detector```, while the main computer runs the ```src.main_pose_solver``` and optionally the ```src.gui.gui``` module.
 
-To setup the Raspberry Pi -based detectors, run the setup/create_image.sh script on a compatible linux system. Flash the resulting image to a microSD card (or multiple) for use.
+To setup the Raspberry Pi -based detectors, download the latest OS image under Releases. Alternatively, run the setup/create_image.sh script on a compatible linux system. Flash the resulting image to a microSD card (or multiple) for use.
+
+Connect the Raspberry Pi and host machine to the LAN. On the host machine, with the python virtualenv activated (see platform-specific instructions above), run the ```src.main_pose_solver``` and ```src.gui.gui``` modules - either through command line, or your IDE of choice for debugging. 
+
+# GUI Usage
+
+Using the GUI, add the IP address and port (8001) of the detector. For the pose solver, the IP address will be localhost and port 8000. To use the pose solver renderer (Windows only), the detector must first be calibrated using a board of markers - as described by https://docs.opencv.org/4.x/da/d13/tutorial_aruco_calibration.html. In the detector panel, with the 'preview image' option checked, capture calibration images of the board at a variety of angles. In the calibrator panel, you can select which ones to use to generate a calibration. Once that is complete, you can set the reference and tracked markers in the pose solver panel, and begin tracking. 
