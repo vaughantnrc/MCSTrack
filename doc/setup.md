@@ -1,3 +1,27 @@
+# Hardware Setup
+
+(Let D be the number of detectors you wish you have)
+
+- D x Raspberry Pi 5 - https://www.pishop.ca/product/raspberry-pi-5-8gb/
+- D x Raspberry Pi Global Shutter Camera - https://www.pishop.ca/product/raspberry-pi-global-shutter-camera/
+- D x Camera Lens - https://www.pishop.ca/product/6mm-wide-angle-lens-for-raspberry-pi-hq-camera-cs/
+- D x Raspberry Pi "Drive" - https://www.pishop.ca/product/microsd-card-16-gb-class-10-blank/
+- D x Raspberry Pi Camera Cable - https://www.pishop.ca/product/camera-cable-for-raspberry-pi-5 (200 mm, alternate link https://www.canakit.com/raspberry-pi-5-camera-cable.html)
+- D x PoE hat for Raspberry Pi 5 - https://www.waveshare.com/poe-hat-f.htm
+- D x Gooseneck clamps (choose SCP-BH, SCP-GN18HDB, SCP-TC) - https://snakeclamp.com/collections/camera
+- D x Ethernet Cable (yellow) - https://www.cdw.ca/product/tripp-lite-7ft-cat6-gigabit-molded-patch-cable-rj45-m-m-550mhz-24awg-yellow/5991672
+
+- 1 x Switch with PoE support* - https://www.cdw.ca/product/netgear-gs516pp-ethernet-switch/6252835
+- 1 x suitable Router*
+- 1 x laptop or other computing device on which to run the pose solver
+- 2 x Ethernet cables (blue) to connect router, switch, and laptop - https://www.cdw.ca/product/tripp-lite-cat6-gigabit-snagless-molded-patch-cable-rj45-m-m-blue-7ft/622270
+- (Optional, but recommended) 1 x Raspberry Pi power supply - https://www.pishop.ca/product/raspberry-pi-27w-usb-c-power-supply-white-us/
+- (Optional, but recommended) 1 x Raspberry Pi display cable - https://www.pishop.ca/product/micro-hdmi-to-hdmi-cable-for-pi-4-3ft-black/
+
+* Alternatively, if you do not anticipate needing many detectors, then you can just get a router with sufficient PoE support and skip the switch
+
+Cable colours are just a suggestion to help differentiate them. You can use whatever convention you like, or get all the same colour.
+
 # Environment Setup
 
 This set up is necessary for running the pose solver and GUI. Please see the section that pertains to your operating system below.
