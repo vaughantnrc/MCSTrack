@@ -141,6 +141,11 @@ class MCTController(MCTComponent):
                         severity="error",
                         message=f"Failed to find DetectorConnection with label {detector_label}.")
                     continue
+                if detector_connection.current_resolution is None:
+                    self.status_message_source.enqueue_status_message(
+                        severity="error",
+                        message=f"DetectorConnection with label {detector_label} doesn't have a resolution.")
+                    continue
                 requests: list[MCTRequest] = list()
                 target_resolution: DetectorResolution = DetectorResolution(
                     detector_serial_identifier=detector_label,
