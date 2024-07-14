@@ -116,12 +116,14 @@ class BasePanel(wx.Panel):
         parent: wx.Window,
         sizer: wx.BoxSizer,
         label: str,
-        selectable_values: list[str]
+        selectable_values: list[str],
+        value: str | None = None
     ) -> ParameterSelector:
         selector = ParameterSelector(
             parent=parent,
             label=label,
-            selectable_values=selectable_values)
+            selectable_values=selectable_values,
+            value=value)
         sizer.Add(
             window=selector,
             flags=wx.SizerFlags(0).Expand())
@@ -136,7 +138,8 @@ class BasePanel(wx.Panel):
         minimum_value: float,
         maximum_value: float,
         initial_value: float,
-        step_value: float
+        step_value: float,
+        digit_count: int = 2
     ) -> ParameterSpinboxFloat:
         spinbox = ParameterSpinboxFloat(
             parent=parent,
@@ -144,7 +147,8 @@ class BasePanel(wx.Panel):
             minimum_value=minimum_value,
             maximum_value=maximum_value,
             initial_value=initial_value,
-            step_value=step_value)
+            step_value=step_value,
+            digit_count=digit_count)
         sizer.Add(
             window=spinbox,
             flags=wx.SizerFlags(0).Expand())
@@ -158,14 +162,16 @@ class BasePanel(wx.Panel):
         label: str,
         minimum_value: int,
         maximum_value: int,
-        initial_value: int
+        initial_value: int,
+        step_value: int = 1
     ) -> ParameterSpinboxInteger:
         spinbox = ParameterSpinboxInteger(
             parent=parent,
             label=label,
             minimum_value=minimum_value,
             maximum_value=maximum_value,
-            initial_value=initial_value)
+            initial_value=initial_value,
+            step_value=step_value)
         sizer.Add(
             window=spinbox,
             flags=wx.SizerFlags(0).Expand())
