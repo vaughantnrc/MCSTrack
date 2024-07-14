@@ -8,9 +8,6 @@ from .parameters import \
     ParameterSelector, \
     ParameterSpinboxFloat, \
     ParameterSpinboxInteger
-from src.calibrator.api import \
-    AddCalibrationImageRequest, \
-    AddCalibrationImageResponse
 from src.common import \
     ErrorResponse, \
     EmptyResponse, \
@@ -40,6 +37,8 @@ from src.common.structures import \
 from src.controller import \
     MCTController
 from src.detector.api import \
+    AddCalibrationImageRequest, \
+    AddCalibrationImageResponse, \
     GetCaptureImageRequest, \
     GetCaptureImageResponse, \
     GetCameraParametersRequest, \

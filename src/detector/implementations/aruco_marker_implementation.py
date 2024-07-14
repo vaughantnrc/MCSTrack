@@ -1,8 +1,9 @@
-from src.detector.api import \
+from ..api import \
     GetDetectionParametersResponse, \
     GetMarkerSnapshotsRequest, \
     GetMarkerSnapshotsResponse, \
     SetDetectionParametersRequest
+from ..interfaces import AbstractMarkerInterface
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -13,17 +14,14 @@ from src.common.structures import \
     CORNER_REFINEMENT_METHOD_DICTIONARY_TEXT_TO_INT, \
     DetectionParameters, \
     MarkerSnapshot, \
+    MarkerStatus, \
     MarkerCornerImagePoint
-
-from src.common.structures import MarkerStatus
-
+import cv2.aruco
 import datetime
 import logging
-from typing import Any, Callable
-import cv2.aruco
 import numpy
+from typing import Any
 
-from src.detector.implementations import AbstractMarkerInterface
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +41,7 @@ class ArucoMarker(AbstractMarkerInterface):
         self._marker_rejected_snapshots = list()  # Things that looked at first like markers but got later filtered out
         self.marker_timestamp_utc = datetime.datetime.min
 
-        self.marker_status = MarkerStatus
+        self.marker_status = MarkerStatus()
         self.marker_status.status = MarkerStatus.Status.STOPPED
 
         # TODO: DEBUGGING

@@ -19,7 +19,7 @@ from src.detector.api import \
     GetMarkerSnapshotsResponse, \
     StartCaptureRequest, \
     StopCaptureRequest
-from src.calibrator.api import \
+from src.detector.api import \
     AddCalibrationImageResponse, \
     CalibrateResponse, \
     GetCalibrationImageResponse, \

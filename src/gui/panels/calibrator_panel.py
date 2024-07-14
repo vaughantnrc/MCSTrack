@@ -8,7 +8,21 @@ from .parameters import \
 from .specialized import \
     CalibrationImageTable, \
     CalibrationResultTable
-from src.calibrator.api import \
+from src.common import \
+    ErrorResponse, \
+    EmptyResponse, \
+    ImageCoding, \
+    ImageUtils, \
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries, \
+    StatusMessageSource
+from src.common.structures import \
+    DetectorResolution, \
+    ImageResolution
+from src.controller import \
+    MCTController
+from src.detector.api import \
     CalibrateRequest, \
     CalibrateResponse, \
     DeleteStagedRequest, \
@@ -24,25 +38,11 @@ from src.calibrator.api import \
     ListCalibrationResultMetadataResponse, \
     UpdateCalibrationImageMetadataRequest, \
     UpdateCalibrationResultMetadataRequest
-from src.calibrator.structures import \
+from src.detector.structures import \
     CalibrationImageMetadata, \
     CalibrationImageState, \
     CalibrationResultMetadata, \
     CalibrationResultState
-from src.common import \
-    ErrorResponse, \
-    EmptyResponse, \
-    ImageCoding, \
-    ImageUtils, \
-    MCTRequestSeries, \
-    MCTResponse, \
-    MCTResponseSeries, \
-    StatusMessageSource
-from src.common.structures import \
-    DetectorResolution, \
-    ImageResolution
-from src.controller import \
-    MCTController
 from io import BytesIO
 import logging
 from typing import Optional

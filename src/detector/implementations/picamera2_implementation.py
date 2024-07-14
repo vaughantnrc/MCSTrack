@@ -1,8 +1,8 @@
-from .abstract_camera_interface import AbstractCameraInterface
 from ..api import \
     GetCameraParametersResponse, \
     SetCameraParametersRequest
 from ..exceptions import UpdateCaptureError
+from ..interfaces import AbstractCameraInterface
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -21,7 +21,6 @@ from src.common.structures import \
 import datetime
 import logging
 from picamera2 import Picamera2
-from picamera2.controls import Controls
 from picamera2.configuration import CameraConfiguration
 from typing import Final
 

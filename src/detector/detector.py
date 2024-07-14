@@ -1,47 +1,48 @@
-from src.detector.api import \
-    GetCaptureImageRequest, \
-    GetCaptureImageResponse, \
-    GetCameraParametersRequest, \
-    GetCameraParametersResponse, \
-    GetDetectionParametersRequest, \
-    GetDetectionParametersResponse, \
-    GetMarkerSnapshotsRequest, \
-    GetMarkerSnapshotsResponse, \
-    SetCameraParametersRequest, \
-    SetDetectionParametersRequest, \
-    StartCaptureRequest, \
-    StopCaptureRequest
-from src.detector.exceptions import UpdateCaptureError
-from src.detector.fileio import DetectorConfiguration
-from src.calibrator import Calibrator
-from src.calibrator.fileio import CalibratorConfiguration
-from src.calibrator.api import \
+from .api import \
     AddCalibrationImageRequest, \
     CalibrateRequest, \
     DeleteStagedRequest, \
     GetCalibrationImageRequest, \
     GetCalibrationResultRequest, \
+    GetCameraParametersRequest, \
+    GetCameraParametersResponse, \
+    GetCaptureImageRequest, \
+    GetCaptureImageResponse, \
+    GetDetectionParametersRequest, \
+    GetDetectionParametersResponse, \
+    GetMarkerSnapshotsRequest, \
+    GetMarkerSnapshotsResponse, \
     ListCalibrationDetectorResolutionsRequest, \
     ListCalibrationImageMetadataRequest, \
     ListCalibrationResultMetadataRequest, \
+    SetCameraParametersRequest, \
+    SetDetectionParametersRequest, \
+    StartCaptureRequest, \
+    StopCaptureRequest, \
     UpdateCalibrationImageMetadataRequest, \
     UpdateCalibrationResultMetadataRequest
+from .calibrator import Calibrator
+from .exceptions import UpdateCaptureError
+from .interfaces import \
+    AbstractMarkerInterface, \
+    AbstractCameraInterface
+from .structures import \
+    DetectorConfiguration
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
     MCTComponent, \
     MCTRequest, \
     MCTResponse
-from src.common.structures.capture_status import CaptureStatus
-from src.common.structures.marker_status import MarkerStatus
+from src.common.structures import \
+    CaptureStatus, \
+    MarkerStatus
 import logging
 from typing import Callable
 
-from src.detector.implementations import \
-    AbstractMarkerInterface, \
-    AbstractCameraInterface
 
 logger = logging.getLogger(__name__)
+
 
 class Detector(MCTComponent):
 
@@ -57,7 +58,6 @@ class Detector(MCTComponent):
         self,
         detector_configuration: DetectorConfiguration,
         marker_interface: AbstractMarkerInterface,
-        calibrator_configuration: CalibratorConfiguration,
         camera_interface: AbstractCameraInterface
     ):
         super().__init__(
@@ -65,7 +65,8 @@ class Detector(MCTComponent):
             send_status_messages_to_logger=True)
         
         self._detector_configuration = detector_configuration
-        self._calibrator = Calibrator(calibrator_configuration)
+        self._calibrator = Calibrator(
+            calibrator_configuration=detector_configuration.calibrator_configuration)
         self._frame_count = 0
 
         self._camera_interface = camera_interface
