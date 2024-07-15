@@ -15,6 +15,8 @@ class PoseLocation:
         self.__RMAT_list = []  # Rotation matrix
         self.__TVEC_list = []  # Translation vector
 
+        self.frame_count = 0
+
     def add_matrix(self, transformation_matrix, timestamp):
         self._timestamp = timestamp
 

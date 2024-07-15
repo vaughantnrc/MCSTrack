@@ -4,6 +4,7 @@ from src.board_builder.utils.board_builder_pose_solver import BoardBuilderPoseSo
 from src.board_builder.structures.pose_location import PoseLocation
 from src.common.structures import Pose
 from src.pose_solver.structures import MarkerCorners
+from collections import defaultdict
 
 
 class BoardBuilder:
@@ -71,6 +72,23 @@ class BoardBuilder:
                 new_matrix[i][j] = self._relative_pose_matrix[i][j]
         self._relative_pose_matrix = new_matrix
 
+    def _filter_data(self, data):
+        """ Filters the detector data to only keep the markers snapshots that appear in more than one detector """
+        label_counts = defaultdict(int)
+        for snapshots in data.values():
+            for snapshot in snapshots:
+                label_counts[snapshot.label] += 1
+
+        filtered_data = {}
+        for key, snapshots in data.items():
+            filtered_snapshots = [
+                snapshot for snapshot in snapshots
+                if label_counts[snapshot.label] >= 2
+            ]
+            if filtered_snapshots:
+                filtered_data[key] = filtered_snapshots
+        return filtered_data
+
     def _find_matrix_input_index(self, pose_uuid, other_pose_uuid):
         """ Given two pose uuids, return their index location in the relative pose matrix """
 
@@ -90,81 +108,80 @@ class BoardBuilder:
 
         return pose_index, other_pose_index
 
-    def _solve_pose(self, detector_data):
+    def _solve_pose(self, detector_data, timestamp):
         """ Given marker ids and its corner locations, find its pose """
-        markers_visible = False
+        for detector_name in detector_data:
+            for markerSnapshot in detector_data[detector_name]:
+                if self.pose_solver.add_target_marker(int(markerSnapshot.label)):
+                    self._expand_matrix()
 
         for detector_name in detector_data:
-            if detector_data[detector_name]['ids'] is not None:
-                markers_visible = True
+            for markerSnapshot in detector_data[detector_name]:
+                corners_list: list[list[int]] = []
+                for corner in markerSnapshot.corner_image_points:
+                    corners_list.append([corner.x_px, corner.y_px])
+                marker_corners = MarkerCorners(
+                    detector_label=detector_name,
+                    marker_id=int(markerSnapshot.label),
+                    points=corners_list,
+                    timestamp=timestamp
+                )
+                self.pose_solver.add_marker_corners([marker_corners])
 
-        if markers_visible:
-            for detector_name in detector_data:
-                for marker_id in detector_data[detector_name]['ids']:
-                    if self.pose_solver.add_target_marker(marker_id):
-                        self._expand_matrix()
-
-            for detector_name in detector_data:
-                for index, corner in enumerate(detector_data[detector_name]['corners']):
-                    marker_corners = MarkerCorners(
-                        detector_label=detector_name,
-                        marker_id=int(detector_data[detector_name]['ids'][index]),
-                        points=corner.tolist(),
-                        timestamp=datetime.datetime.now()
-                    )
-                    self.pose_solver.add_marker_corners([marker_corners])
-
-            target_poses = self.pose_solver.get_target_poses()
-            self.target_poses = target_poses
-            visible_markers = []
-            for pose in target_poses:
-                visible_markers.append(pose.target_id)
-                if pose.target_id not in list(self._index_to_marker_uuid.values()):
-                    self._index_to_marker_uuid[self._matrix_index] = pose.target_id
-                    self._matrix_index += 1
-
-            self._visible_markers = visible_markers
+        target_poses = self.pose_solver.get_target_poses()
+        self.target_poses = target_poses
+        visible_markers = []
+        for pose in target_poses:
+            visible_markers.append(pose.target_id)
+            if pose.target_id not in list(self._index_to_marker_uuid.values()):
+                self._index_to_marker_uuid[self._matrix_index] = pose.target_id
+                self._matrix_index += 1
+        self._visible_markers = visible_markers
 
 
     ### PUBLIC METHOD ###
     def locate_reference_markers(self, detector_data):
-
-        markers_visible = False
-        for detector_name in detector_data:
-            if detector_data[detector_name]['ids'] is not None:
-                markers_visible = True
-
-        if markers_visible:
-            self.detector_poses = []
-            for detector_name in detector_data:
-                for index, corner in enumerate(detector_data[detector_name]['corners']):
-                    marker_corners = MarkerCorners(
-                        detector_label=detector_name,
-                        marker_id=int(detector_data[detector_name]['ids'][index]),
-                        points=corner.tolist(),
-                        timestamp=datetime.datetime.now()
-                    )
-                    self.pose_solver.add_marker_corners([marker_corners])
-
-            new_detector_poses = self.pose_solver.get_detector_poses()
-            for pose in new_detector_poses:
-                if pose.target_id not in self._detector_poses_average:
-                    self._detector_poses_average[pose.target_id] = PoseLocation(pose.target_id)
-                self._detector_poses_average[pose.target_id].add_matrix(np.array(pose.object_to_reference_matrix.values).reshape(4, 4), str(datetime.datetime.now()))
-            for label in self._detector_poses_average:
-                pose = Pose(
-                    target_id=label,
-                    object_to_reference_matrix=self._detector_poses_average[label].get_pose().object_to_reference_matrix,
-                    solver_timestamp_utc_iso8601=str(datetime.datetime.now())
+        detector_data = self._filter_data(detector_data)
+        if not detector_data:
+            return
+        self.detector_poses = []
+        timestamp = datetime.datetime.now()
+        for detector_name in detector_data:  # O(N^3) is pretty bad time complexity
+            for markerSnapshot in detector_data[detector_name]:
+                corners_list: list[list[int]] = []
+                for corner in markerSnapshot.corner_image_points:
+                    corners_list.append([corner.x_px, corner.y_px])
+                marker_corners = MarkerCorners(
+                    detector_label=detector_name,
+                    marker_id=int(markerSnapshot.label),
+                    points=corners_list,
+                    timestamp=timestamp
                 )
-                self.detector_poses.append(pose)
-            self.pose_solver.set_detector_poses(self.detector_poses)
+                self.pose_solver.add_marker_corners([marker_corners])
+
+        new_detector_poses = self.pose_solver.get_detector_poses()
+        for pose in new_detector_poses:
+            if pose.target_id not in self._detector_poses_average:
+                self._detector_poses_average[pose.target_id] = PoseLocation(pose.target_id)
+            self._detector_poses_average[pose.target_id].add_matrix(np.array(pose.object_to_reference_matrix.values).reshape(4, 4), str(timestamp))
+        for label in self._detector_poses_average:
+            pose = Pose(
+                target_id=label,
+                object_to_reference_matrix=self._detector_poses_average[label].get_pose().object_to_reference_matrix,
+                solver_timestamp_utc_iso8601=str(timestamp)
+            )
+            self.detector_poses.append(pose)
+        self.pose_solver.set_detector_poses(self.detector_poses)
 
     def collect_data(self, detector_data):
         """ Collects data of relative position and is entered in matrix. Returns a dictionary of its corners"""
+        detector_data = self._filter_data(detector_data)
+        if not detector_data:
+            return
+        timestamp = datetime.datetime.now()
         corners_dict = {}
         self.target_poses = []
-        self._solve_pose(detector_data)
+        self._solve_pose(detector_data, timestamp)
         for index, pose in enumerate(self.target_poses):
             # R R R T
             # R R R T
@@ -187,6 +204,7 @@ class BoardBuilder:
                         self._relative_pose_matrix[matrix_index[0]][matrix_index[1]] = new_pose_location
                     else:
                         self._relative_pose_matrix[matrix_index[0]][matrix_index[1]].add_matrix(relative_transform, str(datetime.datetime.now()))
+                    self._relative_pose_matrix[matrix_index[0]][matrix_index[1]].frame_count += 1
 
         for index, pose in enumerate(self.target_poses):
             pose_values = pose.object_to_reference_matrix.values
@@ -198,10 +216,13 @@ class BoardBuilder:
 
     def build_board(self, detector_data):
         """ Builds board using the relative matrix"""
-
+        detector_data = self._filter_data(detector_data)
+        if not detector_data:
+            return
+        timestamp = datetime.datetime.now()
         corners_dict = {}
         self.occluded_poses = []
-        self._solve_pose(detector_data)
+        self._solve_pose(detector_data, timestamp)
         if self.target_poses:
             for pose in self.target_poses:
                 pose_values = pose.object_to_reference_matrix.values
