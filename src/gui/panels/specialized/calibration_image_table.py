@@ -1,6 +1,5 @@
 from .row_selection_table import RowSelectionTable
-from src.calibrator.structures import \
-    CalibrationImageMetadata
+from src.detector.structures import CalibrationImageMetadata
 from typing import Final
 import wx
 

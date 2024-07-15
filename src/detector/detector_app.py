@@ -13,12 +13,11 @@ from src.detector.api import \
     GetMarkerSnapshotsRequest, \
     GetMarkerSnapshotsResponse, \
     SetDetectionParametersRequest
-from src.calibrator.fileio import CalibratorConfiguration
-from src.detector.fileio.detector_configuration import OPENCV, PICAMERA
-from src.detector.implementations import \
+from src.detector.structures.detector_configuration import OPENCV, PICAMERA
+from src.detector.interfaces import \
     AbstractCameraInterface, \
-    AbstractMarkerInterface, \
-    ArucoMarker
+    AbstractMarkerInterface
+from src.detector.implementations.aruco_marker_implementation import ArucoMarker
 import base64
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,24 +32,15 @@ logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
-    detector_configuration_filepath: str = os.path.join(os.path.dirname(__file__), "..", "..", "data", "config.json")
+    detector_configuration_filepath: str = \
+        os.path.join(os.path.dirname(__file__), "..", "..", "data", "detector_config.json")
     detector_configuration: DetectorConfiguration
-    calibrator_configuration_filepath: str = os.path.join(os.path.dirname(__file__), "..", "..", "data",
-                                                          "calibrator_config.json")
-    calibrator_configuration: CalibratorConfiguration
-    camera_interface: AbstractCameraInterface
-    marker_interface: AbstractMarkerInterface
-
     with open(detector_configuration_filepath, 'r') as infile:
         detector_configuration_file_contents: str = infile.read()
         detector_configuration_dict = hjson.loads(detector_configuration_file_contents)
         detector_configuration = DetectorConfiguration(**detector_configuration_dict)
 
-    with open(calibrator_configuration_filepath, 'r') as infile:  # Load calibrator configuration
-        calibrator_configuration_file_contents: str = infile.read()
-        calibrator_configuration_dict = hjson.loads(calibrator_configuration_file_contents)
-        calibrator_configuration = CalibratorConfiguration(**calibrator_configuration_dict)
-
+    camera_interface: AbstractCameraInterface
     if detector_configuration.camera_implementation == OPENCV:
         from src.detector.implementations.usb_webcam_implementation import USBWebcamWithOpenCV
         camera_interface = USBWebcamWithOpenCV(detector_configuration.camera_connection.usb_id)
@@ -59,12 +49,13 @@ def create_app() -> FastAPI:
         camera_interface = PiCamera()
     else:
         raise RuntimeError(f"Unsupported AbstractCameraInterface {detector_configuration.camera_implementation}")
+
+    marker_interface: AbstractMarkerInterface
     marker_interface = ArucoMarker()
     
     detector = Detector(
         detector_configuration=detector_configuration,
-        marker_interface=marker_interface, 
-        calibrator_configuration=calibrator_configuration,
+        marker_interface=marker_interface,
         camera_interface=camera_interface)
     detector_app = FastAPI()
 

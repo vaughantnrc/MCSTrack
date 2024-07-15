@@ -1,19 +1,19 @@
-import abc
+from ..api import \
+    GetCameraParametersResponse, \
+    GetCaptureImageResponse, \
+    GetCaptureImageRequest
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
     get_kwarg, \
     MCTResponse
-from src.detector.api import \
-    GetCameraParametersResponse, \
-    GetCaptureImageResponse, \
-    GetCaptureImageRequest
 from src.common.structures.capture_status import CaptureStatus
-
+import abc
 import base64
 import cv2
 import datetime
 import numpy
+
 
 class AbstractCameraInterface(abc.ABC):
 
@@ -24,18 +24,23 @@ class AbstractCameraInterface(abc.ABC):
     def __del__(self):
         pass
 
+    @abc.abstractmethod
     def internal_update_capture(self) -> None:
         pass
 
+    @abc.abstractmethod
     def set_capture_properties(self, **kwargs) -> EmptyResponse | ErrorResponse:
         pass
 
+    @abc.abstractmethod
     def get_capture_properties(self, **_kwargs) -> GetCameraParametersResponse | ErrorResponse:
         pass
 
+    @abc.abstractmethod
     def start_capture(self, **kwargs) -> MCTResponse:
         pass
 
+    @abc.abstractmethod
     def stop_capture(self, **kwargs) -> MCTResponse:
         pass
 
@@ -57,7 +62,3 @@ class AbstractCameraInterface(abc.ABC):
         return GetCaptureImageResponse(
             format=request.format,
             image_base64=encoded_image_rgb_base64)
-    
-        # img_bytes = base64.b64decode(img_str)
-        # img_buffer = numpy.frombuffer(img_bytes, dtype=numpy.uint8)
-        # img = cv2.imdecode(img_buffer, cv2.IMREAD_COLOR)

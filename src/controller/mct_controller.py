@@ -23,18 +23,17 @@ from src.common.structures import \
     ImageResolution, \
     IntrinsicParameters, \
     PoseSolverFrame
-from src.calibrator.api import \
+from src.detector.api import \
     GetCalibrationResultRequest, \
     GetCalibrationResultResponse, \
+    GetCameraParametersRequest, \
+    GetCameraParametersResponse, \
+    GetMarkerSnapshotsRequest, \
+    GetMarkerSnapshotsResponse, \
     ListCalibrationDetectorResolutionsRequest, \
     ListCalibrationDetectorResolutionsResponse, \
     ListCalibrationResultMetadataRequest, \
     ListCalibrationResultMetadataResponse
-from src.detector.api import \
-    GetCameraParametersRequest, \
-    GetCameraParametersResponse, \
-    GetMarkerSnapshotsRequest, \
-    GetMarkerSnapshotsResponse
 from src.pose_solver.api import \
     AddTargetMarkerResponse, \
     AddMarkerCornersRequest, \

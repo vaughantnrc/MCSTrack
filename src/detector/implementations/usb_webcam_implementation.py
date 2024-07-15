@@ -1,8 +1,8 @@
-from .abstract_camera_interface import AbstractCameraInterface
 from ..api import \
     GetCameraParametersResponse, \
     SetCameraParametersRequest
 from ..exceptions import UpdateCaptureError
+from ..interfaces import AbstractCameraInterface
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -105,7 +105,7 @@ class USBWebcamWithOpenCV(AbstractCameraInterface):
         grabbed_frame = self._capture.grab()
         if not grabbed_frame:
             message: str = "Failed to grab frame."
-            self._status.capture_errors.append(message)
+            self._capture_status.errors.append(message)
             self._capture_status.status = CaptureStatus.Status.FAILURE
             raise UpdateCaptureError(severity="error", message=message)
 
@@ -114,7 +114,7 @@ class USBWebcamWithOpenCV(AbstractCameraInterface):
         if not retrieved_frame:
             message: str = "Failed to retrieve frame."
             logger.error(message)
-            self._status.capture_errors.append(message)
+            self._capture_status.errors.append(message)
             self._capture_status.status = CaptureStatus.Status.FAILURE
             raise UpdateCaptureError(severity="error", message=message)
 

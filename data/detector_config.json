@@ -1,0 +1,11 @@
+{
+  "serial_identifier": "example_detector",
+  "camera_implementation": "picamera",
+  "camera_connection": {
+    "usb_id": 0
+  },
+  "camera_intrinsic_parameters": {},
+  "calibrator_configuration": {
+    "data_path": "./example_data_path/"
+  }
+}
