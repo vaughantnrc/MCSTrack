@@ -1052,7 +1052,8 @@ class PoseSolver:
                     reference_known_points += reference_points_for_intersections
                     initial_object_to_reference_matrix = register_corresponding_points(
                         point_set_from=object_points_for_intersections,
-                        point_set_to=reference_points_for_intersections)
+                        point_set_to=reference_points_for_intersections,
+                        collinearity_do_check=False)
                     initial_object_to_reference_estimated = True
 
                 # pose estimation based on ArUco directly, used *only* for initial pose estimation
