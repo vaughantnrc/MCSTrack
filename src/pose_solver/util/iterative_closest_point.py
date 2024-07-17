@@ -118,7 +118,8 @@ def iterative_closest_point_for_points_and_rays(
         target_points = target_known_points + target_ray_points
         transformed_to_target_matrix = register_corresponding_points(
             point_set_from=transformed_points,
-            point_set_to=target_points)
+            point_set_to=target_points,
+            collinearity_do_check=False)
 
         # update transformation & transformed points
         source_to_transformed_matrix = numpy.matmul(transformed_to_target_matrix, source_to_transformed_matrix)
