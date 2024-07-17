@@ -8,25 +8,25 @@ from src.common.api import \
     MCTResponse, \
     MCTResponseSeries
 from src.common.structures import \
-    DetectorResolution, \
     ImageResolution, \
     IntrinsicParameters, \
     MarkerSnapshot
 from src.detector.api import \
-    GetCaptureImageResponse, \
-    GetCameraParametersResponse, \
-    GetDetectionParametersResponse, \
-    GetMarkerSnapshotsResponse, \
-    StartCaptureRequest, \
-    StopCaptureRequest
-from src.detector.api import \
-    AddCalibrationImageResponse, \
-    CalibrateResponse, \
-    GetCalibrationImageResponse, \
-    GetCalibrationResultResponse, \
-    ListCalibrationDetectorResolutionsResponse, \
-    ListCalibrationImageMetadataResponse, \
-    ListCalibrationResultMetadataResponse
+    CalibrationCalculateResponse, \
+    CalibrationImageAddResponse, \
+    CalibrationImageGetResponse, \
+    CalibrationImageMetadataListResponse, \
+    CalibrationResolutionListResponse, \
+    CalibrationResultGetResponse, \
+    CalibrationResultGetActiveResponse, \
+    CalibrationResultMetadataListResponse, \
+    CameraImageGetResponse, \
+    CameraParametersGetResponse, \
+    CameraResolutionGetResponse, \
+    DetectorFrameGetResponse, \
+    DetectorStartRequest, \
+    DetectorStopRequest, \
+    MarkerParametersGetResponse
 import datetime
 import uuid
 
@@ -35,8 +35,6 @@ class DetectorConnection(Connection):
 
     # These are variables used directly by the MCTController for storing data
     request_id: uuid.UUID | None
-    calibration_result_identifier: str | None
-    calibrated_resolutions: list[DetectorResolution] | None
     current_resolution: ImageResolution | None
     current_intrinsic_parameters: IntrinsicParameters | None
     detected_marker_snapshots: list[MarkerSnapshot]
@@ -49,8 +47,6 @@ class DetectorConnection(Connection):
     ):
         super().__init__(component_address=component_address)
         self.request_id = None
-        self.calibration_result_identifier = None
-        self.calibrated_resolutions = None
         self.current_resolution = None
         self.current_intrinsic_parameters = None
         self.detected_marker_snapshots = list()
@@ -58,10 +54,10 @@ class DetectorConnection(Connection):
         self.marker_snapshot_timestamp = datetime.datetime.min
 
     def create_deinitialization_request_series(self) -> MCTRequestSeries:
-        return MCTRequestSeries(series=[StopCaptureRequest()])
+        return MCTRequestSeries(series=[DetectorStopRequest()])
 
     def create_initialization_request_series(self) -> MCTRequestSeries:
-        return MCTRequestSeries(series=[StartCaptureRequest()])
+        return MCTRequestSeries(series=[DetectorStartRequest()])
 
     def handle_deinitialization_response_series(
         self,
@@ -95,17 +91,19 @@ class DetectorConnection(Connection):
 
     def supported_response_types(self) -> list[type[MCTResponse]]:
         return [
-            AddCalibrationImageResponse,
-            CalibrateResponse,
+            CalibrationCalculateResponse,
+            CalibrationImageAddResponse,
+            CalibrationImageGetResponse,
+            CalibrationImageMetadataListResponse,
+            CalibrationResolutionListResponse,
+            CalibrationResultGetResponse,
+            CalibrationResultGetActiveResponse,
+            CalibrationResultMetadataListResponse,
+            CameraImageGetResponse,
+            CameraParametersGetResponse,
+            CameraResolutionGetResponse,
             DequeueStatusMessagesResponse,
+            DetectorFrameGetResponse,
             EmptyResponse,
             ErrorResponse,
-            GetCalibrationImageResponse,
-            GetCalibrationResultResponse,
-            GetCaptureImageResponse,
-            GetCameraParametersResponse,
-            GetDetectionParametersResponse,
-            GetMarkerSnapshotsResponse,
-            ListCalibrationDetectorResolutionsResponse,
-            ListCalibrationImageMetadataResponse,
-            ListCalibrationResultMetadataResponse]
+            MarkerParametersGetResponse]
