@@ -94,6 +94,7 @@ class TestPoseSolver(unittest.TestCase):
             intrinsic_parameters=DETECTOR_RED_INTRINSICS)
         pose_solver.set_reference_target(
             target=TargetMarker(
+                target_id=str(REFERENCE_MARKER_ID),
                 marker_id=REFERENCE_MARKER_ID,
                 marker_size=MARKER_SIZE_MM))
         pose_solver.add_target_marker(
@@ -169,6 +170,7 @@ class TestPoseSolver(unittest.TestCase):
             intrinsic_parameters=DETECTOR_YELLOW_INTRINSICS)
         pose_solver.set_reference_target(
             target=TargetMarker(
+                target_id=str(REFERENCE_MARKER_ID),
                 marker_id=REFERENCE_MARKER_ID,
                 marker_size=MARKER_SIZE_MM))
         pose_solver.add_target_marker(

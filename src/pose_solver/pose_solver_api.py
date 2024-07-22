@@ -130,6 +130,7 @@ class PoseSolverAPI(MCTComponent):
         try:
             self._pose_solver.set_reference_target(
                 TargetMarker(
+                    target_id=str(request.marker_id),
                     marker_id=request.marker_id,
                     marker_size=request.marker_diameter))
         except PoseSolverException as e:

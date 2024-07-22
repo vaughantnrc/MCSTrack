@@ -5,7 +5,7 @@ from .structures import \
     MarkerRaySet, \
     PoseData, \
     Ray, \
-    Target, \
+    TargetBase, \
     TargetMarker, \
     PoseSolverParameters
 from .util import \
@@ -28,7 +28,6 @@ import datetime
 import numpy
 from scipy.spatial.transform import Rotation
 from typing import Callable, Final, Optional, TypeVar
-from pydantic import BaseModel, Field
 import uuid
 
 EPSILON: Final[float] = 0.0001
@@ -185,8 +184,8 @@ class PoseSolver:
     Class containing the actual "solver" logic, kept separate from the API.
     """
     _intrinsics_by_detector_label: dict[str, IntrinsicParameters]
-    _targets: dict[uuid.UUID, Target]
-    _reference_target: Target
+    _targets: dict[uuid.UUID, TargetBase]
+    _reference_target: TargetBase
 
     _marker_corners_since_update: list[MarkerCorners]
 
@@ -217,9 +216,12 @@ class PoseSolver:
         self._intrinsics_by_detector_label = dict()
         self._parameters = PoseSolverParameters()
         self._targets = dict()
+        default_reference_marker_id: int = 0
+        default_reference_marker_size: float = 10.0
         self._reference_target = TargetMarker(
-            marker_id=0,
-            marker_size=10)
+            target_id=str(default_reference_marker_id),
+            marker_id=default_reference_marker_id,
+            marker_size=default_reference_marker_size)
         self._marker_corners_since_update = list()
         self._marker_rayset_by_marker_key = dict()
         self._alpha_poses_by_target_id = dict()
@@ -251,7 +253,8 @@ class PoseSolver:
         for target_id, target in self._targets.items():
             if isinstance(target, TargetMarker) and marker_id == target.marker_id:
                 raise PoseSolverException(message=f"Marker with id {marker_id} is already being tracked.")
-        target: Target = TargetMarker(
+        target: TargetBase = TargetMarker(
+            target_id=str(marker_id),
             marker_id=marker_id,
             marker_size=marker_diameter)
         target_id: uuid.UUID = uuid.uuid4()
@@ -287,7 +290,7 @@ class PoseSolver:
 
     def set_reference_target(
         self,
-        target: Target
+        target: TargetBase
     ) -> None:
         if not isinstance(target, TargetMarker):
             raise NotImplementedError("Only targets that are of type TargetMarker are currently supported.")
@@ -447,23 +450,6 @@ class PoseSolver:
             output_dict[input_key] = output_poses_for_label
         return output_dict, changed
 
-    def _corresponding_point_list_in_target(
-        self,
-        target_id: uuid.UUID
-    ) -> list[list[float]]:
-        points = list()
-        if target_id not in self._targets:
-            raise RuntimeError(f"Could not find target {str(target_id)} in domain.")
-        target: Target = self._targets[target_id]
-        if isinstance(target, TargetMarker):
-            half_width = target.marker_size / 2.0
-            points += [
-                [-half_width, half_width, 0.0],
-                [half_width, half_width, 0.0],
-                [half_width, -half_width, 0.0],
-                [-half_width, -half_width, 0.0]]
-        return points
-
     @staticmethod
     def _denoise_is_pose_pair_outlier(
         pose_a: PoseData,
@@ -548,7 +534,7 @@ class PoseSolver:
 
     def _estimate_target_pose_from_ray_set(
         self,
-        target: Target,
+        target: TargetBase,
         ray_set: MarkerRaySet
     ) -> tuple[list[float], list[float]]:
         corners = numpy.array([ray_set.image_points], dtype="float32")
@@ -596,7 +582,7 @@ class PoseSolver:
         self,
         ray_set: MarkerRaySet,
         target_id: uuid.UUID,
-        target: Target
+        target: TargetMarker
     ) -> tuple[list[float], list[float]]:
         assert (len(ray_set.ray_directions_reference) == 4)
 
@@ -622,7 +608,7 @@ class PoseSolver:
         # We need the original object points
         # First make sure they form a square (with reasonable tolerance)
         # because if not, then the following math becomes suspect...
-        object_points = self._corresponding_point_list_in_target(target_id=target_id)
+        object_points = target.get_points()
         if len(object_points) != 4:
             raise RuntimeError("Input marker points is of incorrect length, expected 4 got " + str(len(object_points)))
         point_top_left = numpy.array(object_points[0])
@@ -845,14 +831,7 @@ class PoseSolver:
             if image_point_set_reference is None:
                 continue  # Reference not visible
             intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
-            half_width: float = self._reference_target.marker_size / 2.0
-            reference_points: numpy.ndarray = numpy.array([
-                [-half_width,  half_width, 0.0],
-                [ half_width,  half_width, 0.0],
-                [ half_width, -half_width, 0.0],
-                [-half_width, -half_width, 0.0]],
-                dtype="float32")
-            reference_points = numpy.reshape(reference_points, newshape=(1, 4, 3))
+            reference_points = numpy.reshape(numpy.asarray(self._reference_target.get_points()), newshape=(1, 4, 3))
             image_points: numpy.ndarray = numpy.array([image_point_set_reference.points], dtype="float32")
             image_points = numpy.reshape(image_points, newshape=(1, 4, 2))
             reference_found: bool
@@ -1047,7 +1026,7 @@ class PoseSolver:
                     for marker_id in marker_ids_with_intersections:
                         corner_set_reference = corner_sets_reference_by_marker_id[marker_id]
                         reference_points_for_intersections += corner_set_reference.corners
-                    object_points_for_intersections = self._corresponding_point_list_in_target(target_id=target_id)
+                    object_points_for_intersections = target.get_points()
                     object_known_points += object_points_for_intersections
                     reference_known_points += reference_points_for_intersections
                     initial_object_to_reference_matrix = register_corresponding_points(
@@ -1069,7 +1048,7 @@ class PoseSolver:
                                 source_point=ray_set.ray_origin_reference,
                                 direction=ray_set.ray_directions_reference[corner_index]))
                         reference_rays += reference_rays_for_set
-                        object_points_for_set = self._corresponding_point_list_in_target(target_id=target_id)
+                        object_points_for_set = target.get_points()
                         object_ray_points += object_points_for_set
                         if not initial_object_to_reference_estimated:
                             position, orientation = self._estimate_target_pose_from_ray_set(target, ray_set)
