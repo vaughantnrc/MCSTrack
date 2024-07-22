@@ -22,11 +22,28 @@ class TestRegisterCorrespondingPoints(unittest.TestCase):
         self.assertAlmostEqual(float(matrix[2, 1]), 0.0, delta=tolerance)
         self.assertAlmostEqual(float(matrix[2, 2]), 1.0, delta=tolerance)
 
-    def test_identity(self):
+    def test_identity_3_points(self):
         point_set_from = [
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
             [0.0, 1.0, 0.0]]
+        point_set_to = point_set_from
+        matrix = register_corresponding_points(point_set_from, point_set_to)
+        self.assertRotationCloseToIdentity(matrix)
+        self.assertAlmostEqual(matrix[0, 3], 0.0)
+        self.assertAlmostEqual(matrix[1, 3], 0.0)
+        self.assertAlmostEqual(matrix[2, 3], 0.0)
+        self.assertEqual(matrix[3, 3], 1.0)
+        self.assertEqual(matrix[3, 0], 0.0)
+        self.assertEqual(matrix[3, 1], 0.0)
+        self.assertEqual(matrix[3, 2], 0.0)
+
+    def test_identity_4_points(self):
+        point_set_from = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0]]
         point_set_to = point_set_from
         matrix = register_corresponding_points(point_set_from, point_set_to)
         self.assertRotationCloseToIdentity(matrix)
