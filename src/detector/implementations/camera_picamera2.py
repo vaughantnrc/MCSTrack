@@ -1,16 +1,13 @@
-from ..api import \
-    GetCameraParametersResponse, \
-    SetCameraParametersRequest
-from ..exceptions import UpdateCaptureError
-from ..interfaces import AbstractCameraInterface
-from src.common import \
-    EmptyResponse, \
-    ErrorResponse, \
-    get_kwarg, \
-    MCTResponse
+from ..exceptions import MCTDetectorRuntimeError
+from ..interfaces import AbstractCamera
+from ..structures import \
+    CameraConfiguration, \
+    CameraStatus
+from src.common import StatusMessageSource
 from src.common.structures import \
-    CaptureStatus, \
+    ImageResolution, \
     KeyValueSimpleAbstract, \
+    KeyValueSimpleAny, \
     KeyValueSimpleBool, \
     KeyValueSimpleFloat, \
     KeyValueSimpleInt, \
@@ -20,8 +17,9 @@ from src.common.structures import \
     KeyValueMetaInt
 import datetime
 import logging
+import numpy
 from picamera2 import Picamera2
-from picamera2.configuration import CameraConfiguration
+from picamera2.configuration import CameraConfiguration as Picamera2Configuration
 from typing import Final
 
 
@@ -32,6 +30,9 @@ _RANGE_MAXIMUM_INDEX: Final[int] = 1
 _RANGE_DEFAULT_INDEX: Final[int] = 2
 _MICROSECONDS_PER_SECOND: Final[int] = 1000000
 
+_CAMERA_RESOLUTION_KEY: Final[str] = "size"
+
+_CAMERA_STREAM: Final[str] = "main"
 _CAMERA_CONTROLS_KEY: Final[str] = "controls"
 _CAMERA_FPS_KEY: Final[str] = "FramesPerSecond"
 _CAMERA_FPS_DEFAULT: Final[float] = 30.0
@@ -74,50 +75,113 @@ _PICAMERA2_CONTRAST_KEY: Final[str] = "Contrast"
 _PICAMERA2_SHARPNESS_KEY: Final[str] = "Sharpness"
 
 
-class PiCamera(AbstractCameraInterface):
+class Picamera2Camera(AbstractCamera):
 
     _camera: Picamera2
-    _camera_configuration: CameraConfiguration
+    _camera_configuration: Picamera2Configuration
 
-    _captured_timestamp_utc: datetime.datetime
-    _capture_status: CaptureStatus  # internal bookkeeping
+    _image: numpy.ndarray | None
+    _image_timestamp_utc: datetime.datetime
 
-    def __init__(self):
-        self._captured_image = None
-        self._captured_timestamp_utc = datetime.datetime.min
-
-        self._capture_status = CaptureStatus()
-        self._capture_status.status = CaptureStatus.Status.STOPPED
-
+    def __init__(
+        self,
+        configuration: CameraConfiguration,
+        status_message_source: StatusMessageSource
+    ):
+        super().__init__(
+            configuration=configuration,
+            status_message_source=status_message_source)
+        self._image = None
+        self._image_timestamp_utc = datetime.datetime.min
         self._camera = Picamera2()
         self._camera_configuration = self._camera.create_video_configuration()
+        self.set_status(CameraStatus.STOPPED)
 
-    def internal_update_capture(self) -> None:
-        self._captured_image = self._camera.capture_array()
+    def get_changed_timestamp(self) -> datetime.datetime:
+        return self._image_timestamp_utc
 
-        if self._captured_image is None:
-            message: str = "Failed to grab frame."
-            self._status.capture_errors.append(message)
-            self._capture_status.status = CaptureStatus.Status.FAILURE
-            raise UpdateCaptureError(severity="error", message=message)
+    def get_image(self) -> numpy.ndarray:
+        if self._image is None:
+            raise MCTDetectorRuntimeError(message="There is no captured image.")
+        return self._image
 
-        self._captured_timestamp_utc = datetime.datetime.utcnow()
+    def get_parameters(self, **_kwargs) -> list[KeyValueMetaAbstract]:
+        if self.get_status() != CameraStatus.RUNNING:
+            raise MCTDetectorRuntimeError(message="The capture is not active, and properties cannot be retrieved.")
+
+        current_controls: dict = {
+            # Custom settings shall override default values
+            **{control[0]: control[1][_RANGE_DEFAULT_INDEX]
+               for control in self._camera.camera_controls.items()},
+            **self._camera_configuration[_CAMERA_CONTROLS_KEY]}
+
+        return_value: list[KeyValueMetaAbstract] = list()
+
+        frame_limits_us: tuple[float, float] = current_controls[_PICAMERA2_FRAME_DURATION_LIMITS_KEY]  # max, min
+        frame_duration_us: float = (frame_limits_us[0] + frame_limits_us[1]) / 2.0
+        frames_per_second: int = int(_MICROSECONDS_PER_SECOND / round(frame_duration_us))
+        return_value.append(KeyValueMetaFloat(
+            key=_CAMERA_FPS_KEY,
+            value=frames_per_second,
+            range_minimum=_CAMERA_FPS_RANGE_MINIMUM,
+            range_maximum=_CAMERA_FPS_RANGE_MAXIMUM,
+            digit_count=_CAMERA_FPS_DIGIT_COUNT))
+
+        return_value.append(KeyValueMetaBool(
+            key=_CAMERA_AUTO_EXPOSURE_KEY,
+            value=current_controls[_PICAMERA2_AEC_AGC_KEY]))
+
+        return_value.append(KeyValueMetaFloat(
+            key=_CAMERA_GAIN_KEY,
+            value=current_controls[_PICAMERA2_GAIN_KEY],
+            range_minimum=_CAMERA_GAIN_MINIMUM,
+            range_maximum=_CAMERA_GAIN_MAXIMUM,
+            digit_count=_CAMERA_GAIN_DIGIT_COUNT))
+
+        return_value.append(KeyValueMetaInt(
+            key=_CAMERA_EXPOSURE_KEY,
+            value=current_controls[_PICAMERA2_EXPOSURE_KEY],
+            range_minimum=_CAMERA_EXPOSURE_MINIMUM,
+            range_maximum=_CAMERA_EXPOSURE_MAXIMUM))
+
+        return_value.append(KeyValueMetaFloat(
+            key=_CAMERA_BRIGHTNESS_KEY,
+            value=current_controls[_PICAMERA2_BRIGHTNESS_KEY],
+            range_minimum=_CAMERA_BRIGHTNESS_MINIMUM,
+            range_maximum=_CAMERA_BRIGHTNESS_MAXIMUM,
+            digit_count=_CAMERA_BRIGHTNESS_DIGIT_COUNT))
+
+        return_value.append(KeyValueMetaFloat(
+            key=_CAMERA_CONTRAST_KEY,
+            value=current_controls[_PICAMERA2_CONTRAST_KEY],
+            range_minimum=_CAMERA_CONTRAST_MINIMUM,
+            range_maximum=_CAMERA_CONTRAST_MAXIMUM,
+            digit_count=_CAMERA_CONTRAST_DIGIT_COUNT))
+
+        return_value.append(KeyValueMetaFloat(
+            key=_CAMERA_SHARPNESS_KEY,
+            value=current_controls[_PICAMERA2_SHARPNESS_KEY],
+            range_minimum=_CAMERA_SHARPNESS_MINIMUM,
+            range_maximum=_CAMERA_SHARPNESS_MAXIMUM,
+            digit_count=_CAMERA_SHARPNESS_DIGIT_COUNT))
+
+        return return_value
+
+    def get_resolution(self) -> ImageResolution:
+        resolution: tuple[int, int] = self._camera_configuration[_CAMERA_STREAM][_CAMERA_RESOLUTION_KEY]
+        return ImageResolution(x_px=resolution[0], y_px=resolution[1])
+
+    @staticmethod
+    def get_type_identifier() -> str:
+        return "picamera2"
 
     # noinspection DuplicatedCode
-    def set_capture_properties(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        """
-        :key request: SetCapturePropertiesRequest
-        """
-
-        request: SetCameraParametersRequest = get_kwarg(
-            kwargs=kwargs,
-            key="request",
-            arg_type=SetCameraParametersRequest)
+    def set_parameters(self, parameters: list[KeyValueSimpleAny]) -> None:
 
         mismatched_keys: list[str] = list()
 
         key_value: KeyValueSimpleAbstract
-        for key_value in request.parameters:
+        for key_value in parameters:
             if key_value.key == _CAMERA_FPS_KEY:
                 if not isinstance(key_value, KeyValueSimpleFloat):
                     mismatched_keys.append(key_value.key)
@@ -159,81 +223,16 @@ class PiCamera(AbstractCameraInterface):
                 mismatched_keys.append(key_value.key)
 
         if len(mismatched_keys) > 0:
-            return ErrorResponse(
+            raise MCTDetectorRuntimeError(
                 message=f"The following parameters could not be applied due to key mismatch: {str(mismatched_keys)}")
 
-        if self._capture_status.status == CaptureStatus.Status.RUNNING:
+        if self.get_status() == CameraStatus.RUNNING:
             self._camera.stop()
             self._camera.configure(self._camera_configuration)
             self._camera.start()
-            self._captured_image = self._camera.capture_array()
+            self._image = self._camera.capture_array()
 
-        return EmptyResponse()
-
-    def get_capture_properties(self, **_kwargs) -> GetCameraParametersResponse | ErrorResponse:
-        if self._capture_status.status != CaptureStatus.Status.RUNNING:
-            return ErrorResponse(
-                message="The capture is not active, and properties cannot be retrieved.")
-
-        current_controls: dict = {
-            # Custom settings shall override default values
-            **{control[0]: control[1][_RANGE_DEFAULT_INDEX]
-               for control in self._camera.camera_controls.items()},
-            **self._camera_configuration[_CAMERA_CONTROLS_KEY]}
-
-        key_values: list[KeyValueMetaAbstract] = list()
-
-        frame_limits_us: tuple[float, float] = current_controls[_PICAMERA2_FRAME_DURATION_LIMITS_KEY]  # max, min
-        frame_duration_us: float = (frame_limits_us[0] + frame_limits_us[1]) / 2.0
-        frames_per_second: int = int(_MICROSECONDS_PER_SECOND / round(frame_duration_us))
-        key_values.append(KeyValueMetaFloat(
-            key=_CAMERA_FPS_KEY,
-            value=frames_per_second,
-            range_minimum=_CAMERA_FPS_RANGE_MINIMUM,
-            range_maximum=_CAMERA_FPS_RANGE_MAXIMUM,
-            digit_count=_CAMERA_FPS_DIGIT_COUNT))
-
-        key_values.append(KeyValueMetaBool(
-            key=_CAMERA_AUTO_EXPOSURE_KEY,
-            value=current_controls[_PICAMERA2_AEC_AGC_KEY]))
-
-        key_values.append(KeyValueMetaFloat(
-            key=_CAMERA_GAIN_KEY,
-            value=current_controls[_PICAMERA2_GAIN_KEY],
-            range_minimum=_CAMERA_GAIN_MINIMUM,
-            range_maximum=_CAMERA_GAIN_MAXIMUM,
-            digit_count=_CAMERA_GAIN_DIGIT_COUNT))
-
-        key_values.append(KeyValueMetaInt(
-            key=_CAMERA_EXPOSURE_KEY,
-            value=current_controls[_PICAMERA2_EXPOSURE_KEY],
-            range_minimum=_CAMERA_EXPOSURE_MINIMUM,
-            range_maximum=_CAMERA_EXPOSURE_MAXIMUM))
-
-        key_values.append(KeyValueMetaFloat(
-            key=_CAMERA_BRIGHTNESS_KEY,
-            value=current_controls[_PICAMERA2_BRIGHTNESS_KEY],
-            range_minimum=_CAMERA_BRIGHTNESS_MINIMUM,
-            range_maximum=_CAMERA_BRIGHTNESS_MAXIMUM,
-            digit_count=_CAMERA_BRIGHTNESS_DIGIT_COUNT))
-
-        key_values.append(KeyValueMetaFloat(
-            key=_CAMERA_CONTRAST_KEY,
-            value=current_controls[_PICAMERA2_CONTRAST_KEY],
-            range_minimum=_CAMERA_CONTRAST_MINIMUM,
-            range_maximum=_CAMERA_CONTRAST_MAXIMUM,
-            digit_count=_CAMERA_CONTRAST_DIGIT_COUNT))
-
-        key_values.append(KeyValueMetaFloat(
-            key=_CAMERA_SHARPNESS_KEY,
-            value=current_controls[_PICAMERA2_SHARPNESS_KEY],
-            range_minimum=_CAMERA_SHARPNESS_MINIMUM,
-            range_maximum=_CAMERA_SHARPNESS_MAXIMUM,
-            digit_count=_CAMERA_SHARPNESS_DIGIT_COUNT))
-
-        return GetCameraParametersResponse(parameters=key_values)
-
-    def start_capture(self, **kwargs) -> MCTResponse:
+    def start(self) -> None:
 
         if _PICAMERA2_FRAME_DURATION_LIMITS_KEY not in self._camera_configuration:
             minr = int(round(_MICROSECONDS_PER_SECOND / _CAMERA_FPS_DEFAULT))
@@ -260,13 +259,22 @@ class PiCamera(AbstractCameraInterface):
 
         self._camera.configure(self._camera_configuration)
         self._camera.start()
-        self._captured_image = self._camera.capture_array()
-        self._capture_status.status = CaptureStatus.Status.RUNNING
-        return EmptyResponse()
+        self._image = self._camera.capture_array()
+        self.set_status(CameraStatus.RUNNING)
 
-    def stop_capture(self, **kwargs) -> MCTResponse:
-        if self._captured_image is not None:
-            self._captured_image = None
-        self._capture_status.status = CaptureStatus.Status.STOPPED
+    def stop(self) -> None:
+        if self._image is not None:
+            self._image = None
+        self.set_status(CameraStatus.STOPPED)
         self._camera.stop()
-        return EmptyResponse()
+
+    def update(self) -> None:
+        self._image = self._camera.capture_array(_CAMERA_STREAM)
+
+        if self._image is None:
+            message: str = "Failed to grab frame."
+            self.add_status_message(severity="error", message=message)
+            self.set_status(CameraStatus.FAILURE)
+            raise MCTDetectorRuntimeError(message=message)
+
+        self._image_timestamp_utc = datetime.datetime.utcnow()
