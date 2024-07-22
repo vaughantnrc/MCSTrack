@@ -19,7 +19,7 @@ def register_corresponding_points(
     """
     if len(point_set_from) != len(point_set_to):
         raise ValueError("Input point sets must be of identical length.")
-    if len(point_set_from) > 3:
+    if len(point_set_from) < 3:
         raise ValueError("Input point sets must be of length 3 or higher.")
     if collinearity_do_check:
         for point_set in (point_set_from, point_set_to):
