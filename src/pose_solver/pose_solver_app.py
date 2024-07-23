@@ -1,17 +1,18 @@
-from src.common import \
-    EmptyResponse, \
-    ErrorResponse
-from src.pose_solver.pose_solver import \
-    PoseSolver
-from src.pose_solver.pose_solver_api import \
-    PoseSolverAPI, \
-    PoseSolverConfiguration
-from src.pose_solver.api import \
+from .api import \
     AddMarkerCornersRequest, \
     AddTargetMarkerRequest, \
     AddTargetMarkerResponse, \
     GetPosesResponse, \
     SetIntrinsicParametersRequest
+from .pose_solver import \
+    PoseSolver
+from .pose_solver_api import \
+    PoseSolverAPI
+from .structures import \
+    PoseSolverConfiguration
+from src.common import \
+    EmptyResponse, \
+    ErrorResponse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.websockets import WebSocket
@@ -47,18 +48,18 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"])
 
-    @pose_solver_app.post("/add_marker_corners")
+    @pose_solver_app.post("/add_detector_frame")
     async def add_marker_corners(
         request: AddMarkerCornersRequest
     ) -> EmptyResponse | ErrorResponse:
-        return pose_solver_api.add_marker_corners(
+        return pose_solver_api.add_detector_frame(
             request=request)
 
-    @pose_solver_app.post("/add_target_marker")
+    @pose_solver_app.post("/add_target")
     async def add_target_marker(
         request: AddTargetMarkerRequest
     ) -> AddTargetMarkerResponse | ErrorResponse:
-        return pose_solver_api.add_target_marker(
+        return pose_solver_api.add_target(
             request=request)
 
     @pose_solver_app.get("/get_poses")
@@ -87,7 +88,7 @@ def create_app() -> FastAPI:
     @pose_solver_app.on_event("startup")
     @repeat_every(seconds=0.001)
     async def internal_update() -> None:
-        await pose_solver_api.internal_update()
+        await pose_solver_api.update()
 
     return pose_solver_app
 
