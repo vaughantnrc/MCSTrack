@@ -1,9 +1,8 @@
 from .api import \
-    AddMarkerCornersRequest, \
-    AddTargetMarkerRequest, \
-    AddTargetMarkerResponse, \
-    GetPosesResponse, \
-    SetIntrinsicParametersRequest
+    PoseSolverAddDetectorFrameRequest, \
+    PoseSolverAddTargetMarkerRequest, \
+    PoseSolverGetPosesResponse, \
+    PoseSolverSetIntrinsicRequest
 from .pose_solver import \
     PoseSolver
 from .pose_solver_api import \
@@ -50,28 +49,25 @@ def create_app() -> FastAPI:
 
     @pose_solver_app.post("/add_detector_frame")
     async def add_marker_corners(
-        request: AddMarkerCornersRequest
+        request: PoseSolverAddDetectorFrameRequest
     ) -> EmptyResponse | ErrorResponse:
-        return pose_solver_api.add_detector_frame(
-            request=request)
+        return pose_solver_api.add_detector_frame(request=request)
 
     @pose_solver_app.post("/add_target")
     async def add_target_marker(
-        request: AddTargetMarkerRequest
-    ) -> AddTargetMarkerResponse | ErrorResponse:
-        return pose_solver_api.add_target(
-            request=request)
+        request: PoseSolverAddTargetMarkerRequest
+    ) -> EmptyResponse | ErrorResponse:
+        return pose_solver_api.add_target(request=request)
 
     @pose_solver_app.get("/get_poses")
-    async def get_poses() -> GetPosesResponse | ErrorResponse:
+    async def get_poses() -> PoseSolverGetPosesResponse | ErrorResponse:
         return pose_solver_api.get_poses()
 
     @pose_solver_app.post("/set_intrinsic_parameters")
     async def set_intrinsic_parameters(
-        request: SetIntrinsicParametersRequest
+        request: PoseSolverSetIntrinsicRequest
     ) -> EmptyResponse | ErrorResponse:
-        return pose_solver_api.set_intrinsic_parameters(
-            request=request)
+        return pose_solver_api.set_intrinsic_parameters(request=request)
 
     @pose_solver_app.head("/start_capture")
     async def start_capture() -> None:

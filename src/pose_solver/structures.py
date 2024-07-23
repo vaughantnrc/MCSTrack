@@ -3,7 +3,6 @@ from src.common.structures import Matrix4x4
 import cv2.aruco
 import datetime
 import numpy
-import uuid
 from pydantic import BaseModel, Field
 from typing import Final
 
