@@ -69,6 +69,8 @@ class BoardBuilderPanel(BasePanel):
     _tracked_marker_diameter_spinbox: ParameterSpinboxFloat
     _confirm_marker_size_button: wx.Button
     _preview_image_checkbox: ParameterCheckbox
+    _annotate_detected_checkbox: ParameterCheckbox
+    _annotate_rejected_checkbox: ParameterCheckbox
     _locate_reference_button: wx.Button
     _collect_data_button: wx.Button
     _build_board_button: wx.Button
@@ -164,6 +166,16 @@ class BoardBuilderPanel(BasePanel):
             sizer=control_sizer,
             label="Preview Image")
 
+        self._annotate_detected_checkbox = self.add_control_checkbox(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Annotate Detected")
+
+        self._annotate_rejected_checkbox = self.add_control_checkbox(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Annotate Rejected")
+
         self.add_text_label(
             parent=control_panel,
             sizer=control_sizer,
@@ -238,6 +250,12 @@ class BoardBuilderPanel(BasePanel):
             event=wx.EVT_BUTTON,
             handler=self._on_confirm_marker_size_pressed)
         self._preview_image_checkbox.checkbox.Bind(
+            event=wx.EVT_CHECKBOX,
+            handler=self._on_display_mode_changed)
+        self._annotate_detected_checkbox.checkbox.Bind(
+            event=wx.EVT_CHECKBOX,
+            handler=self._on_display_mode_changed)
+        self._annotate_rejected_checkbox.checkbox.Bind(
             event=wx.EVT_CHECKBOX,
             handler=self._on_display_mode_changed)
         self._locate_reference_button.Bind(
@@ -339,7 +357,7 @@ class BoardBuilderPanel(BasePanel):
             connection_label=preview.detector_label,
             request_series=request_series)
 
-    def _draw_all_corners(self, detected_marker_snapshots, scale, frame):
+    def _draw_all_corners(self, detected_marker_snapshots, scale, frame, color):
         """
         Takes in a dictionary of marker UUIDs to their corners and draws each set of corners on the frame with different colors.
         """
@@ -350,7 +368,7 @@ class BoardBuilderPanel(BasePanel):
             img=frame,
             pts=corners,
             isClosed=True,
-            color=[127, 191, 255],  # orange
+            color=color,
             thickness=2)
 
     def _handle_calibration_result_get_active_response(
@@ -402,44 +420,36 @@ class BoardBuilderPanel(BasePanel):
     def _on_confirm_marker_size_pressed(self, _event: wx.CommandEvent) -> None:
         self._marker_size = self._tracked_marker_diameter_spinbox.spinbox.GetValue()
         self.board_builder.pose_solver.set_board_marker_size(self._marker_size)
+        self._locate_reference_button.Enable(True)
 
     def _on_display_mode_changed(self, _event: wx.CommandEvent):
         if self._preview_image_checkbox.checkbox.GetValue():
-            self.live_detector_previews.clear()
-            for detector in self._controller.get_active_detector_labels():
-                image_panel = self.default_image_panel
+            if not self.live_detector_previews:
+                for detector in self._controller.get_active_detector_labels():
+                    image_panel = self.default_image_panel
 
-                if len(self.live_detector_previews) > 0:
-                    # Add a new image frame for each connected detector
-                    image_panel = ImagePanel(parent=self)
-                    image_panel.SetBackgroundColour(colour=wx.BLACK)
-                    self.camera_split_sizer.Add(image_panel, proportion=1, flag=wx.EXPAND)
-                    self.horizontal_split_sizer.Layout()
+                    if len(self.live_detector_previews) > 0:
+                        image_panel = ImagePanel(parent=self)
+                        image_panel.SetBackgroundColour(colour=wx.BLACK)
+                        self.camera_split_sizer.Add(image_panel, proportion=1, flag=wx.EXPAND)
+                        self.horizontal_split_sizer.Layout()
 
-                preview = self.LiveDetectorPreview(
-                    detector_label=detector,
-                    image_panel=image_panel)
-                self.live_detector_previews.append(preview)
+                    preview = self.LiveDetectorPreview(
+                        detector_label=detector,
+                        image_panel=image_panel)
+                    self.live_detector_previews.append(preview)
 
-            for preview in self.live_detector_previews:
-                self._begin_capture_snapshot(preview)
+                for preview in self.live_detector_previews:
+                    self._begin_capture_snapshot(preview)
 
-            self._locate_reference_button.Enable(True)
         else:
-            # Remove all image panels except the default one
             for preview in self.live_detector_previews:
-                if preview.image_panel != self.default_image_panel:
-                    self.camera_split_sizer.Detach(preview.image_panel)
-                    preview.image_panel.Destroy()
+                preview.image = None  # Stop displaying the live image from the detector
+                preview.image_panel.set_bitmap(wx.Bitmap(1, 1))
 
-            # Clear the default image panel
             self.default_image_panel.set_bitmap(wx.Bitmap(1, 1))
-
-            self.live_detector_previews.clear()
             self.horizontal_split_sizer.Layout()
             self.Refresh()
-
-        self._locate_reference_button.Enable(self._preview_image_checkbox.checkbox.GetValue())
 
     def _on_locate_reference_button_click(self, event: wx.CommandEvent) -> None:
         if self._locate_reference_button.GetValue():
@@ -455,20 +465,18 @@ class BoardBuilderPanel(BasePanel):
             self._collect_data_button.Enable(True)
 
     def _process_frame(self, preview: LiveDetectorPreview):
-
         # TODO: The Detector should tell us the resolution of the image it operated on.
         resolution_str: str = str(StandardResolutions.RES_1280X720)
         image_panel = preview.image_panel
         display_image: numpy.ndarray
         scale: float | None
 
-        if preview.image is not None:
+        if self._preview_image_checkbox.checkbox.GetValue() and preview.image is not None:
             opencv_image: numpy.ndarray = ImageCoding.base64_to_image(input_base64=preview.image)
             display_image: numpy.ndarray = ImageUtils.image_resize_to_fit(
                 opencv_image=opencv_image,
                 available_size=image_panel.GetSize())
             scale: float = display_image.shape[0] / opencv_image.shape[0]
-            self._draw_all_corners(preview.detector_frame.detected_marker_snapshots, scale, display_image)
 
         elif resolution_str is not None and len(resolution_str) > 0:
             panel_size_px: tuple[int, int] = image_panel.GetSize()
@@ -478,11 +486,16 @@ class BoardBuilderPanel(BasePanel):
                 available_size_px=panel_size_px)
             display_image = ImageUtils.black_image(resolution_px=rescaled_resolution_px)
             scale: float = rescaled_resolution_px[1] / image_resolution.y_px
-            self._draw_all_corners(preview.detector_frame.detected_marker_snapshots, scale, display_image)
 
         else:
             display_image = ImageUtils.black_image(resolution_px=image_panel.GetSize())
             scale = None
+
+        if scale is not None:
+            if self._annotate_detected_checkbox.checkbox.GetValue():
+                self._draw_all_corners(preview.detector_frame.detected_marker_snapshots, scale, display_image, [255, 191, 127])
+            if self._annotate_rejected_checkbox.checkbox.GetValue():
+                self._draw_all_corners(preview.detector_frame.rejected_marker_snapshots, scale, display_image, [127, 191, 255])
 
         image_buffer: bytes = ImageCoding.image_to_bytes(image_data=display_image, image_format=".jpg")
         image_buffer_io: BytesIO = BytesIO(image_buffer)
