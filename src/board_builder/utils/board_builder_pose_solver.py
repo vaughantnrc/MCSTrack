@@ -1,10 +1,11 @@
-from src.board_builder.structures import PoseLocation, CharucoBoard
+from src.board_builder.structures import PoseLocation
 from src.common.structures import \
     IntrinsicParameters, \
     Matrix4x4, \
-    Pose
+    Pose, \
+    CharucoBoardSpecification, \
+    MarkerCorners
 from src.pose_solver.structures import \
-    MarkerCorners, \
     MarkerRaySet, \
     PoseData, \
     Ray, \
@@ -168,7 +169,7 @@ class BoardBuilderPoseSolver:
     _minimum_marker_age_before_removal_seconds: float
 
     _board_marker_ids: list[int]
-    _board_marker_positions: list[list[int]]
+    _board_marker_positions: list[list[float]]
     _board_marker_size: int
 
     def __init__(self):
@@ -193,9 +194,9 @@ class BoardBuilderPoseSolver:
             self._parameters.POSE_SINGLE_CAMERA_DEPTH_LIMIT_AGE_SECONDS,
             self._parameters.POSE_MULTI_CAMERA_LIMIT_RAY_AGE_SECONDS])
 
-        self._charuco_board = CharucoBoard()
-        self._board_marker_ids = self._charuco_board.get_ids()
-        self._board_marker_positions = self._charuco_board.get_positions()
+        self._charuco_board = CharucoBoardSpecification()
+        self._board_marker_ids = self._charuco_board.get_marker_ids()
+        self._board_marker_positions = self._charuco_board.get_marker_center_points()
         self._board_marker_size = 10
 
     def add_marker_corners(

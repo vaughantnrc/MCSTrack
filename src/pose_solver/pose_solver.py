@@ -1,7 +1,6 @@
 from .exceptions import \
     PoseSolverException
 from .structures import \
-    MarkerCorners, \
     MarkerRaySet, \
     PoseData, \
     Ray, \
@@ -21,7 +20,8 @@ from .util import \
 from src.common.structures import \
     IntrinsicParameters, \
     Matrix4x4, \
-    Pose
+    Pose, \
+    MarkerCorners
 import cv2
 import cv2.aruco
 import datetime

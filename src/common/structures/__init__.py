@@ -1,4 +1,5 @@
 from .capture_format import CaptureFormat
+from .charuco_board_specification import CharucoBoardSpecification
 from .component_role_label import \
     ComponentRoleLabel, \
     COMPONENT_ROLE_LABEL_DETECTOR, \
@@ -32,6 +33,7 @@ from .key_value_structures import \
     KeyValueMetaFloat, \
     KeyValueMetaInt
 from .marker_corner_image_point import MarkerCornerImagePoint
+from .marker_corners import MarkerCorners
 from .marker_definition import MarkerDefinition
 from .marker_snapshot import MarkerSnapshot
 from .matrix4x4 import Matrix4x4

@@ -552,7 +552,7 @@ class BoardBuilderPanel(BasePanel):
             for detector_name in self._detector_intrinsics:
                 self.board_builder.pose_solver.set_intrinsic_parameters(detector_name,
                                                                         self._detector_intrinsics[detector_name])
-            self.board_builder.locate_reference_markers(detector_data)
+            self.board_builder.locate_reference_board(detector_data)
 
         elif self._collecting_data:
             corners_dict = self.board_builder.collect_data(detector_data)

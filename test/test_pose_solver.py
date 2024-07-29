@@ -2,9 +2,9 @@ from src.pose_solver.pose_solver import PoseSolver
 from src.common.structures import \
     IntrinsicParameters, \
     Matrix4x4, \
-    Pose
+    Pose, \
+    MarkerCorners
 from src.pose_solver.structures import \
-    MarkerCorners, \
     TargetMarker
 import datetime
 from typing import Final

@@ -1,7 +1,5 @@
 import datetime
 
-
-# TODO: Merge into a similar structure in common
 class MarkerCorners:
     detector_label: str
     marker_id: int

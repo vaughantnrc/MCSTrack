@@ -12,7 +12,6 @@ from .exceptions import PoseSolverException
 from .fileio import PoseSolverConfiguration
 from .pose_solver import PoseSolver
 from .structures import \
-    MarkerCorners, \
     TargetMarker
 from src.common import \
     EmptyResponse, \
@@ -23,7 +22,8 @@ from src.common import \
     MCTResponse
 from src.common.structures import \
     Pose, \
-    PoseSolverStatus
+    PoseSolverStatus, \
+    MarkerCorners
 import datetime
 import logging
 from typing import Callable
