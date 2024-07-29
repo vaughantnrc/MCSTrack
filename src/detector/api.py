@@ -196,6 +196,7 @@ class CameraImageGetRequest(MCTRequest):
 
     parsable_type: str = Field(default=parsable_type_identifier(), const=True)
     format: CaptureFormat = Field()
+    requested_resolution: ImageResolution | None = Field(default=None)
 
 
 class CameraImageGetResponse(MCTResponse):
