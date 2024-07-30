@@ -314,13 +314,14 @@ class BoardBuilderPanel(BasePanel):
                         self.handle_response_series(response_series)
 
             for detector_label in self._controller.get_active_detector_labels():
-                request = CalibrationResultGetActiveRequest()
-                request_series = MCTRequestSeries(series=[request])
-                request_id = self._controller.request_series_push(
-                    connection_label=detector_label,
-                    request_series=request_series)
-                self._calibration_result_get_active_request_ids[detector_label] = request_id
-                self._calibration_request_map[request_id] = detector_label
+                if detector_label not in self._calibration_result_get_active_request_ids:
+                    request = CalibrationResultGetActiveRequest()
+                    request_series = MCTRequestSeries(series=[request])
+                    request_id = self._controller.request_series_push(
+                        connection_label=detector_label,
+                        request_series=request_series)
+                    self._calibration_result_get_active_request_ids[detector_label] = request_id
+                    self._calibration_request_map[request_id] = detector_label
 
         else:
             if self._controller.is_running():
