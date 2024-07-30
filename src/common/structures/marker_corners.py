@@ -1,5 +1,6 @@
 import datetime
 
+# TODO: Remove this in favour of DetectorFrame or another data structure
 class MarkerCorners:
     detector_label: str
     marker_id: int

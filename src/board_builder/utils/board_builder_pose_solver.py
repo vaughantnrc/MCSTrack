@@ -9,7 +9,7 @@ from src.pose_solver.structures import \
     MarkerRaySet, \
     PoseData, \
     Ray, \
-    Target, \
+    TargetBase, \
     TargetMarker, \
     PoseSolverParameters
 from src.pose_solver.util import \
@@ -28,6 +28,7 @@ import numpy
 from scipy.spatial.transform import Rotation
 from typing import Callable, TypeVar
 import uuid
+
 
 KeyType = TypeVar("KeyType")
 ValueType = TypeVar("ValueType")
@@ -59,9 +60,13 @@ class ImagePointSetsKey:
 
 class MarkerKey:
     detector_label: str
-    marker_id: int
+    marker_id: str
 
-    def __init__(self, detector_label, marker_id):
+    def __init__(
+        self,
+        detector_label: str,
+        marker_id: str
+    ):
         self.detector_label = detector_label
         self.marker_id = marker_id
 
@@ -81,13 +86,13 @@ class MarkerKey:
 
 
 class CornerSetReference:
-    marker_id: int
+    marker_id: str
     corners: list[list[float]]  # in reference coordinate system
     ray_sets: list[MarkerRaySet]
 
     def __init__(
         self,
-        marker_id: int,
+        marker_id: str,
         corners: list[list[float]],
         ray_sets: list[MarkerRaySet]
     ):
@@ -152,7 +157,7 @@ class BoardBuilderPoseSolver:
     """
 
     _intrinsics_by_detector_label: dict[str, IntrinsicParameters]
-    _targets: dict[uuid.UUID, Target]
+    _targets: dict[uuid.UUID, TargetBase]
 
     _marker_corners_since_update: list[MarkerCorners]
 
@@ -212,8 +217,9 @@ class BoardBuilderPoseSolver:
         for target_id, target in self._targets.items():
             if isinstance(target, TargetMarker) and marker_id == target.marker_id:
                 return False
-        target: Target = TargetMarker(
-            marker_id=marker_id,
+        target: TargetBase = TargetMarker(
+            target_id=str(marker_id),
+            marker_id=str(marker_id),
             marker_size=self._board_marker_size)
         target_id: uuid.UUID = uuid.uuid4()
         self._targets[target_id] = target
@@ -369,7 +375,7 @@ class BoardBuilderPoseSolver:
         points = list()
         if target_id not in self._targets:
             raise RuntimeError(f"Could not find target {str(target_id)} in domain.")
-        target: Target = self._targets[target_id]
+        target: TargetBase = self._targets[target_id]
         if isinstance(target, TargetMarker):
             half_width = target.marker_size / 2.0
             points += [
@@ -381,7 +387,7 @@ class BoardBuilderPoseSolver:
 
     def _estimate_target_pose_from_ray_set(
         self,
-        target: Target,
+        target: TargetBase,
         ray_set: MarkerRaySet
     ) -> tuple[list[float], list[float]]:
         corners = numpy.array([ray_set.image_points], dtype="float32")
@@ -502,7 +508,7 @@ class BoardBuilderPoseSolver:
             image_timestamp = image_point_set.timestamp
             marker_key = MarkerKey(
                 detector_label=image_point_set.detector_label,
-                marker_id=image_point_set.marker_id)
+                marker_id=str(image_point_set.marker_id))
             if marker_key in self._marker_rayset_by_marker_key:
                 if self._marker_rayset_by_marker_key[marker_key].image_timestamp > image_timestamp:
                     continue  # A newer timestamp was found in this iteration. Skip the older one.
@@ -514,7 +520,7 @@ class BoardBuilderPoseSolver:
                         detector_to_reference_matrix=detector_to_reference_matrix)
 
         # Create a dictionary that maps marker ID's to a list of *recent* rays
-        ray_sets_by_marker_id: dict[int, list[MarkerRaySet]] = dict()
+        ray_sets_by_marker_id: dict[str, list[MarkerRaySet]] = dict()
         for marker_key, marker_ray_set in self._marker_rayset_by_marker_key.items():
             if (self._now_timestamp - marker_ray_set.image_timestamp).total_seconds() > \
                     self._parameters.POSE_MULTI_CAMERA_LIMIT_RAY_AGE_SECONDS:
@@ -532,11 +538,11 @@ class BoardBuilderPoseSolver:
             ray_set_list.sort(key=lambda x: convex_quadrilateral_area(x.image_points), reverse=True)
             ray_sets_by_marker_id[marker_id] = ray_set_list[0:self._parameters.MAXIMUM_RAY_COUNT_FOR_INTERSECTION]
 
-        marker_count_by_marker_id: dict[int, int] = dict()
+        marker_count_by_marker_id: dict[str, int] = dict()
         for marker_id, ray_set_list in ray_sets_by_marker_id.items():
             marker_count_by_marker_id[marker_id] = len(ray_set_list)
-        intersectable_marker_ids: list[int] = list()
-        nonintersectable_marker_ids: list[int] = list()
+        intersectable_marker_ids: list[str] = list()
+        nonintersectable_marker_ids: list[str] = list()
         for marker_id, count in marker_count_by_marker_id.items():
             if count >= 2:
                 intersectable_marker_ids.append(marker_id)
@@ -544,8 +550,8 @@ class BoardBuilderPoseSolver:
                 nonintersectable_marker_ids.append(marker_id)
 
         # intersect rays to find the 3D points for each marker corner in reference coordinates
-        corner_sets_reference_by_marker_id: dict[int, CornerSetReference] = dict()
-        rejected_intersection_marker_ids: list[int] = list()
+        corner_sets_reference_by_marker_id: dict[str, CornerSetReference] = dict()
+        rejected_intersection_marker_ids: list[str] = list()
         for marker_id in intersectable_marker_ids:
             intersections_appear_valid: bool = True  # If something looks off, set this to False
             ray_set_list: list[MarkerRaySet] = ray_sets_by_marker_id[marker_id]
@@ -580,14 +586,14 @@ class BoardBuilderPoseSolver:
         # We estimate the pose of each target based on the calculated intersections
         # and the rays projected from each detector
         for target_id, target in self._targets.items():
-            marker_ids_in_target: list[int]
+            marker_ids_in_target: list[str]
             if isinstance(target, TargetMarker):
                 marker_ids_in_target = [target.marker_id]
             else:
                 raise NotImplementedError("Only targets that are markers are supported.")
 
-            marker_ids_with_intersections: list[int] = list()
-            marker_ids_with_rays: list[int] = list()
+            marker_ids_with_intersections: list[str] = list()
+            marker_ids_with_rays: list[str] = list()
             for marker_id in marker_ids_in_target:
                 if marker_id in corner_sets_reference_by_marker_id:
                     marker_ids_with_intersections.append(marker_id)
@@ -598,7 +604,7 @@ class BoardBuilderPoseSolver:
                 continue  # No information on which to base a pose
 
             # Determine how many markers and how many detectors are involved
-            marker_id_set: set[int] = set()
+            marker_id_set: set[str] = set()
             one_detector_only: bool = True
             detector_set: set[str] = set()
             ray_sets: list[MarkerRaySet] = list()
@@ -736,7 +742,7 @@ class BoardBuilderPoseSolver:
                 object_to_reference_matrix[0:3, 3] = detector_position_reference + depth_factor * depth_vector_reference
 
             pose = PoseData(
-                target_id=target_id,
+                target_id=str(target_id),
                 object_to_reference_matrix=Matrix4x4.from_numpy_array(object_to_reference_matrix),
                 ray_sets=ray_sets)
 
