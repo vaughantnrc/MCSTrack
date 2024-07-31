@@ -35,12 +35,11 @@ from src.pose_solver.api import \
     PoseSolverSetIntrinsicRequest
 import datetime
 from enum import IntEnum, StrEnum
+import json
 import logging
+import os
 from typing import Callable, Final, get_args, TypeVar
 import uuid
-
-import json
-import os
 
 logger = logging.getLogger(__name__)
 ConnectionType = TypeVar('ConnectionType', bound=Connection)
@@ -77,8 +76,6 @@ class MCTController(MCTComponent):
 
     _recording_detector : bool
     _recording_pose_solver : bool
-    _detector_record: list[DetectorFrame]
-    _pose_solver_record: list[PoseSolverFrame]
     _recording_save_path : bool
 
     def __init__(
@@ -102,8 +99,6 @@ class MCTController(MCTComponent):
 
         self._recording_detector = False
         self._recording_pose_solver = False
-        self._detector_record = []
-        self._pose_solver_record = []
         self._recording_save_path = None
 
     def add_connection(
@@ -444,26 +439,25 @@ class MCTController(MCTComponent):
                 message=f"Recording save path not defined")
 
     def recording_stop(self):
-        # Save the instance variables (detector_recording and pose_solver_recording) to files
-        if self._recording_pose_solver:
-            pose_solver_frames_dict = [frame.dict() for frame in self._pose_solver_record]
-            pose_solver_frames_json = json.dumps(pose_solver_frames_dict)
+        for connection_label in self._connections:
+            connection = self._get_connection(
+                connection_label=connection_label,
+                connection_type=Connection)
+            report = connection.get_report()
+            # Do not record if specified
+            if report.role == COMPONENT_ROLE_LABEL_DETECTOR and not self._recording_detector:
+                continue
+            if report.role == COMPONENT_ROLE_LABEL_POSE_SOLVER and not self._recording_pose_solver:
+                continue
 
-            # TODO: add timestamp in filename
-            with open(os.path.join(self._recording_save_path,"pose_solver_log.json"), 'w') as f:
-                f.write(pose_solver_frames_json)
+            frames_dict = [frame.dict() for frame in connection.recording]
+            frames_json = json.dumps(frames_dict)
 
-            self._recording_pose_solver = False
+            with open(os.path.join(self._recording_save_path,report.role+"_log.json"), 'w') as f:
+                f.write(frames_json)
 
-        # TODO: add support for multiple detectors
-        if self._recording_detector:
-            detector_frames_dict = [frame.dict() for frame in self._detector_record]
-            detector_frames_json = json.dumps(detector_frames_dict)
-
-            with open(os.path.join(self._recording_save_path,"detector_log.json"), 'w') as f:
-                f.write(detector_frames_json)
-
-            self._recording_detector = False
+        self._recording_detector = False
+        self._recording_pose_solver = False
 
     def remove_connection(
         self,
@@ -607,6 +601,9 @@ class MCTController(MCTComponent):
                     solver_request_list: list[MCTRequest] = list()
                     detector_labels: list[str] = self.get_active_detector_labels()
                     for detector_label in detector_labels:
+                        detector_connection: DetectorConnection = self._get_connection(
+                            connection_label=detector_label,
+                            connection_type=DetectorConnection)
                         current_detector_frame: DetectorFrame = self.get_live_detector_frame(
                             detector_label=detector_label)
                         current_detector_frame_timestamp: datetime.datetime = current_detector_frame.timestamp_utc()
@@ -625,11 +622,12 @@ class MCTController(MCTComponent):
                                 detector_label=detector_label,
                                 detector_frame=current_detector_frame)
                             solver_request_list.append(marker_request)
+
                             if self._recording_detector:
-                                self._detector_record.append(current_detector_frame)
+                                detector_connection.recording.append(current_detector_frame)
                             if self._recording_pose_solver:
                                 current_pose_solver_frame = self.get_live_pose_solver_frame(pose_solver_label)
-                                self._pose_solver_record.append(current_pose_solver_frame)
+                                pose_solver_connection.recording.append(current_pose_solver_frame)
 
                     solver_request_list.append(PoseSolverGetPosesRequest())
                     request_series: MCTRequestSeries = MCTRequestSeries(series=solver_request_list)
