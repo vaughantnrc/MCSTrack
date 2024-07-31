@@ -39,6 +39,9 @@ import logging
 from typing import Callable, Final, get_args, TypeVar
 import uuid
 
+import json
+import os
+
 logger = logging.getLogger(__name__)
 ConnectionType = TypeVar('ConnectionType', bound=Connection)
 
@@ -72,6 +75,12 @@ class MCTController(MCTComponent):
     _connections: dict[str, Connection]
     _pending_request_ids: list[uuid.UUID]
 
+    _recording_detector : bool
+    _recording_pose_solver : bool
+    _detector_record: list[DetectorFrame]
+    _pose_solver_record: list[PoseSolverFrame]
+    _recording_save_path : bool
+
     def __init__(
         self,
         serial_identifier: str,
@@ -90,6 +99,12 @@ class MCTController(MCTComponent):
 
         self._connections = dict()
         self._pending_request_ids = list()
+
+        self._recording_detector = False
+        self._recording_pose_solver = False
+        self._detector_record = []
+        self._pose_solver_record = []
+        self._recording_save_path = None
 
     def add_connection(
         self,
@@ -412,6 +427,44 @@ class MCTController(MCTComponent):
     def is_transitioning(self):
         return self._status == MCTController.Status.STARTING or self._status == MCTController.Status.STOPPING
 
+    def recording_start(
+            self,
+            save_path : str,
+            record_pose_solver : bool,
+            record_detector : bool
+        ):
+
+        if save_path:
+            self._recording_pose_solver = record_pose_solver
+            self._recording_detector = record_detector
+            self._recording_save_path = save_path
+        else:
+            self.add_status_message(
+                severity="error",
+                message=f"Recording save path not defined")
+
+    def recording_stop(self):
+        # Save the instance variables (detector_recording and pose_solver_recording) to files
+        if self._recording_pose_solver:
+            pose_solver_frames_dict = [frame.dict() for frame in self._pose_solver_record]
+            pose_solver_frames_json = json.dumps(pose_solver_frames_dict)
+
+            # TODO: add timestamp in filename
+            with open(os.path.join(self._recording_save_path,"pose_solver_log.json"), 'w') as f:
+                f.write(pose_solver_frames_json)
+
+            self._recording_pose_solver = False
+
+        # TODO: add support for multiple detectors
+        if self._recording_detector:
+            detector_frames_dict = [frame.dict() for frame in self._detector_record]
+            detector_frames_json = json.dumps(detector_frames_dict)
+
+            with open(os.path.join(self._recording_save_path,"detector_log.json"), 'w') as f:
+                f.write(detector_frames_json)
+
+            self._recording_detector = False
+
     def remove_connection(
         self,
         label: str
@@ -474,6 +527,10 @@ class MCTController(MCTComponent):
         self._startup_state = MCTController.StartupState.STARTING_CAPTURE
         self._status = MCTController.Status.STARTING
 
+        self.recording_start(save_path="/home/adminpi5",
+                             record_pose_solver=True,
+                             record_detector=True)
+
     def shut_down(self) -> None:
         if self._status != MCTController.Status.RUNNING:
             raise RuntimeError("Cannot shut down if controller isn't first running.")
@@ -482,6 +539,8 @@ class MCTController(MCTComponent):
                 connection.shut_down()
 
         self._status = MCTController.Status.STOPPING
+
+        self.recording_stop()
 
     def supported_request_types(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
         return super().supported_request_types()
@@ -566,6 +625,12 @@ class MCTController(MCTComponent):
                                 detector_label=detector_label,
                                 detector_frame=current_detector_frame)
                             solver_request_list.append(marker_request)
+                            if self._recording_detector:
+                                self._detector_record.append(current_detector_frame)
+                            if self._recording_pose_solver:
+                                current_pose_solver_frame = self.get_live_pose_solver_frame(pose_solver_label)
+                                self._pose_solver_record.append(current_pose_solver_frame)
+
                     solver_request_list.append(PoseSolverGetPosesRequest())
                     request_series: MCTRequestSeries = MCTRequestSeries(series=solver_request_list)
                     pose_solver_connection.request_id = self.request_series_push(
