@@ -15,7 +15,7 @@ class Matrix4x4(BaseModel):
 
     def as_numpy_array(self):
         a = self.values
-        return numpy.array(
+        return numpy.asarray(
             [[a[0],  a[1],  a[2],  a[3]],
              [a[4],  a[5],  a[6],  a[7]],
              [a[8],  a[9],  a[10], a[11]],
@@ -32,6 +32,10 @@ class Matrix4x4(BaseModel):
             raise ValueError
         result_numpy_array = numpy.matmul(self.as_numpy_array(), other.as_numpy_array())
         return Matrix4x4(values=list(result_numpy_array.flatten()))
+
+    def get_translation(self) -> list[float]:
+        a = self.values
+        return [a[3], a[7], a[11]]
 
     @staticmethod
     def from_raw_values(

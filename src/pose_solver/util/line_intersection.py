@@ -1,5 +1,4 @@
 import numpy
-from typing import List
 from src.pose_solver.structures import Ray
 
 
@@ -8,20 +7,20 @@ EPSILON: float = 0.0001
 
 class RayIntersection2:
     parallel: bool  # special case, mark it as such
-    closest_point_1: numpy.array
-    closest_point_2: numpy.array
+    closest_point_1: numpy.ndarray
+    closest_point_2: numpy.ndarray
 
     def __init__(
         self,
         parallel: bool,
-        closest_point_1: numpy.array,
-        closest_point_2: numpy.array
+        closest_point_1: numpy.ndarray,
+        closest_point_2: numpy.ndarray
     ):
         self.parallel = parallel
         self.closest_point_1 = closest_point_1
         self.closest_point_2 = closest_point_2
 
-    def centroid(self) -> numpy.array:
+    def centroid(self) -> numpy.ndarray:
         return (self.closest_point_1 + self.closest_point_2) / 2
 
     def distance(self) -> float:
@@ -29,7 +28,7 @@ class RayIntersection2:
 
 
 class RayIntersectionN:
-    centroids: numpy.array
+    centroids: numpy.ndarray
 
     # How many rays were used.
     # Note that centroids might not use all possible intersections (e.g. parallel rays)
@@ -37,14 +36,14 @@ class RayIntersectionN:
 
     def __init__(
         self,
-        centroids: numpy.array,
+        centroids: numpy.ndarray,
         ray_count: int
     ):
         self.centroids = centroids
         self.ray_count = ray_count
 
-    def centroid(self) -> numpy.array:
-        sum_centroids = numpy.array([0, 0, 0], dtype="float32")
+    def centroid(self) -> numpy.ndarray:
+        sum_centroids = numpy.asarray([0, 0, 0], dtype="float32")
         for centroid in self.centroids:
             sum_centroids += centroid
         return sum_centroids / self.centroids.shape[0]
@@ -73,7 +72,7 @@ def closest_intersection_between_two_lines(
 
     # system of equations Ax = b
     b = numpy.subtract(ray_2.source_point, ray_1.source_point)
-    a = numpy.array(
+    a = numpy.asarray(
         [ray_1_direction_normalized, -ray_2_direction_normalized, ray_3_direction], dtype="float32").transpose()
     x = numpy.linalg.solve(a, b)
 
@@ -90,17 +89,17 @@ def closest_intersection_between_two_lines(
 
 
 def closest_intersection_between_n_lines(
-    rays: List[Ray],
+    rays: list[Ray],
     maximum_distance: float
 ) -> RayIntersectionN:
     ray_count = len(rays)
-    intersections: List[RayIntersection2] = list()
+    intersections: list[RayIntersection2] = list()
     for ray_1_index in range(0, ray_count):
         for ray_2_index in range(ray_1_index + 1, ray_count):
             intersections.append(closest_intersection_between_two_lines(
                 ray_1=rays[ray_1_index],
                 ray_2=rays[ray_2_index]))
-    centroids: List[numpy.array] = list()
+    centroids: list[numpy.ndarray] = list()
     for intersection in intersections:
         if intersection.parallel:
             continue
@@ -108,5 +107,5 @@ def closest_intersection_between_n_lines(
             continue
         centroids.append(intersection.centroid())
     return RayIntersectionN(
-        centroids=numpy.array(centroids, dtype="float32"),
+        centroids=numpy.asarray(centroids, dtype="float32"),
         ray_count=ray_count)

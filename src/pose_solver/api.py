@@ -1,4 +1,4 @@
-from .structures import \
+from src.common.structures import \
     TargetMarker, \
     TargetBoard
 from src.common import \

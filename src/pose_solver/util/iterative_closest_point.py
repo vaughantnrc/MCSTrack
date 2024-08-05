@@ -79,6 +79,20 @@ def iterative_closest_point_for_points_and_rays(
     parameters: IterativeClosestPointParameters = None,
     initial_transformation_matrix: numpy.ndarray = None
 ) -> IterativeClosestPointOutput:
+    """
+    :param source_known_points: points with known corresponding positions in both source and target coordinate frames
+    :param target_known_points: points with known corresponding positions in both source and target coordinate frames
+    :param source_ray_points: points with known position in the source coordinate frame, but NOT in target
+    :param target_rays: rays along which the remaining target points lie (1:1 correspondence with source_ray_points)
+    :param parameters:
+    :param initial_transformation_matrix:
+    """
+
+    if len(source_known_points) != len(target_known_points):
+        raise ValueError("source_known_points and target_known_points must be of equal length (1:1 correspondence).")
+
+    if len(source_known_points) != len(target_known_points):
+        raise ValueError("source_ray_points and target_rays must be of equal length (1:1 correspondence).")
 
     # Initial transformation
     source_to_transformed_matrix: numpy.ndarray
