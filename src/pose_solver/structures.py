@@ -1,5 +1,6 @@
-import abc
-from src.common.structures import Matrix4x4
+from src.common.structures import \
+    DetectorFrame, \
+    Matrix4x4
 import cv2.aruco
 import datetime
 import numpy
@@ -10,77 +11,105 @@ from typing import Final
 EPSILON: Final[float] = 0.0001
 
 
-# TODO: Merge into a similar structure in common
-class MarkerCorners:
-    detector_label: str
-    marker_id: str
-    points: list[list[float]]
-    timestamp: datetime.datetime
+class DetectorFrameRecord:
+    _detector_label: str
+    _frame: DetectorFrame
+    _timestamp_utc: datetime.datetime | None
+    _corners_by_marker_id: dict[str, list[list[float]]] | None
 
     def __init__(
         self,
         detector_label: str,
-        marker_id: str,
-        points: list[list[float]],
-        timestamp: datetime.datetime
+        frame: DetectorFrame
     ):
-        self.detector_label = detector_label
-        self.marker_id = marker_id
-        self.points = points
-        self.timestamp = timestamp
+        self._detector_label = detector_label
+        self._frame = frame
+        self._timestamp_utc = None  # calculated when needed
+        self._corners_by_marker_id = None
+
+    def _init_corners_by_marker_id(self):
+        self._corners_by_marker_id = dict()
+        for snapshot in self._frame.detected_marker_snapshots:
+            self._corners_by_marker_id[snapshot.label] = [
+                [corner_image_point.x_px, corner_image_point.y_px]
+                for corner_image_point in snapshot.corner_image_points]
+
+    def get_detector_label(self) -> str:
+        return self._detector_label
+
+    def get_frame(self) -> DetectorFrame:
+        return self._frame
+
+    def get_marker_corners_by_marker_id(
+        self,
+        marker_id: str
+    ) -> list[list[float]] | None:
+        if self._corners_by_marker_id is None:
+            self._init_corners_by_marker_id()
+        if marker_id in list(self._corners_by_marker_id.keys()):
+            return self._corners_by_marker_id[marker_id]
+        return None
+
+    def get_marker_ids_detected(self) -> list[str]:
+        if self._corners_by_marker_id is None:
+            self._init_corners_by_marker_id()
+        return list(self._corners_by_marker_id.keys())
+
+    def get_timestamp_utc(self):
+        if self._timestamp_utc is None:
+            self._timestamp_utc = self._frame.timestamp_utc()
+        return self._timestamp_utc
 
 
-class MarkerRaySet(BaseModel):
-    marker_id: int = Field()
-    image_points: list[list[float]] = Field()  # image positions of marker corners. Size 4.
-    image_timestamp: datetime.datetime = Field()
-    ray_origin_reference: list[float] = Field()  # Shared origin for all rays (same detector)
-    ray_directions_reference: list[list[float]] = Field()  # Size 4 (one for each image point)
-    detector_label: str = Field()
-    detector_to_reference_matrix: Matrix4x4 = Field()
+class DetectorRecord:
+    _frame_records_by_marker_id: dict[str, DetectorFrameRecord] = Field(default_factory=dict)
+    _marker_ids: set[str]
 
-    @staticmethod
-    def age_seconds(
-        marker_ray_set,
-        query_timestamp: datetime.datetime
-    ):
-        return (query_timestamp - marker_ray_set.image_timestamp).total_seconds()
+    def __init__(self):
+        self._frame_records_by_marker_id = dict()
+        self._marker_ids = set()
 
-    @staticmethod
-    def newest_timestamp_in_list(marker_ray_set_list: list) -> datetime.datetime:
-        return_value = datetime.datetime.now()
-        for ray_set in marker_ray_set_list:
-            if ray_set.image_timestamp > return_value:
-                return_value = ray_set.image_timestamp
+    def add_frame_record(
+        self,
+        frame_record: DetectorFrameRecord
+    ) -> None:
+        marker_ids: list[str] = frame_record.get_marker_ids_detected()
+        for marker_id in marker_ids:
+            if marker_id not in self._frame_records_by_marker_id or \
+               frame_record.get_timestamp_utc() > self._frame_records_by_marker_id[marker_id].get_timestamp_utc():
+                self._frame_records_by_marker_id[marker_id] = frame_record
+
+    def clear_frame_records_older_than(
+        self,
+        timestamp_utc: datetime.datetime
+    ) -> bool:
+        """
+        returns True if any changes were made
+        """
+        return_value: bool = False
+        marker_ids: list[str] = list(self._frame_records_by_marker_id.keys())
+        for marker_id in marker_ids:
+            frame_record: DetectorFrameRecord = self._frame_records_by_marker_id[marker_id]
+            if frame_record.get_timestamp_utc() < timestamp_utc:
+                del self._frame_records_by_marker_id[marker_id]
+                return_value = True
         return return_value
 
-    @staticmethod
-    def oldest_timestamp_in_list(marker_ray_set_list: list) -> datetime.datetime:
-        return_value = datetime.datetime.utcfromtimestamp(0)
-        for ray_set in marker_ray_set_list:
-            if ray_set.image_timestamp > return_value:
-                return_value = ray_set.image_timestamp
-        return return_value
+    def get_corners(
+        self
+    ) -> dict[str, list[list[float]]]:  # [marker_id][point_index][x/y/z]
+        corners_by_marker_id: dict[str, list[list[float]]] = dict()
+        for marker_id, frame_record in self._frame_records_by_marker_id.items():
+            corners_by_marker_id[marker_id] = frame_record.get_marker_corners_by_marker_id(marker_id=marker_id)
+        return corners_by_marker_id
 
-
-# TODO: Merge/replace this with pose under common data structures
-class PoseData(BaseModel):
-    target_id: str = Field()
-    object_to_reference_matrix: Matrix4x4 = Field()
-    ray_sets: list[MarkerRaySet]
-
-    def newest_timestamp(self) -> datetime.datetime:
-        return MarkerRaySet.newest_timestamp_in_list(self.ray_sets)
-
-    def oldest_timestamp(self) -> datetime.datetime:
-        return MarkerRaySet.oldest_timestamp_in_list(self.ray_sets)
-
-    @staticmethod
-    def age_seconds(
-        pose,
-        query_timestamp: datetime.datetime
-    ) -> float:
-        return (query_timestamp - pose.oldest_timestamp()).total_seconds()
+    def get_corners_for_marker_id(
+        self,
+        marker_id: str
+    ) -> list[list[float]] | None:  # [point_index][x/y/z]
+        if marker_id not in self._frame_records_by_marker_id:
+            return None
+        return self._frame_records_by_marker_id[marker_id].get_marker_corners_by_marker_id(marker_id=marker_id)
 
 
 class PoseSolverConfiguration(BaseModel):
@@ -104,11 +133,11 @@ class PoseSolverParameters(BaseModel):
     POSE_SINGLE_CAMERA_DEPTH_CORRECTION: float = Field(-7.5, description="millimeters, observed tendency to overestimate depth.")
     POSE_DETECTOR_DENOISE_LIMIT_AGE_SECONDS: float = Field(1.0)
     INTERSECTION_MAXIMUM_DISTANCE: float = Field(10.0, description="millimeters")
-    ITERATIVE_CLOSEST_POINT_TERMINATION_ITERATION_COUNT: int = Field(50)
-    ITERATIVE_CLOSEST_POINT_TERMINATION_TRANSLATION: float = Field(0.005, description="millimeters")
-    ITERATIVE_CLOSEST_POINT_TERMINATION_ROTATION_RADIANS: float = Field(0.0005)
-    ITERATIVE_CLOSEST_POINT_TERMINATION_MEAN_POINT_DISTANCE: float = Field(0.1, description="millimeters")
-    ITERATIVE_CLOSEST_POINT_TERMINATION_RMS_POINT_DISTANCE: float = Field(0.1, description="millimeters")
+    icp_termination_iteration_count: int = Field(50)
+    icp_termination_translation: float = Field(0.005, description="millimeters")
+    icp_termination_rotation_radians: float = Field(0.0005)
+    icp_termination_mean_point_distance: float = Field(0.1, description="millimeters")
+    icp_termination_rms_point_distance: float = Field(0.1, description="millimeters")
     DENOISE_OUTLIER_DISTANCE_MILLIMETERS: float = Field(10.0)
     DENOISE_OUTLIER_ANGLE_DEGREES: float = Field(5.0)
     DENOISE_STORAGE_SIZE: int = Field(10)
@@ -136,68 +165,3 @@ class Ray:
             raise ValueError("Direction cannot be zero.")
         self.source_point = source_point
         self.direction = direction
-
-
-class _Marker(BaseModel):
-    marker_id: str = Field()
-    marker_size: float | None = Field(default=None)
-    points: list[list[float]] | None = Field(default=None)
-
-    # TODO: During validation, make sure either marker_size or points is defined, but not both.
-
-    def get_marker_size(self) -> float:
-        if self.marker_size is None:
-            if self.points is None or len(self.points) < 2:
-                raise RuntimeError("TargetMarker defined with neither marker_size nor enough points.")
-            marker_size_sum: float = 0.0
-            for point_index in range(0, len(self.points)):
-                point_a: numpy.ndarray = numpy.asarray(self.points[point_index])
-                point_b: numpy.ndarray = numpy.asarray(self.points[point_index-1])
-                vector: numpy.ndarray = point_a - point_b
-                marker_size_sum += numpy.linalg.norm(vector)
-            self.marker_size = marker_size_sum / len(self.points)
-        return self.marker_size
-
-    def get_points_internal(self) -> list[list[float]]:
-        # Use the TargetBase.get_points() instead.
-        if self.points is None:
-            if self.marker_size is None:
-                raise RuntimeError("TargetMarker defined with neither marker_size nor points.")
-            half_width = self.marker_size / 2.0
-            self.points = [
-                [-half_width, half_width, 0.0],
-                [half_width, half_width, 0.0],
-                [half_width, -half_width, 0.0],
-                [-half_width, -half_width, 0.0]]
-        return self.points
-
-
-class TargetBase(BaseModel, abc.ABC):
-    target_id: str = Field()
-
-    @abc.abstractmethod
-    def get_marker_ids(self) -> list[str]: ...
-
-    @abc.abstractmethod
-    def get_points(self) -> list[list[float]]: ...
-
-
-class TargetMarker(TargetBase, _Marker):
-    def get_marker_ids(self) -> list[str]:
-        return [self.marker_id]
-
-    def get_points(self) -> list[list[float]]:
-        return self.get_points_internal()
-
-
-class TargetBoard(TargetBase):
-    markers: list[_Marker] = Field()
-
-    def get_marker_ids(self) -> list[str]:
-        return [marker.marker_id for marker in self.markers]
-
-    def get_points(self) -> list[list[float]]:
-        points = list()
-        for marker in self.markers:
-            points += marker.get_points_internal()
-        return points

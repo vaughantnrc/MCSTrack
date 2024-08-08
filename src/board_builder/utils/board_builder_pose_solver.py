@@ -1,26 +1,26 @@
-from src.board_builder.structures import PoseLocation
-from src.common.structures import \
-    IntrinsicParameters, \
-    Matrix4x4, \
-    Pose, \
-    CharucoBoardSpecification, \
-    MarkerCorners
-from src.pose_solver.structures import \
+from src.board_builder.structures import \
     MarkerRaySet, \
     PoseData, \
-    Ray, \
+    PoseLocation
+from src.common.structures import \
+    CharucoBoardSpecification, \
+    IntrinsicParameters, \
+    MarkerCorners, \
+    Matrix4x4, \
+    Pose, \
     TargetBase, \
-    TargetMarker, \
+    TargetMarker
+from src.common.util import MathUtils
+from src.pose_solver.structures import \
+    Ray, \
     PoseSolverParameters
 from src.pose_solver.util import \
     average_quaternion, \
-    transformation_image_to_opengl, \
     convex_quadrilateral_area, \
     closest_intersection_between_n_lines, \
     IterativeClosestPointParameters, \
     iterative_closest_point_for_points_and_rays, \
-    register_corresponding_points, \
-    vector_image_to_opengl
+    register_corresponding_points
 import cv2
 import cv2.aruco
 import datetime
@@ -286,7 +286,7 @@ class BoardBuilderPoseSolver:
         ray_origin_reference = ray_origin_reference.tolist()[0:3]
         for point_normalized in undistorted_points_normalized:
             target_point_image = [point_normalized[0, 0], point_normalized[0, 1], 1, 1]  # reverse perspective
-            target_point_detector = vector_image_to_opengl(target_point_image)
+            target_point_detector = MathUtils.image_to_opengl_vector(target_point_image)
             ray_direction_detector = numpy.subtract(target_point_detector, origin_point_detector)
             ray_direction_detector = ray_direction_detector / numpy.linalg.norm(ray_direction_detector)  # normalize
             ray_direction_reference = numpy.matmul(detector_to_reference, ray_direction_detector)
@@ -421,7 +421,7 @@ class BoardBuilderPoseSolver:
         object_to_camera_matrix = numpy.identity(4, dtype="float32")
         object_to_camera_matrix[0:3, 0:3] = Rotation.from_rotvec(rotation_vector).as_matrix()
         object_to_camera_matrix[0:3, 3] = translation_vector[0:3]
-        object_to_detector_matrix = transformation_image_to_opengl(object_to_camera_matrix)
+        object_to_detector_matrix = MathUtils.image_to_opengl_transformation_matrix(object_to_camera_matrix)
         detector_to_reference_matrix: Matrix4x4 = ray_set.detector_to_reference_matrix
         object_to_reference_matrix = numpy.matmul(
             detector_to_reference_matrix.as_numpy_array(), object_to_detector_matrix)
@@ -487,7 +487,7 @@ class BoardBuilderPoseSolver:
             reference_to_camera_matrix = numpy.identity(4, dtype="float32")
             reference_to_camera_matrix[0:3, 0:3] = Rotation.from_rotvec(rotation_vector).as_matrix()
             reference_to_camera_matrix[0:3, 3] = translation_vector
-            reference_to_detector_matrix = transformation_image_to_opengl(reference_to_camera_matrix)
+            reference_to_detector_matrix = MathUtils.image_to_opengl_transformation_matrix(reference_to_camera_matrix)
             detector_to_reference_opengl = numpy.linalg.inv(reference_to_detector_matrix)
             self._poses_by_detector_label[detector_label] = Matrix4x4.from_numpy_array(detector_to_reference_opengl)
 
@@ -643,11 +643,11 @@ class BoardBuilderPoseSolver:
                 object_ray_points: list[list[float]] = list()
                 reference_rays: list[Ray] = list()
                 iterative_closest_point_parameters = IterativeClosestPointParameters(
-                    termination_iteration_count=self._parameters.ITERATIVE_CLOSEST_POINT_TERMINATION_ITERATION_COUNT,
-                    termination_delta_translation=self._parameters.ITERATIVE_CLOSEST_POINT_TERMINATION_TRANSLATION,
-                    termination_delta_rotation_radians=self._parameters.ITERATIVE_CLOSEST_POINT_TERMINATION_ROTATION_RADIANS,
-                    termination_mean_point_distance=self._parameters.ITERATIVE_CLOSEST_POINT_TERMINATION_MEAN_POINT_DISTANCE,
-                    termination_rms_point_distance=self._parameters.ITERATIVE_CLOSEST_POINT_TERMINATION_RMS_POINT_DISTANCE)
+                    termination_iteration_count=self._parameters.icp_termination_iteration_count,
+                    termination_delta_translation=self._parameters.icp_termination_translation,
+                    termination_delta_rotation_radians=self._parameters.icp_termination_rotation_radians,
+                    termination_mean_point_distance=self._parameters.icp_termination_mean_point_distance,
+                    termination_rms_point_distance=self._parameters.icp_termination_rms_point_distance)
 
                 if len(marker_ids_with_intersections) >= 1:
                     reference_points_for_intersections: list[list[float]] = list()

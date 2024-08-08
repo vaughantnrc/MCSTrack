@@ -25,7 +25,7 @@ from src.controller import \
 from src.pose_solver.api import \
     PoseSolverAddTargetMarkerRequest, \
     PoseSolverSetReferenceRequest
-from src.pose_solver.structures import \
+from src.common.structures import \
     TargetMarker
 import datetime
 import logging
