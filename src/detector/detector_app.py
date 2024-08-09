@@ -1,7 +1,11 @@
 from src.common import \
     client_identifier_from_connection, \
     EmptyResponse, \
-    ErrorResponse
+    ErrorResponse, \
+    TimestampGetRequest, \
+    TimestampGetResponse, \
+    TimeSyncStartRequest, \
+    TimeSyncStopRequest
 from src.detector import \
     Detector, \
     DetectorConfiguration
@@ -89,12 +93,32 @@ def create_app() -> FastAPI:
         client_identifier: str = client_identifier_from_connection(connection=http_request)
         detector.detector_stop(client_identifier=client_identifier)
 
+    @detector_app.post("/detector/start_time_sync")
+    async def start_time_sync(
+        request: TimeSyncStartRequest
+    ) -> EmptyResponse:
+        return detector.time_sync_start(
+            request=request)
+    
+    @detector_app.post("/detector/stop_time_sync")
+    async def stop_time_sync(
+        request: TimeSyncStopRequest
+    ) -> EmptyResponse:
+        return detector.time_sync_stop(
+            request=request)
+
     @detector_app.post("/detector/get_frame")
     async def detector_get_frame(
         request: DetectorFrameGetRequest
     ) -> DetectorFrameGetResponse:
         return detector.detector_frame_get(
             request=request)
+    
+    @detector_app.get("/detector/get_timestamp")
+    async def get_timestamp(
+        request: TimestampGetRequest
+    ) -> TimestampGetResponse:
+        return detector.timestamp_get()
 
     @detector_app.get("/calibration/get_result_active")
     async def calibration_get_result_active() -> CalibrationResultGetActiveResponse:

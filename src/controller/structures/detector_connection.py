@@ -1,9 +1,7 @@
 from .mct_component_address import MCTComponentAddress
 from .connection import Connection
 from src.common.api import \
-    DequeueStatusMessagesResponse, \
     EmptyResponse, \
-    ErrorResponse, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries
@@ -88,7 +86,7 @@ class DetectorConnection(Connection):
         return Connection.InitializationResult.SUCCESS
 
     def supported_response_types(self) -> list[type[MCTResponse]]:
-        return [
+        return super().supported_response_types() + [
             CalibrationCalculateResponse,
             CalibrationImageAddResponse,
             CalibrationImageGetResponse,
@@ -101,8 +99,5 @@ class DetectorConnection(Connection):
             CameraParametersGetResponse,
             CameraParametersSetResponse,
             CameraResolutionGetResponse,
-            DequeueStatusMessagesResponse,
             DetectorFrameGetResponse,
-            EmptyResponse,
-            ErrorResponse,
             MarkerParametersGetResponse]

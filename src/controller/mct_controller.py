@@ -13,7 +13,11 @@ from src.common import \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
-    StatusMessageSource
+    StatusMessageSource, \
+    TimestampGetRequest, \
+    TimestampGetResponse, \
+    TimeSyncStartRequest, \
+    TimeSyncStopRequest
 from src.common.structures import \
     ComponentRoleLabel, \
     COMPONENT_ROLE_LABEL_DETECTOR, \
@@ -37,12 +41,16 @@ import datetime
 from enum import IntEnum, StrEnum
 import json
 import logging
+import numpy
 import os
 from typing import Callable, Final, get_args, TypeVar
 import uuid
 
 logger = logging.getLogger(__name__)
 ConnectionType = TypeVar('ConnectionType', bound=Connection)
+
+
+_TIME_SYNC_SAMPLE_MAXIMUM_COUNT: Final[int] = 5
 
 
 class MCTController(MCTComponent):
@@ -60,11 +68,10 @@ class MCTController(MCTComponent):
     class StartupState(IntEnum):
         INITIAL: Final[int] = 0
         CONNECTING: Final[int] = 1
-        STARTING_CAPTURE: Final[int] = 2
-        GET_RESOLUTIONS: Final[int] = 3
-        LIST_INTRINSICS: Final[int] = 4  # This and next phase can be combined with some API modification
-        GET_INTRINSICS: Final[int] = 5
-        SET_INTRINSICS: Final[int] = 6
+        TIME_SYNC_START: Final[int] = 2
+        TIME_SYNC_STOP: Final[int] = 3
+        GET_INTRINSICS: Final[int] = 4
+        SET_INTRINSICS: Final[int] = 5
 
     _status_message_source: StatusMessageSource
     _status: Status
@@ -73,6 +80,8 @@ class MCTController(MCTComponent):
 
     _connections: dict[str, Connection]
     _pending_request_ids: list[uuid.UUID]
+
+    _time_sync_sample_count: int
 
     _recording_detector : bool
     _recording_pose_solver : bool
@@ -97,6 +106,8 @@ class MCTController(MCTComponent):
         self._connections = dict()
         self._pending_request_ids = list()
 
+        self._time_sync_sample_count = 0
+
         self._recording_detector = False
         self._recording_pose_solver = False
         self._recording_save_path = None
@@ -116,7 +127,45 @@ class MCTController(MCTComponent):
             raise ValueError(f"Unrecognized component role {component_address.role}.")
 
     def _advance_startup_state(self) -> None:
-        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.STARTING_CAPTURE:
+        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.CONNECTING:
+            self.status_message_source.enqueue_status_message(
+                severity="debug",
+                message="CONNECTING complete")
+            component_labels: list[str] = self.get_component_labels(active=True)
+            request_series: MCTRequestSeries = MCTRequestSeries(series=[TimeSyncStartRequest()])
+            for component_label in component_labels:
+                connection = self._get_connection(
+                    connection_label=component_label,
+                    connection_type=Connection)
+                connection.reset_time_sync_stats()
+                self._pending_request_ids.append(
+                    self.request_series_push(
+                        connection_label=component_label,
+                        request_series=request_series))
+            self._time_sync_sample_count = 0
+            self._startup_state = MCTController.StartupState.TIME_SYNC_START
+        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.TIME_SYNC_START:
+            self.status_message_source.enqueue_status_message(
+                severity="debug",
+                message="TIME_SYNC complete")
+            component_labels: list[str] = self.get_component_labels(active=True)
+            request_series: MCTRequestSeries = MCTRequestSeries(series=[
+                TimestampGetRequest(requester_timestamp_utc_iso8601=datetime.datetime.utcnow().isoformat())])
+            for component_label in component_labels:
+                self._pending_request_ids.append(
+                    self.request_series_push(
+                        connection_label=component_label,
+                        request_series=request_series))
+            self._time_sync_sample_count += 1
+            if self._time_sync_sample_count >= _TIME_SYNC_SAMPLE_MAXIMUM_COUNT:
+                request_series: MCTRequestSeries = MCTRequestSeries(series=[TimeSyncStopRequest()])
+                for component_label in component_labels:
+                    self._pending_request_ids.append(
+                        self.request_series_push(
+                            connection_label=component_label,
+                            request_series=request_series))
+                self._startup_state = MCTController.StartupState.TIME_SYNC_STOP
+        if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.TIME_SYNC_STOP:
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="STARTING_CAPTURE complete")
@@ -354,6 +403,28 @@ class MCTController(MCTComponent):
         pose_solver_connection.poses_timestamp = \
             datetime.datetime.utcnow()  # TODO: This should come from the pose solver
 
+    def handle_response_timestamp_get(
+        self,
+        response: TimestampGetResponse,
+        component_label: str
+    ) -> None:
+        connection: PoseSolverConnection = self._get_connection(
+            connection_label=component_label,
+            connection_type=Connection)
+        utc_now: datetime.datetime = datetime.datetime.utcnow()
+        requester_timestamp: datetime.datetime = datetime.datetime.fromisoformat(response.requester_timestamp_utc_iso8601)
+        round_trip_seconds: float = (utc_now - requester_timestamp).total_seconds()
+        connection.network_latency_samples_seconds.append(round_trip_seconds)
+        responder_timestamp: datetime.datetime = datetime.datetime.fromisoformat(response.responder_timestamp_utc_iso8601)
+        network_plus_offset_seconds: float = (responder_timestamp - requester_timestamp).total_seconds()
+        connection.network_plus_offset_samples_seconds.append(network_plus_offset_seconds)
+        if self._time_sync_sample_count >= _TIME_SYNC_SAMPLE_MAXIMUM_COUNT:
+            connection.network_latency_seconds = numpy.median(connection.network_latency_samples_seconds)
+            connection.controller_offset_samples_seconds = list(
+                numpy.asarray(connection.network_plus_offset_samples_seconds) - (connection.network_latency_seconds / 2.0))
+            connection.controller_offset_seconds = numpy.median(connection.controller_offset_samples_seconds)
+            print(f"Calculated offset: {connection.controller_offset_seconds}")
+
     def handle_response_unknown(
         self,
         response: MCTResponse
@@ -401,6 +472,10 @@ class MCTController(MCTComponent):
                 self.handle_response_detector_frame_get(
                     response=response,
                     detector_label=response_series.responder)
+            elif isinstance(response, TimestampGetResponse):
+                self.handle_response_timestamp_get(
+                    response=response,
+                    component_label=response_series.responder)
             elif isinstance(response, PoseSolverGetPosesResponse):
                 self.handle_response_get_poses(
                     response=response,
@@ -518,7 +593,7 @@ class MCTController(MCTComponent):
                 continue
             connection.start_up()
 
-        self._startup_state = MCTController.StartupState.STARTING_CAPTURE
+        self._startup_state = MCTController.StartupState.CONNECTING
         self._status = MCTController.Status.STARTING
 
         self.recording_start(save_path="/home/adminpi5",
@@ -548,16 +623,16 @@ class MCTController(MCTComponent):
             await connection.update()
 
         if self._status == MCTController.Status.STARTING and \
-           self._startup_state == MCTController.StartupState.STARTING_CAPTURE:
-            startup_finished: bool = True
+           self._startup_state == MCTController.StartupState.CONNECTING:
+            all_connected: bool = True
             for connection in connections:
                 if self._startup_mode == MCTController.StartupMode.DETECTING_ONLY and \
                    connection.get_role() == COMPONENT_ROLE_LABEL_POSE_SOLVER:
                     continue
                 if not connection.is_start_up_finished():
-                    startup_finished = False
+                    all_connected = False
                     break
-            if startup_finished:
+            if all_connected:
                 self._advance_startup_state()
         elif self._status == MCTController.Status.STOPPING:
             shutdown_finished: bool = True

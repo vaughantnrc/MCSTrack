@@ -3,11 +3,16 @@ from .status_message_source import StatusMessageSource
 from src.common.api import \
     DequeueStatusMessagesRequest, \
     DequeueStatusMessagesResponse, \
+    EmptyResponse, \
     ErrorResponse, \
     MCTRequest, \
     MCTRequestSeries, \
     MCTResponse, \
-    MCTResponseSeries
+    MCTResponseSeries, \
+    TimestampGetRequest, \
+    TimestampGetResponse, \
+    TimeSyncStartRequest, \
+    TimeSyncStopRequest
 from src.common.exceptions import MCTParsingError
 from src.common.structures import \
     MCTParsable, \
@@ -28,6 +33,7 @@ ParsableDynamicSingle = TypeVar('ParsableDynamicSingle', bound=MCTParsable)
 class MCTComponent(abc.ABC):
 
     _status_message_source: StatusMessageSource
+    _syncing_time: bool
 
     def __init__(
         self,
@@ -37,6 +43,7 @@ class MCTComponent(abc.ABC):
         self._status_message_source = StatusMessageSource(
             source_label=status_source_label,
             send_to_logger=send_status_messages_to_logger)
+        self._syncing_time = False
 
     def add_status_message(
         self,
@@ -98,8 +105,29 @@ class MCTComponent(abc.ABC):
             - client_identifier: str unique to the component making the request
             - request: Of type derived from MCTRequest that contains information specific to the request
         """
-        return {DequeueStatusMessagesRequest: self.dequeue_status_messages}
-
+        return {DequeueStatusMessagesRequest: self.dequeue_status_messages,
+                TimestampGetRequest: self.timestamp_get,
+                TimeSyncStartRequest: self.time_sync_start,
+                TimeSyncStopRequest: self.time_sync_stop}
+    
+    def timestamp_get(self, **kwargs) -> TimestampGetResponse:
+        request: TimestampGetRequest = get_kwarg(
+            kwargs=kwargs,
+            key="request",
+            arg_type=TimestampGetRequest)
+        timestamp_utc_iso8601 : str = datetime.datetime.utcnow().isoformat()
+        return TimestampGetResponse(
+            requester_timestamp_utc_iso8601=request.requester_timestamp_utc_iso8601,
+            responder_timestamp_utc_iso8601=timestamp_utc_iso8601)
+    
+    def time_sync_start(self, **kwargs) -> EmptyResponse:
+        self._syncing_time = True
+        return EmptyResponse()
+    
+    def time_sync_stop(self, **kwargs) -> EmptyResponse:
+        self._syncing_time = False
+        return EmptyResponse()
+    
     async def websocket_handler(self, websocket: WebSocket) -> None:
         await websocket.accept()
         try:

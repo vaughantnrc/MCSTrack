@@ -346,14 +346,15 @@ class Detector(MCTComponent):
         return return_value
 
     async def update(self):
-        if self._camera.get_status() == CameraStatus.RUNNING:
-            try:
-                self._camera.update()
-            except MCTDetectorRuntimeError as e:
-                self.add_status_message(severity="error", message=e.message)
-        if self._marker.get_status() == MarkerStatus.RUNNING and \
-           self._camera.get_changed_timestamp() > self._marker.get_changed_timestamp():
-            self._marker.update(self._camera.get_image())
-        self._frame_count += 1
-        if self._frame_count % 1000 == 0:
-            print(f"Update count: {self._frame_count}")
+        if not self._syncing_time:
+            if self._camera.get_status() == CameraStatus.RUNNING:
+                try:
+                    self._camera.update()
+                except MCTDetectorRuntimeError as e:
+                    self.add_status_message(severity="error", message=e.message)
+            if self._marker.get_status() == MarkerStatus.RUNNING and \
+            self._camera.get_changed_timestamp() > self._marker.get_changed_timestamp():
+                self._marker.update(self._camera.get_image())
+            self._frame_count += 1
+            if self._frame_count % 1000 == 0:
+                print(f"Update count: {self._frame_count}")

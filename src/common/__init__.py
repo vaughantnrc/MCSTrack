@@ -6,7 +6,11 @@ from .api import \
     MCTRequest, \
     MCTRequestSeries, \
     MCTResponse, \
-    MCTResponseSeries
+    MCTResponseSeries, \
+    TimestampGetRequest, \
+    TimestampGetResponse, \
+    TimeSyncStartRequest, \
+    TimeSyncStopRequest
 from .client_identifier_from_connection import client_identifier_from_connection
 from .get_kwarg import get_kwarg
 from .image_coding import ImageCoding

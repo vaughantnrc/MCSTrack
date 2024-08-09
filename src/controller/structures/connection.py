@@ -1,9 +1,13 @@
 from .mct_component_address import MCTComponentAddress
 from .connection_report import ConnectionReport
 from src.common import \
+    DequeueStatusMessagesResponse, \
+    EmptyResponse, \
+    ErrorResponse, \
     MCTRequestSeries, \
     MCTResponse, \
-    MCTResponseSeries
+    MCTResponseSeries, \
+    TimestampGetResponse
 from src.common.structures import \
     MCTParsable, \
     SeverityLabel, \
@@ -99,6 +103,12 @@ class Connection(abc.ABC):
     _current_request_id: uuid.UUID | None
     _response_series_queue: dict[uuid.UUID, MCTResponseSeries]
 
+    network_latency_samples_seconds: list[float]
+    network_latency_seconds: float
+    network_plus_offset_samples_seconds: list[float]
+    controller_offset_samples_seconds: list[float]
+    controller_offset_seconds: float
+
     def __init__(
         self,
         component_address: MCTComponentAddress
@@ -118,6 +128,8 @@ class Connection(abc.ABC):
         self._request_series_queue = list()
         self._current_request_id = None
         self._response_series_queue = dict()
+
+        self.reset_time_sync_stats()
 
     @abc.abstractmethod
     def create_deinitialization_request_series(self) -> MCTRequestSeries: ...
@@ -216,6 +228,13 @@ class Connection(abc.ABC):
         return Connection.PopResponseSeriesResult(
             status=Connection.PopResponseSeriesResult.Status.UNTRACKED)
 
+    def reset_time_sync_stats(self):
+        self.network_latency_samples_seconds = list()
+        self.network_latency_seconds = 0.0
+        self.network_plus_offset_samples_seconds = list()
+        self.controller_offset_samples_seconds = list()
+        self.controller_offset_seconds = 0.0
+
     async def _send_recv(
         self
     ) -> None:
@@ -276,7 +295,12 @@ class Connection(abc.ABC):
         self._next_attempt_timestamp_utc = datetime.datetime.utcnow()
 
     @abc.abstractmethod
-    def supported_response_types(self) -> list[type[MCTResponse]]: ...
+    def supported_response_types(self) -> list[type[MCTResponse]]:
+        return [
+            DequeueStatusMessagesResponse,
+            EmptyResponse,
+            ErrorResponse,
+            TimestampGetResponse]
 
     async def _try_connect(self) -> ConnectionResult:
         uri: str = f"ws://{self._component_address.ip_address}:{self._component_address.port}/websocket"

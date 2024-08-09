@@ -2,9 +2,7 @@ from src.common.structures.pose_solver_frame import PoseSolverFrame
 from .mct_component_address import MCTComponentAddress
 from .connection import Connection
 from src.common.api import \
-    DequeueStatusMessagesResponse, \
     EmptyResponse, \
-    ErrorResponse, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries
@@ -76,8 +74,5 @@ class PoseSolverConnection(Connection):
         return Connection.InitializationResult.SUCCESS
 
     def supported_response_types(self) -> list[type[MCTResponse]]:
-        return [
-            DequeueStatusMessagesResponse,
-            EmptyResponse,
-            ErrorResponse,
+        return super().supported_response_types() + [
             PoseSolverGetPosesResponse]
