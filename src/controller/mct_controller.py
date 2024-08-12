@@ -1,10 +1,13 @@
 from .exceptions import ResponseSeriesNotExpected
 from .structures import \
-    MCTComponentAddress, \
     ConnectionReport, \
     Connection, \
     DetectorConnection, \
-    PoseSolverConnection
+    MCTComponentAddress, \
+    MCTComponentConfig, \
+    MCTConfiguration, \
+    PoseSolverConnection, \
+    StartupMode
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -35,9 +38,12 @@ from src.pose_solver.api import \
     PoseSolverSetIntrinsicRequest
 import datetime
 from enum import IntEnum, StrEnum
+import hjson
+from ipaddress import IPv4Address
 import json
 import logging
 import os
+from pydantic import ValidationError
 from typing import Callable, Final, get_args, TypeVar
 import uuid
 
@@ -52,10 +58,6 @@ class MCTController(MCTComponent):
         STARTING: Final[int] = "Starting"
         RUNNING: Final[int] = "Running"
         STOPPING: Final[int] = "Stopping"
-
-    class StartupMode(StrEnum):
-        DETECTING_ONLY: Final[str] = "detecting_only"
-        DETECTING_AND_SOLVING: Final[str] = "detecting_and_solving"
 
     class StartupState(IntEnum):
         INITIAL: Final[int] = 0
@@ -74,9 +76,9 @@ class MCTController(MCTComponent):
     _connections: dict[str, Connection]
     _pending_request_ids: list[uuid.UUID]
 
-    _recording_detector : bool
-    _recording_pose_solver : bool
-    _recording_save_path : bool
+    _recording_detector: bool
+    _recording_pose_solver: bool
+    _recording_save_path: str | None
 
     def __init__(
         self,
@@ -86,32 +88,75 @@ class MCTController(MCTComponent):
         super().__init__(
             status_source_label=serial_identifier,
             send_status_messages_to_logger=send_status_messages_to_logger)
-
         self.status_message_source = StatusMessageSource(
             source_label="controller",
             send_to_logger=True)
-        self._status = MCTController.Status.STOPPED
-        self._startup_mode = MCTController.StartupMode.DETECTING_AND_SOLVING  # Will be overwritten on startup
-        self._startup_state = MCTController.StartupState.INITIAL
+        # _reset is responsible for creating and restoring the initial state; __init__ calls it to avoid duplication
+        self._reset()
 
-        self._connections = dict()
-        self._pending_request_ids = list()
+    def add_connections_from_configuration(
+        self,
+        configuration: MCTConfiguration
+    ):
+        def is_valid_ip_address(connection: MCTComponentConfig) -> bool:
+            try:
+                IPv4Address(connection.ip_address)
+            except ValueError:
+                self.add_status_message(
+                    severity="error",
+                    message=f"Connection {connection.label} has invalid IP address {connection.ip_address}. "
+                            "It will be skipped.")
+                return False
+            if connection.port < 0 or connection.port > 65535:
+                self.add_status_message(
+                    severity="error",
+                    message=f"Connection {connection.label} has invalid port {connection.port}. "
+                            "It will be skipped.")
+                return False
+            return True
 
-        self._recording_detector = False
-        self._recording_pose_solver = False
-        self._recording_save_path = None
+        for detector in configuration.detectors:
+            if not is_valid_ip_address(detector):
+                continue
+            component_address: MCTComponentAddress = MCTComponentAddress(
+                label=detector.label,
+                role="detector",
+                ip_address=detector.ip_address,
+                port=detector.port)
+            detector_connection: DetectorConnection = self.add_connection(component_address=component_address)
+            if detector.fixed_transform_to_reference is not None:
+                detector_connection.configured_transform_to_reference = detector.fixed_transform_to_reference
+            if detector.camera_parameters is not None:
+                detector_connection.configured_camera_parameters = detector.camera_parameters
+            if detector.marker_parameters is not None:
+                detector_connection.configured_camera_parameters = detector.marker_parameters
+        for pose_solver in configuration.pose_solvers:
+            if not is_valid_ip_address(pose_solver):
+                continue
+            component_address: MCTComponentAddress = MCTComponentAddress(
+                label=pose_solver.label,
+                role="pose_solver",
+                ip_address=pose_solver.ip_address,
+                port=pose_solver.port)
+            pose_solver_connection: DetectorConnection = self.add_connection(component_address=component_address)
+            if pose_solver.solver_parameters is not None:
+                pose_solver_connection.configured_solver_parameters = pose_solver.solver_parameters
 
     def add_connection(
         self,
         component_address: MCTComponentAddress
-    ) -> None:
+    ) -> DetectorConnection | PoseSolverConnection:
         label = component_address.label
         if label in self._connections:
             raise RuntimeError(f"Connection associated with {label} already exists.")
         if component_address.role == COMPONENT_ROLE_LABEL_DETECTOR:
-            self._connections[label] = DetectorConnection(component_address=component_address)
+            return_value: DetectorConnection = DetectorConnection(component_address=component_address)
+            self._connections[label] = return_value
+            return return_value
         elif component_address.role == COMPONENT_ROLE_LABEL_POSE_SOLVER:
-            self._connections[label] = PoseSolverConnection(component_address=component_address)
+            return_value: PoseSolverConnection = PoseSolverConnection(component_address=component_address)
+            self._connections[label] = return_value
+            return return_value
         else:
             raise ValueError(f"Unrecognized component role {component_address.role}.")
 
@@ -134,7 +179,7 @@ class MCTController(MCTComponent):
             self.status_message_source.enqueue_status_message(
                 severity="debug",
                 message="GET_INTRINSICS complete")
-            if self._startup_mode == MCTController.StartupMode.DETECTING_ONLY:
+            if self._startup_mode == StartupMode.DETECTING_ONLY:
                 self._startup_state = MCTController.StartupState.INITIAL
                 self._status = MCTController.Status.RUNNING  # We're done
             else:
@@ -453,7 +498,7 @@ class MCTController(MCTComponent):
             frames_dict = [frame.dict() for frame in connection.recording]
             frames_json = json.dumps(frames_dict)
 
-            with open(os.path.join(self._recording_save_path,report.role+"_log.json"), 'w') as f:
+            with open(os.path.join(self._recording_save_path, report.role+"_log.json"), 'w') as f:
                 f.write(frames_json)
 
         self._recording_detector = False
@@ -466,6 +511,18 @@ class MCTController(MCTComponent):
         if label not in self._connections:
             raise RuntimeError(f"Failed to find connection associated with {label}.")
         self._connections.pop(label)
+
+    def _reset(self):
+        self._status = MCTController.Status.STOPPED
+        self._startup_mode = StartupMode.DETECTING_AND_SOLVING  # Will be overwritten on startup
+        self._startup_state = MCTController.StartupState.INITIAL
+
+        self._connections = dict()
+        self._pending_request_ids = list()
+
+        self._recording_detector = False
+        self._recording_pose_solver = False
+        self._recording_save_path = None
 
     def request_series_push(
         self,
@@ -502,18 +559,42 @@ class MCTController(MCTComponent):
         # Cannot be found
         raise ResponseSeriesNotExpected()
 
+    def start_from_configuration_filepath(
+        self,
+        input_configuration_filepath: str
+    ) -> None:
+        if self._status != MCTController.Status.STOPPED:
+            raise RuntimeError("Cannot load from configuration if controller isn't first stopped.")
+        if not os.path.exists(input_configuration_filepath):
+            raise IOError(f"File {input_configuration_filepath} does not exist. Configuration will not be loaded.")
+        if not os.path.isfile(input_configuration_filepath):
+            raise IOError(f"File {input_configuration_filepath} is not a file. Configuration will not be loaded.")
+        configuration_dict: dict
+        with open(input_configuration_filepath, 'r') as infile:
+            configuration_dict = hjson.loads(infile.read())
+        configuration: MCTConfiguration
+        try:
+            configuration = MCTConfiguration(**configuration_dict)
+        except ValidationError as e:
+            raise RuntimeError(
+                f"Failed to load configuration file {input_configuration_filepath}. "
+                f"Error: {e}") from None
+        self._reset()
+        self.add_connections_from_configuration(configuration)
+        self.start_up(mode=configuration.startup_mode)
+
     def start_up(
         self,
         mode: str = StartupMode.DETECTING_AND_SOLVING
     ) -> None:
-        if mode not in MCTController.StartupMode:
+        if mode not in StartupMode:
             raise ValueError(f"Unexpected mode \"{mode}\".")
-        self._startup_mode = MCTController.StartupMode(mode)
+        self._startup_mode = StartupMode(mode)
 
         if self._status != MCTController.Status.STOPPED:
             raise RuntimeError("Cannot start up if controller isn't first stopped.")
         for connection in self._connections.values():
-            if mode == MCTController.StartupMode.DETECTING_ONLY and \
+            if mode == StartupMode.DETECTING_ONLY and \
                connection.get_role() == COMPONENT_ROLE_LABEL_POSE_SOLVER:
                 continue
             connection.start_up()
@@ -551,7 +632,7 @@ class MCTController(MCTComponent):
            self._startup_state == MCTController.StartupState.STARTING_CAPTURE:
             startup_finished: bool = True
             for connection in connections:
-                if self._startup_mode == MCTController.StartupMode.DETECTING_ONLY and \
+                if self._startup_mode == StartupMode.DETECTING_ONLY and \
                    connection.get_role() == COMPONENT_ROLE_LABEL_POSE_SOLVER:
                     continue
                 if not connection.is_start_up_finished():

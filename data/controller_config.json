@@ -1,0 +1,22 @@
+{
+  "startup_mode": "detecting_and_solving",
+  "detectors": [
+    {
+      "label": "det1",
+      "ip_address": "127.0.0.1",
+      "port": 8001
+    },
+    {
+      "label": "det2",
+      "ip_address": "127.0.0.1",
+      "port": 8001
+    }
+  ],
+  "pose_solvers": [
+    {
+      "label": "sol",
+      "ip_address": "127.0.0.1",
+      "port": 8000
+    }
+  ]
+}
