@@ -3,6 +3,7 @@ from .api import \
     PoseSolverAddTargetMarkerRequest, \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
+    PoseSolverSetExtrinsicRequest, \
     PoseSolverSetIntrinsicRequest, \
     PoseSolverSetReferenceRequest, \
     PoseSolverStartRequest, \
@@ -81,6 +82,19 @@ class PoseSolverAPI(MCTComponent):
             detector_poses=detector_poses,
             target_poses=target_poses)
 
+    def set_extrinsic_matrix(self, **kwargs) -> EmptyResponse | ErrorResponse:
+        request: PoseSolverSetExtrinsicRequest = get_kwarg(
+            kwargs=kwargs,
+            key="request",
+            arg_type=PoseSolverSetExtrinsicRequest)
+        try:
+            self._pose_solver.set_extrinsic_matrix(
+                detector_label=request.detector_label,
+                transform_to_reference=request.transform_to_reference)
+        except PoseSolverException as e:
+            return ErrorResponse(message=e.message)
+        return EmptyResponse()
+
     def set_intrinsic_parameters(self, **kwargs) -> EmptyResponse | ErrorResponse:
         request: PoseSolverSetIntrinsicRequest = get_kwarg(
             kwargs=kwargs,
@@ -119,6 +133,7 @@ class PoseSolverAPI(MCTComponent):
             PoseSolverAddDetectorFrameRequest: self.add_detector_frame,
             PoseSolverAddTargetMarkerRequest: self.add_target,
             PoseSolverGetPosesRequest: self.get_poses,
+            PoseSolverSetExtrinsicRequest: self.set_extrinsic_matrix,
             PoseSolverSetIntrinsicRequest: self.set_intrinsic_parameters,
             PoseSolverSetReferenceRequest: self.set_reference_marker,
             PoseSolverStartRequest: self.start_pose_solver,

@@ -35,6 +35,7 @@ from src.pose_solver.api import \
     PoseSolverAddDetectorFrameRequest, \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
+    PoseSolverSetExtrinsicRequest, \
     PoseSolverSetIntrinsicRequest
 import datetime
 from enum import IntEnum, StrEnum
@@ -199,6 +200,10 @@ class MCTController(MCTComponent):
                             requests.append(PoseSolverSetIntrinsicRequest(
                                 detector_label=detector_label,
                                 intrinsic_parameters=detector_connection.current_intrinsic_parameters))
+                        if detector_connection.configured_transform_to_reference is not None:
+                            requests.append(PoseSolverSetExtrinsicRequest(
+                                detector_label=detector_label,
+                                transform_to_reference=detector_connection.configured_transform_to_reference))
                     request_series: MCTRequestSeries = MCTRequestSeries(series=requests)
                     self._pending_request_ids.append(self.request_series_push(
                         connection_label=pose_solver_label,

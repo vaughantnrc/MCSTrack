@@ -7,6 +7,7 @@ from src.common import \
 from src.common.structures import \
     DetectorFrame, \
     IntrinsicParameters, \
+    Matrix4x4, \
     Pose
 from pydantic import Field
 
@@ -64,6 +65,16 @@ class PoseSolverGetPosesResponse(MCTResponse):
     parsable_type: str = Field(default=parsable_type_identifier(), const=True)
     detector_poses: list[Pose]
     target_poses: list[Pose]
+
+
+class PoseSolverSetExtrinsicRequest(MCTRequest):
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return "set_intrinsic_parameters"
+
+    parsable_type: str = Field(default=parsable_type_identifier(), const=True)
+    detector_label: str = Field()
+    transform_to_reference: Matrix4x4 = Field()
 
 
 class PoseSolverSetIntrinsicRequest(MCTRequest):

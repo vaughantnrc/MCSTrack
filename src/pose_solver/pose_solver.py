@@ -48,6 +48,7 @@ class PoseSolver:
     # inputs
     _parameters: PoseSolverParameters
     _intrinsics_by_detector_label: dict[str, IntrinsicParameters]
+    _extrinsics_by_detector_label: dict[str, Matrix4x4]
     _targets: list[TargetBase]  # First target is considered the "reference"
     # input per frame
     _detector_records_by_detector_label: dict[str, DetectorRecord]
@@ -69,6 +70,7 @@ class PoseSolver:
 
         self._parameters = PoseSolverParameters()
         self._intrinsics_by_detector_label = dict()
+        self._extrinsics_by_detector_label = dict()
         self._targets = list()
         self._detector_records_by_detector_label = dict()
 
@@ -117,6 +119,14 @@ class PoseSolver:
             self._marker_target_map[marker_id] = self._targets[target_index]
         self._last_change_timestamp_utc = datetime.datetime.utcnow()
 
+    def clear_extrinsic_matrices(self):
+        self._extrinsics_by_detector_label.clear()
+        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+
+    def clear_intrinsic_parameters(self):
+        self._intrinsics_by_detector_label.clear()
+        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+
     def clear_targets(self):
         self._targets.clear()
         self._marker_target_map.clear()
@@ -144,6 +154,14 @@ class PoseSolver:
 
     def list_targets(self) -> list[TargetBase]:
         return self._targets
+
+    def set_extrinsic_matrix(
+        self,
+        detector_label: str,
+        transform_to_reference: Matrix4x4
+    ) -> None:
+        self._extrinsics_by_detector_label[detector_label] = transform_to_reference
+        self._last_change_timestamp_utc = datetime.datetime.utcnow()
 
     def set_intrinsic_parameters(
         self,
@@ -319,14 +337,17 @@ class PoseSolver:
 
         reference_target: TargetBase = self._targets[0]
         for detector_label in detector_labels:
-            intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
-            reference_to_detector: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
-                target=reference_target,
-                corners_by_marker_id=corners[detector_label],
-                detector_intrinsics=intrinsics)
-            detector_to_reference: Matrix4x4 = Matrix4x4.from_numpy_array(
-                numpy.linalg.inv(reference_to_detector.as_numpy_array()))
-            self._poses_by_detector_label[detector_label] = detector_to_reference
+            if detector_label in self._extrinsics_by_detector_label:
+                self._poses_by_detector_label[detector_label] = self._extrinsics_by_detector_label[detector_label]
+            else:
+                intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
+                reference_to_detector: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
+                    target=reference_target,
+                    corners_by_marker_id=corners[detector_label],
+                    detector_intrinsics=intrinsics)
+                detector_to_reference: Matrix4x4 = Matrix4x4.from_numpy_array(
+                    numpy.linalg.inv(reference_to_detector.as_numpy_array()))
+                self._poses_by_detector_label[detector_label] = detector_to_reference
 
         # At the time of writing, each marker_id can be used only once.
         # So we can remove marker_ids used by the reference_target to avoid unnecessary processing.
