@@ -139,9 +139,11 @@ class MCTController(MCTComponent):
                 role="pose_solver",
                 ip_address=pose_solver.ip_address,
                 port=pose_solver.port)
-            pose_solver_connection: DetectorConnection = self.add_connection(component_address=component_address)
+            pose_solver_connection: PoseSolverConnection = self.add_connection(component_address=component_address)
             if pose_solver.solver_parameters is not None:
                 pose_solver_connection.configured_solver_parameters = pose_solver.solver_parameters
+            if pose_solver.targets is not None:
+                pose_solver_connection.configured_targets = pose_solver.targets
 
     def add_connection(
         self,
@@ -690,8 +692,10 @@ class MCTController(MCTComponent):
                         detector_connection: DetectorConnection = self._get_connection(
                             connection_label=detector_label,
                             connection_type=DetectorConnection)
-                        current_detector_frame: DetectorFrame = self.get_live_detector_frame(
+                        current_detector_frame: DetectorFrame | None = self.get_live_detector_frame(
                             detector_label=detector_label)
+                        if current_detector_frame is None:
+                            continue
                         current_detector_frame_timestamp: datetime.datetime = current_detector_frame.timestamp_utc()
                         current_is_new: bool = False
                         if detector_label in pose_solver_connection.detector_timestamps:

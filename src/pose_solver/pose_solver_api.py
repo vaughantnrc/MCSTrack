@@ -6,6 +6,7 @@ from .api import \
     PoseSolverSetExtrinsicRequest, \
     PoseSolverSetIntrinsicRequest, \
     PoseSolverSetReferenceRequest, \
+    PoseSolverSetTargetsRequest, \
     PoseSolverStartRequest, \
     PoseSolverStopRequest
 from .exceptions import PoseSolverException
@@ -119,6 +120,17 @@ class PoseSolverAPI(MCTComponent):
             return ErrorResponse(message=e.message)
         return EmptyResponse()
 
+    def set_targets(self, **kwargs) -> EmptyResponse | ErrorResponse:
+        request: PoseSolverSetTargetsRequest = get_kwarg(
+            kwargs=kwargs,
+            key="request",
+            arg_type=PoseSolverSetTargetsRequest)
+        try:
+            self._pose_solver.set_targets(targets=request.targets)
+        except PoseSolverException as e:
+            return ErrorResponse(message=e.message)
+        return EmptyResponse()
+
     def start_pose_solver(self, **_kwargs) -> EmptyResponse:
         self._status.solve_status = PoseSolverStatus.Solve.RUNNING
         return EmptyResponse()
@@ -136,6 +148,7 @@ class PoseSolverAPI(MCTComponent):
             PoseSolverSetExtrinsicRequest: self.set_extrinsic_matrix,
             PoseSolverSetIntrinsicRequest: self.set_intrinsic_parameters,
             PoseSolverSetReferenceRequest: self.set_reference_marker,
+            PoseSolverSetTargetsRequest: self.set_targets,
             PoseSolverStartRequest: self.start_pose_solver,
             PoseSolverStopRequest: self.stop_pose_solver})
         return return_value

@@ -1,6 +1,3 @@
-from src.common.structures import \
-    TargetMarker, \
-    TargetBoard
 from src.common import \
     MCTRequest, \
     MCTResponse
@@ -8,8 +5,11 @@ from src.common.structures import \
     DetectorFrame, \
     IntrinsicParameters, \
     Matrix4x4, \
-    Pose
+    Pose, \
+    TargetBoard, \
+    TargetMarker
 from pydantic import Field
+from typing import Union
 
 
 class PoseSolverAddDetectorFrameRequest(MCTRequest):
@@ -70,7 +70,7 @@ class PoseSolverGetPosesResponse(MCTResponse):
 class PoseSolverSetExtrinsicRequest(MCTRequest):
     @staticmethod
     def parsable_type_identifier() -> str:
-        return "set_intrinsic_parameters"
+        return "set_extrinsic_parameters"
 
     parsable_type: str = Field(default=parsable_type_identifier(), const=True)
     detector_label: str = Field()
@@ -95,6 +95,15 @@ class PoseSolverSetReferenceRequest(MCTRequest):
     parsable_type: str = Field(default=parsable_type_identifier(), const=True)
     marker_id: int = Field()
     marker_diameter: float = Field()
+
+
+class PoseSolverSetTargetsRequest(MCTRequest):
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return "set_targets"
+
+    parsable_type: str = Field(default=parsable_type_identifier(), const=True)
+    targets: list[Union[TargetMarker, TargetBoard]] = Field()
 
 
 class PoseSolverStartRequest(MCTRequest):

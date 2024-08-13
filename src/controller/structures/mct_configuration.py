@@ -1,8 +1,11 @@
 from .startup_mode import StartupMode
 from src.common.structures import \
     KeyValueSimpleAny, \
-    Matrix4x4
+    Matrix4x4, \
+    TargetBoard, \
+    TargetMarker
 from pydantic import BaseModel, Field
+from typing import Union
 
 
 class MCTComponentConfig(BaseModel):
@@ -19,6 +22,7 @@ class DetectorComponentConfig(MCTComponentConfig):
 
 class PoseSolverConfig(MCTComponentConfig):
     solver_parameters: list[KeyValueSimpleAny] | None = Field(default=None)
+    targets: list[Union[TargetBoard, TargetMarker]] | None = Field(default=None)
 
 
 class MCTConfiguration(BaseModel):

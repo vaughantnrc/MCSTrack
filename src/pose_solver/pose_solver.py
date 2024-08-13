@@ -185,6 +185,15 @@ class PoseSolver:
         if not found:
             raise PoseSolverException(f"{target_id} was not found.")
 
+    def set_targets(
+        self,
+        targets: list[TargetBase]
+    ) -> None:
+        self._targets = targets
+        self._poses_by_target_id.clear()
+        self._poses_by_detector_label.clear()
+        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+
     def _calculate_reprojection_error_for_pose(
         self,
         ray_set: ...,
