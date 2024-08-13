@@ -5,9 +5,7 @@ from .feedback import \
 from .parameters import \
     ParameterBase, \
     ParameterCheckbox, \
-    ParameterSelector, \
-    ParameterSpinboxFloat, \
-    ParameterSpinboxInteger
+    ParameterSelector
 from src.common import \
     ErrorResponse, \
     EmptyResponse, \
@@ -20,19 +18,9 @@ from src.common import \
     StatusMessageSource
 from src.common.structures import \
     CaptureFormat, \
-    DetectionParameters, \
     DetectorFrame, \
     ImageResolution, \
-    KeyValueSimpleAbstract, \
-    KeyValueSimpleBool, \
-    KeyValueSimpleString, \
-    KeyValueSimpleFloat, \
-    KeyValueSimpleInt, \
-    KeyValueMetaAbstract, \
-    KeyValueMetaBool, \
-    KeyValueMetaEnum, \
-    KeyValueMetaFloat, \
-    KeyValueMetaInt, \
+    KeyValueSimpleAny, \
     MarkerSnapshot
 from src.controller import \
     MCTController
@@ -100,41 +88,10 @@ class DetectorPanel(BasePanel):
     _camera_parameter_sizer: wx.BoxSizer
     _camera_parameter_uis: list[ParameterBase]
 
-    # Look at https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html
-    # for documentation on individual parameters
+    _marker_parameter_panel: wx.Panel
+    _marker_parameter_sizer: wx.BoxSizer
+    _marker_parameter_uis: list[ParameterBase]
 
-    _detection_param_adaptive_thresh_win_size_min: ParameterSpinboxInteger
-    _detection_param_adaptive_thresh_win_size_max: ParameterSpinboxInteger
-    _detection_param_adaptive_thresh_win_size_step: ParameterSpinboxInteger
-    _detection_param_adaptive_thresh_constant: ParameterSpinboxFloat
-    _detection_param_min_marker_perimeter_rate: ParameterSpinboxFloat
-    _detection_param_max_marker_perimeter_rate: ParameterSpinboxFloat
-    _detection_param_polygonal_approx_accuracy_rate: ParameterSpinboxFloat
-    _detection_param_min_corner_distance_rate: ParameterSpinboxFloat
-    _detection_param_min_marker_distance_rate: ParameterSpinboxFloat
-    _detection_param_min_distance_to_border: ParameterSpinboxInteger
-    _detection_param_marker_border_bits: ParameterSpinboxInteger
-    _detection_param_min_otsu_std_dev: ParameterSpinboxFloat
-    _detection_param_persp_rem_px_per_cell: ParameterSpinboxInteger
-    _detection_param_persp_rem_marg_per_cell: ParameterSpinboxFloat
-    _detection_param_max_erroneous_bits_border_rate: ParameterSpinboxFloat
-    _detection_param_error_correction_rate: ParameterSpinboxFloat
-    _detection_param_detect_inverted_marker: ParameterCheckbox
-    _detection_param_corner_refinement_method: ParameterSelector
-    _detection_param_corner_refinement_win_size: ParameterSpinboxInteger
-    _detection_param_corner_refinement_max_iterations: ParameterSpinboxInteger
-    _detection_param_corner_refinement_min_accuracy: ParameterSpinboxFloat
-    _detection_param_april_tag_critical_rad: ParameterSpinboxFloat
-    _detection_param_april_tag_deglitch: ParameterCheckbox
-    _detection_param_april_tag_max_line_fit_mse: ParameterSpinboxFloat
-    _detection_param_april_tag_max_nmaxima: ParameterSpinboxInteger
-    _detection_param_april_tag_min_cluster_pixels: ParameterSpinboxFloat
-    _detection_param_april_tag_min_white_black_diff: ParameterSpinboxFloat
-    _detection_param_april_tag_quad_decimate: ParameterSpinboxFloat
-    _detection_param_april_tag_quad_sigma: ParameterSpinboxFloat
-    _detection_param_use_aruco_3_detection: ParameterCheckbox
-    _detection_param_min_side_length_canonical_img: ParameterSpinboxInteger
-    _detection_param_min_marker_length_ratio_orig: ParameterSpinboxFloat
     _calibration_capture_button: wx.Button
 
     _image_panel: ImagePanel
@@ -160,6 +117,7 @@ class DetectorPanel(BasePanel):
         self._live_markers_rejected = list()
 
         self._camera_parameter_uis = list()
+        self._marker_parameter_uis = list()
 
         horizontal_split_sizer: wx.BoxSizer = wx.BoxSizer(orient=wx.HORIZONTAL)
 
@@ -249,313 +207,12 @@ class DetectorPanel(BasePanel):
             font_size_delta=2,
             bold=True)
 
-        self.add_text_label(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Adaptive Thresholding",
-            bold=True)
-
-        self._detection_param_adaptive_thresh_win_size_min = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Window Size Min (px)",
-            minimum_value=1,
-            maximum_value=99,
-            initial_value=3)
-
-        self._detection_param_adaptive_thresh_win_size_max = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Window Size Max (px)",
-            minimum_value=1,
-            maximum_value=99,
-            initial_value=23)
-
-        self._detection_param_adaptive_thresh_win_size_step = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Window Size Step (px)",
-            minimum_value=1,
-            maximum_value=99,
-            initial_value=10)
-
-        self._detection_param_adaptive_thresh_constant = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Threshold Constant",
-            minimum_value=-256.0,
-            maximum_value=256.0,
-            initial_value=7.0,
-            step_value=1.0)
-
-        self.add_text_label(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Contour Filtering",
-            bold=True)
-
-        self._detection_param_min_marker_perimeter_rate = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Min Size Ratio",
-            minimum_value=0.0,
-            maximum_value=8.0,
-            initial_value=0.03,
-            step_value=0.01)
-
-        self._detection_param_max_marker_perimeter_rate = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Max Size Ratio",
-            minimum_value=0.0,
-            maximum_value=8.0,
-            initial_value=4.0,
-            step_value=0.01)
-
-        self._detection_param_polygonal_approx_accuracy_rate = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Square Tolerance Ratio",
-            minimum_value=0.0,
-            maximum_value=1.0,
-            initial_value=0.05,
-            step_value=0.01)
-
-        self._detection_param_min_corner_distance_rate = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Corner Separation Ratio",
-            minimum_value=0.0,
-            maximum_value=1.0,
-            initial_value=0.05,
-            step_value=0.01)
-
-        self._detection_param_min_marker_distance_rate = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Marker Separation Ratio",
-            minimum_value=0.0,
-            maximum_value=1.0,
-            initial_value=0.05,
-            step_value=0.01)
-
-        self._detection_param_min_distance_to_border = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Border Distance (px)",
-            minimum_value=0,
-            maximum_value=512,
-            initial_value=3)
-
-        self.add_text_label(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Bits Extraction",
-            bold=True)
-
-        self._detection_param_marker_border_bits = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Border width (px)",
-            minimum_value=1,
-            maximum_value=9,
-            initial_value=1)
-
-        self._detection_param_min_otsu_std_dev = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Min Brightness Stdev",
-            minimum_value=0.0,
-            maximum_value=256.0,
-            initial_value=5.0,
-            step_value=1.0)
-
-        self._detection_param_persp_rem_px_per_cell = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Bit Sampling Rate",
-            minimum_value=1,
-            maximum_value=20,
-            initial_value=1)
-
-        self._detection_param_persp_rem_marg_per_cell = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Bit Margin Ratio",
-            minimum_value=0.0,
-            maximum_value=0.5,
-            initial_value=0.13,
-            step_value=0.01)
-
-        self.add_text_label(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Marker Identification",
-            bold=True)
-
-        self._detection_param_max_erroneous_bits_border_rate = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Border Error Rate",
-            minimum_value=0.0,
-            maximum_value=1.0,
-            initial_value=0.35,
-            step_value=0.01)
-
-        self._detection_param_error_correction_rate = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Error Correction Rate",
-            minimum_value=0.0,
-            maximum_value=1.0,
-            initial_value=0.6,
-            step_value=0.01)
-
-        self._detection_param_detect_inverted_marker = self.add_control_checkbox(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Detect Inverted",
-            value=False)
-
-        self.add_text_label(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Corner Refinement",
-            bold=True)
-
-        self._detection_param_corner_refinement_method = self.add_control_selector(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Method",
-            selectable_values=_SUPPORTED_CORNER_REFINEMENT_METHODS)
-
-        self._detection_param_corner_refinement_win_size = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Window Size (px)",
-            minimum_value=1,
-            maximum_value=9,
-            initial_value=5)
-
-        self._detection_param_corner_refinement_max_iterations = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Maximum Iterations",
-            minimum_value=1,
-            maximum_value=100,
-            initial_value=30)
-
-        self._detection_param_corner_refinement_min_accuracy = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Minimum Error",
-            minimum_value=0.0,
-            maximum_value=5.0,
-            initial_value=0.1,
-            step_value=0.01)
-
-        self.add_text_label(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="April Tag Only",
-            bold=True)
-
-        self._detection_param_april_tag_critical_rad = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Crit Angle (Rad)",
-            minimum_value=0.0,
-            maximum_value=numpy.pi,
-            initial_value=numpy.pi * 10.0 / 180.0,
-            step_value=0.01)
-
-        self._detection_param_april_tag_deglitch = self.add_control_checkbox(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Deglitch",
-            value=False)
-
-        self._detection_param_april_tag_max_line_fit_mse = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Max Line Fit MSE",
-            minimum_value=0.0,
-            maximum_value=512.0,
-            initial_value=10.0,
-            step_value=0.01)
-
-        self._detection_param_april_tag_max_nmaxima = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Max NMaxima",
-            minimum_value=1,
-            maximum_value=100,
-            initial_value=10)
-
-        self._detection_param_april_tag_min_cluster_pixels = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Min Cluster Size",
-            minimum_value=0.0,
-            maximum_value=512.0,
-            initial_value=5.0,
-            step_value=0.1)
-
-        self._detection_param_april_tag_min_white_black_diff = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="White-Black Diff",
-            minimum_value=0.0,
-            maximum_value=256.0,
-            initial_value=5.0,
-            step_value=0.1)
-
-        self._detection_param_april_tag_quad_decimate = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Quad Decimate",
-            minimum_value=0.0,
-            maximum_value=1.0,
-            initial_value=0.0,
-            step_value=0.01)
-
-        self._detection_param_april_tag_quad_sigma = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Quad Sigma",
-            minimum_value=0.0,
-            maximum_value=1.0,
-            initial_value=0.0,
-            step_value=0.01)
-
-        self.add_text_label(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Aruco 3",
-            bold=True)
-
-        self._detection_param_use_aruco_3_detection = self.add_control_checkbox(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Use Aruco 3",
-            value=False)
-
-        self._detection_param_min_side_length_canonical_img = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Min Size (px)",
-            minimum_value=1,
-            maximum_value=512,
-            initial_value=32)
-
-        self._detection_param_min_marker_length_ratio_orig = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Min Size Ratio",
-            minimum_value=0.0,
-            maximum_value=1.0,
-            initial_value=0.0,
-            step_value=0.01)
+        self._marker_parameter_panel: wx.Panel = wx.Panel(parent=control_panel)
+        self._marker_parameter_sizer: wx.BoxSizer = wx.BoxSizer(orient=wx.VERTICAL)
+        self._marker_parameter_panel.SetSizer(sizer=self._marker_parameter_sizer)
+        control_sizer.Add(
+            window=self._marker_parameter_panel,
+            flags=wx.SizerFlags(0).Expand())
 
         self._send_detection_parameters_button = self.add_control_button(
             parent=control_panel,
@@ -624,10 +281,12 @@ class DetectorPanel(BasePanel):
             connection_label=selected_detector_label,
             request_series=request_series)
 
-    def begin_get_capture_parameters(self):
+    def begin_get_detector_parameters(self):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         request_series: MCTRequestSeries = MCTRequestSeries(
-            series=[CameraParametersGetRequest()])
+            series=[
+                CameraParametersGetRequest(),
+                MarkerParametersGetRequest()])
         self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
@@ -635,26 +294,8 @@ class DetectorPanel(BasePanel):
 
     def begin_set_capture_parameters(self):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
-        key_values: list[KeyValueSimpleAbstract] = list()
-        for parameter_ui in self._camera_parameter_uis:
-            parameter_type: type[KeyValueSimpleAbstract]
-            label: str = parameter_ui.label.GetLabelText()
-            if isinstance(parameter_ui, ParameterCheckbox):
-                parameter_type = KeyValueSimpleBool
-            elif isinstance(parameter_ui, ParameterSelector):
-                parameter_type = KeyValueSimpleString
-            elif isinstance(parameter_ui, ParameterSpinboxFloat):
-                parameter_type = KeyValueSimpleFloat
-            elif isinstance(parameter_ui, ParameterSpinboxInteger):
-                parameter_type = KeyValueSimpleInt
-            else:
-                self.status_message_source.enqueue_status_message(
-                    severity="error",
-                    message=f"Failed to determine parameter type from UI element for key {label}.")
-                continue
-            key_values.append(parameter_type(
-                key=label,
-                value=parameter_ui.get_value()))
+        key_values: list[KeyValueSimpleAny] = self.populate_key_value_list_from_dynamic_ui(
+            parameter_uis=self._camera_parameter_uis)
         request_series: MCTRequestSeries = MCTRequestSeries(
             series=[
                 CameraParametersSetRequest(parameters=key_values),
@@ -666,41 +307,10 @@ class DetectorPanel(BasePanel):
 
     def begin_set_detection_parameters(self):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
-        params: DetectionParameters = DetectionParameters(
-            adaptive_thresh_win_size_min=self._detection_param_adaptive_thresh_win_size_min.spinbox.GetValue(),
-            adaptive_thresh_win_size_max=self._detection_param_adaptive_thresh_win_size_max.spinbox.GetValue(),
-            adaptive_thresh_win_size_step=self._detection_param_adaptive_thresh_win_size_step.spinbox.GetValue(),
-            adaptive_thresh_constant=self._detection_param_adaptive_thresh_constant.spinbox.GetValue(),
-            min_marker_perimeter_rate=self._detection_param_min_marker_perimeter_rate.spinbox.GetValue(),
-            max_marker_perimeter_rate=self._detection_param_max_marker_perimeter_rate.spinbox.GetValue(),
-            polygonal_approx_accuracy_rate=self._detection_param_polygonal_approx_accuracy_rate.spinbox.GetValue(),
-            min_corner_distance_rate=self._detection_param_min_corner_distance_rate.spinbox.GetValue(),
-            min_marker_distance_rate=self._detection_param_min_marker_distance_rate.spinbox.GetValue(),
-            min_distance_to_border=self._detection_param_min_distance_to_border.spinbox.GetValue(),
-            marker_border_bits=self._detection_param_marker_border_bits.spinbox.GetValue(),
-            min_otsu_std_dev=self._detection_param_min_otsu_std_dev.spinbox.GetValue(),
-            perspective_remove_pixel_per_cell=self._detection_param_persp_rem_px_per_cell.spinbox.GetValue(),
-            perspective_remove_ignored_margin_per_cell=self._detection_param_persp_rem_marg_per_cell.spinbox.GetValue(),
-            max_erroneous_bits_in_border_rate=self._detection_param_max_erroneous_bits_border_rate.spinbox.GetValue(),
-            error_correction_rate=self._detection_param_error_correction_rate.spinbox.GetValue(),
-            detect_inverted_marker=int(self._detection_param_detect_inverted_marker.checkbox.GetValue()),
-            corner_refinement_method=self._detection_param_corner_refinement_method.selector.GetStringSelection(),
-            corner_refinement_win_size=self._detection_param_corner_refinement_win_size.spinbox.GetValue(),
-            corner_refinement_max_iterations=self._detection_param_corner_refinement_max_iterations.spinbox.GetValue(),
-            corner_refinement_min_accuracy=self._detection_param_corner_refinement_min_accuracy.spinbox.GetValue(),
-            april_tag_critical_rad=self._detection_param_april_tag_critical_rad.spinbox.GetValue(),
-            april_tag_deglitch=int(self._detection_param_april_tag_deglitch.checkbox.GetValue()),
-            april_tag_max_line_fit_mse=self._detection_param_april_tag_max_line_fit_mse.spinbox.GetValue(),
-            april_tag_max_nmaxima=self._detection_param_april_tag_max_nmaxima.spinbox.GetValue(),
-            april_tag_min_cluster_pixels=self._detection_param_april_tag_min_cluster_pixels.spinbox.GetValue(),
-            april_tag_min_white_black_diff=self._detection_param_april_tag_min_white_black_diff.spinbox.GetValue(),
-            april_tag_quad_decimate=self._detection_param_april_tag_quad_decimate.spinbox.GetValue(),
-            april_tag_quad_sigma=self._detection_param_april_tag_quad_sigma.spinbox.GetValue(),
-            use_aruco_3_detection=self._detection_param_use_aruco_3_detection.checkbox.GetValue(),
-            min_marker_length_ratio_original_img=self._detection_param_min_marker_length_ratio_orig.spinbox.GetValue(),
-            min_side_length_canonical_img=self._detection_param_min_side_length_canonical_img.spinbox.GetValue())
+        key_values: list[KeyValueSimpleAny] = self.populate_key_value_list_from_dynamic_ui(
+            parameter_uis=self._marker_parameter_uis)
         request_series: MCTRequestSeries = MCTRequestSeries(series=[
-            MarkerParametersSetRequest(parameters=params),
+            MarkerParametersSetRequest(parameters=key_values),
             MarkerParametersGetRequest()])  # sync
         self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
@@ -748,48 +358,13 @@ class DetectorPanel(BasePanel):
         self,
         response: CameraParametersGetResponse
     ):
-        self._camera_parameter_uis.clear()
         self._camera_parameter_panel.Freeze()
         self._camera_parameter_sizer.Clear(True)
         self._camera_parameter_sizer = wx.BoxSizer(orient=wx.VERTICAL)
-        key_value: KeyValueMetaAbstract
-        for key_value in response.parameters:
-            if isinstance(key_value, KeyValueMetaBool):
-                self._camera_parameter_uis.append(self.add_control_checkbox(
-                    parent=self._camera_parameter_panel,
-                    sizer=self._camera_parameter_sizer,
-                    label=key_value.key,
-                    value=key_value.value))
-            elif isinstance(key_value, KeyValueMetaEnum):
-                self._camera_parameter_uis.append(self.add_control_selector(
-                    parent=self._camera_parameter_panel,
-                    sizer=self._camera_parameter_sizer,
-                    label=key_value.key,
-                    selectable_values=key_value.allowable_values,
-                    value=key_value.value))
-            elif isinstance(key_value, KeyValueMetaFloat):
-                self._camera_parameter_uis.append(self.add_control_spinbox_float(
-                    parent=self._camera_parameter_panel,
-                    sizer=self._camera_parameter_sizer,
-                    label=key_value.key,
-                    minimum_value=key_value.range_minimum,
-                    maximum_value=key_value.range_maximum,
-                    initial_value=key_value.value,
-                    step_value=key_value.range_step,
-                    digit_count=key_value.digit_count))
-            elif isinstance(key_value, KeyValueMetaInt):
-                self._camera_parameter_uis.append(self.add_control_spinbox_integer(
-                    parent=self._camera_parameter_panel,
-                    sizer=self._camera_parameter_sizer,
-                    label=key_value.key,
-                    minimum_value=key_value.range_minimum,
-                    maximum_value=key_value.range_maximum,
-                    initial_value=key_value.value,
-                    step_value=key_value.range_step))
-            else:
-                self.status_message_source.enqueue_status_message(
-                    severity="error",
-                    message=f"Unsupported parameter type {key_value.parsable_type} will not be handled")
+        self._camera_parameter_uis = self.populate_dynamic_ui_from_key_value_list(
+            key_value_list=response.parameters,
+            containing_panel=self._camera_parameter_panel,
+            containing_sizer=self._camera_parameter_sizer)
         self._camera_parameter_panel.SetSizer(self._camera_parameter_sizer)
         self._camera_parameter_panel.Thaw()
         self.Layout()
@@ -799,85 +374,16 @@ class DetectorPanel(BasePanel):
         self,
         response: MarkerParametersGetResponse
     ):
-        params: DetectionParameters = response.parameters
-        if params.adaptive_thresh_win_size_min is not None:
-            self._detection_param_adaptive_thresh_win_size_min.spinbox.SetValue(
-                params.adaptive_thresh_win_size_min)
-        if params.adaptive_thresh_win_size_max is not None:
-            self._detection_param_adaptive_thresh_win_size_max.spinbox.SetValue(
-                params.adaptive_thresh_win_size_max)
-        if params.adaptive_thresh_win_size_step is not None:
-            self._detection_param_adaptive_thresh_win_size_step.spinbox.SetValue(
-                params.adaptive_thresh_win_size_step)
-        if params.adaptive_thresh_constant is not None:
-            self._detection_param_adaptive_thresh_constant.spinbox.SetValue(params.adaptive_thresh_constant)
-        if params.min_marker_perimeter_rate is not None:
-            self._detection_param_min_marker_perimeter_rate.spinbox.SetValue(params.min_marker_perimeter_rate)
-        if params.max_marker_perimeter_rate is not None:
-            self._detection_param_max_marker_perimeter_rate.spinbox.SetValue(params.max_marker_perimeter_rate)
-        if params.polygonal_approx_accuracy_rate is not None:
-            self._detection_param_polygonal_approx_accuracy_rate.spinbox.SetValue(
-                params.polygonal_approx_accuracy_rate)
-        if params.min_corner_distance_rate is not None:
-            self._detection_param_min_corner_distance_rate.spinbox.SetValue(params.min_corner_distance_rate)
-        if params.min_marker_distance_rate is not None:
-            self._detection_param_min_marker_distance_rate.spinbox.SetValue(params.min_marker_distance_rate)
-        if params.min_distance_to_border is not None:
-            self._detection_param_min_distance_to_border.spinbox.SetValue(params.min_distance_to_border)
-        if params.marker_border_bits is not None:
-            self._detection_param_marker_border_bits.spinbox.SetValue(params.marker_border_bits)
-        if params.min_otsu_std_dev is not None:
-            self._detection_param_min_otsu_std_dev.spinbox.SetValue(params.min_otsu_std_dev)
-        if params.perspective_remove_pixel_per_cell is not None:
-            self._detection_param_persp_rem_px_per_cell.spinbox.SetValue(
-                params.perspective_remove_pixel_per_cell)
-        if params.perspective_remove_ignored_margin_per_cell is not None:
-            self._detection_param_persp_rem_marg_per_cell.spinbox.SetValue(
-                params.perspective_remove_ignored_margin_per_cell)
-        if params.max_erroneous_bits_in_border_rate is not None:
-            self._detection_param_max_erroneous_bits_border_rate.spinbox.SetValue(
-                params.max_erroneous_bits_in_border_rate)
-        if params.error_correction_rate is not None:
-            self._detection_param_error_correction_rate.spinbox.SetValue(params.error_correction_rate)
-        if params.detect_inverted_marker is not None:
-            self._detection_param_detect_inverted_marker.checkbox.SetValue(bool(params.detect_inverted_marker))
-        if params.corner_refinement_method is not None:
-            self._detection_param_corner_refinement_method.selector.SetStringSelection(
-                params.corner_refinement_method)
-        if params.corner_refinement_win_size is not None:
-            self._detection_param_corner_refinement_win_size.spinbox.SetValue(params.corner_refinement_win_size)
-        if params.corner_refinement_max_iterations is not None:
-            self._detection_param_corner_refinement_max_iterations.spinbox.SetValue(
-                params.corner_refinement_max_iterations)
-        if params.corner_refinement_min_accuracy is not None:
-            self._detection_param_corner_refinement_min_accuracy.spinbox.SetValue(
-                params.corner_refinement_min_accuracy)
-        if params.april_tag_critical_rad is not None:
-            self._detection_param_april_tag_critical_rad.spinbox.SetValue(params.april_tag_critical_rad)
-        if params.april_tag_deglitch is not None:
-            self._detection_param_april_tag_deglitch.checkbox.SetValue(bool(params.april_tag_deglitch))
-        if params.april_tag_max_line_fit_mse is not None:
-            self._detection_param_april_tag_max_line_fit_mse.spinbox.SetValue(params.april_tag_max_line_fit_mse)
-        if params.april_tag_max_nmaxima is not None:
-            self._detection_param_april_tag_max_nmaxima.spinbox.SetValue(params.april_tag_max_nmaxima)
-        if params.april_tag_min_cluster_pixels is not None:
-            self._detection_param_april_tag_min_cluster_pixels.spinbox.SetValue(
-                params.april_tag_min_cluster_pixels)
-        if params.april_tag_min_white_black_diff is not None:
-            self._detection_param_april_tag_min_white_black_diff.spinbox.SetValue(
-                params.april_tag_min_white_black_diff)
-        if params.april_tag_quad_decimate is not None:
-            self._detection_param_april_tag_quad_decimate.spinbox.SetValue(params.april_tag_quad_decimate)
-        if params.april_tag_quad_sigma is not None:
-            self._detection_param_april_tag_quad_sigma.spinbox.SetValue(params.april_tag_quad_sigma)
-        if params.use_aruco_3_detection is not None:
-            self._detection_param_use_aruco_3_detection.checkbox.SetValue(params.use_aruco_3_detection)
-        if params.min_marker_length_ratio_original_img is not None:
-            self._detection_param_min_marker_length_ratio_orig.spinbox.SetValue(
-                params.min_marker_length_ratio_original_img)
-        if params.min_side_length_canonical_img is not None:
-            self._detection_param_min_side_length_canonical_img.spinbox.SetValue(
-                params.min_side_length_canonical_img)
+        self._marker_parameter_panel.Freeze()
+        self._marker_parameter_sizer.Clear(True)
+        self._marker_parameter_sizer = wx.BoxSizer(orient=wx.VERTICAL)
+        self._marker_parameter_uis = self.populate_dynamic_ui_from_key_value_list(
+            key_value_list=response.parameters,
+            containing_panel=self._marker_parameter_panel,
+            containing_sizer=self._marker_parameter_sizer)
+        self._marker_parameter_panel.SetSizer(self._marker_parameter_sizer)
+        self._marker_parameter_panel.Thaw()
+        self.Layout()
 
     @staticmethod
     def _marker_snapshot_list_to_opencv_points(
@@ -896,7 +402,7 @@ class DetectorPanel(BasePanel):
 
     def on_detector_selected(self, _event: wx.CommandEvent):
         self._live_image_base64 = None
-        self.begin_get_capture_parameters()
+        self.begin_get_detector_parameters()
         self._update_ui_image()
         self._update_ui_controls()
 
@@ -931,38 +437,8 @@ class DetectorPanel(BasePanel):
     ):
         for parameter_ui in self._camera_parameter_uis:
             parameter_ui.set_enabled(enable=enable)
-        self._detection_param_adaptive_thresh_win_size_min.set_enabled(enable=enable)
-        self._detection_param_adaptive_thresh_win_size_max.set_enabled(enable=enable)
-        self._detection_param_adaptive_thresh_win_size_step.set_enabled(enable=enable)
-        self._detection_param_adaptive_thresh_constant.set_enabled(enable=enable)
-        self._detection_param_min_marker_perimeter_rate.set_enabled(enable=enable)
-        self._detection_param_max_marker_perimeter_rate.set_enabled(enable=enable)
-        self._detection_param_polygonal_approx_accuracy_rate.set_enabled(enable=enable)
-        self._detection_param_min_corner_distance_rate.set_enabled(enable=enable)
-        self._detection_param_min_marker_distance_rate.set_enabled(enable=enable)
-        self._detection_param_min_distance_to_border.set_enabled(enable=enable)
-        self._detection_param_marker_border_bits.set_enabled(enable=enable)
-        self._detection_param_min_otsu_std_dev.set_enabled(enable=enable)
-        self._detection_param_persp_rem_px_per_cell.set_enabled(enable=enable)
-        self._detection_param_persp_rem_marg_per_cell.set_enabled(enable=enable)
-        self._detection_param_max_erroneous_bits_border_rate.set_enabled(enable=enable)
-        self._detection_param_error_correction_rate.set_enabled(enable=enable)
-        self._detection_param_detect_inverted_marker.set_enabled(enable=enable)
-        self._detection_param_corner_refinement_method.set_enabled(enable=enable)
-        self._detection_param_corner_refinement_win_size.set_enabled(enable=enable)
-        self._detection_param_corner_refinement_max_iterations.set_enabled(enable=enable)
-        self._detection_param_corner_refinement_min_accuracy.set_enabled(enable=enable)
-        self._detection_param_april_tag_critical_rad.set_enabled(enable=enable)
-        self._detection_param_april_tag_deglitch.set_enabled(enable=enable)
-        self._detection_param_april_tag_max_line_fit_mse.set_enabled(enable=enable)
-        self._detection_param_april_tag_max_nmaxima.set_enabled(enable=enable)
-        self._detection_param_april_tag_min_cluster_pixels.set_enabled(enable=enable)
-        self._detection_param_april_tag_min_white_black_diff.set_enabled(enable=enable)
-        self._detection_param_april_tag_quad_decimate.set_enabled(enable=enable)
-        self._detection_param_april_tag_quad_sigma.set_enabled(enable=enable)
-        self._detection_param_use_aruco_3_detection.set_enabled(enable=enable)
-        self._detection_param_min_side_length_canonical_img.set_enabled(enable=enable)
-        self._detection_param_min_marker_length_ratio_orig.set_enabled(enable=enable)
+        for parameter_ui in self._marker_parameter_uis:
+            parameter_ui.set_enabled(enable=enable)
         self._send_capture_parameters_button.Enable(enable=enable)
         self._send_detection_parameters_button.Enable(enable=enable)
 

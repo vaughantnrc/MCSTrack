@@ -1,0 +1,11 @@
+{
+  "startup_mode": "detecting_only",
+  "detectors": [
+    {
+      "label": "det",
+      "ip_address": "127.0.0.1",
+      "port": 8001
+    }
+  ],
+  "pose_solvers": []
+}
