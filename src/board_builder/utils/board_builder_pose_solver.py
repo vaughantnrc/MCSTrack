@@ -11,6 +11,7 @@ from src.common.structures import \
     TargetBase, \
     TargetMarker
 from src.common.util import MathUtils
+from src.common.util import register_corresponding_points
 from src.pose_solver.structures import \
     Ray, \
     PoseSolverParameters
@@ -21,6 +22,7 @@ from src.pose_solver.util import \
     IterativeClosestPointParameters, \
     iterative_closest_point_for_points_and_rays, \
     register_corresponding_points
+    vector_image_to_opengl
 import cv2
 import cv2.aruco
 import datetime
