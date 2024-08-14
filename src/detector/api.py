@@ -4,7 +4,6 @@ from src.common import \
 from src.common.structures import \
     CaptureFormat, \
     DetectorFrame, \
-    DetectionParameters, \
     IntrinsicCalibration, \
     ImageResolution, \
     KeyValueMetaAny, \
@@ -313,7 +312,7 @@ class MarkerParametersGetResponse(MCTResponse):
         return "detector_marker_parameters_get"
 
     parsable_type: str = Field(default=parsable_type_identifier(), const=True)
-    parameters: DetectionParameters = Field(default_factory=DetectionParameters)
+    parameters: list[KeyValueMetaAny] = Field()
 
 
 class MarkerParametersSetRequest(MCTRequest):
@@ -322,4 +321,4 @@ class MarkerParametersSetRequest(MCTRequest):
         return "detector_marker_parameters_set"
 
     parsable_type: str = Field(default=parsable_type_identifier(), const=True)
-    parameters: DetectionParameters = Field(default_factory=DetectionParameters)
+    parameters: list[KeyValueSimpleAny] = Field()

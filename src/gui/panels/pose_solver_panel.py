@@ -1,9 +1,7 @@
 from .base_panel import \
     BasePanel
 from .parameters import \
-    ParameterSelector, \
-    ParameterSpinboxFloat, \
-    ParameterSpinboxInteger
+    ParameterSelector
 from .specialized import \
     GraphicsRenderer, \
     TrackingTable, \
@@ -11,7 +9,6 @@ from .specialized import \
 from src.common import \
     ErrorResponse, \
     EmptyResponse, \
-    MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
     StatusMessageSource
@@ -22,11 +19,6 @@ from src.common.structures import \
     PoseSolverFrame
 from src.controller import \
     MCTController
-from src.pose_solver.api import \
-    PoseSolverAddTargetMarkerRequest, \
-    PoseSolverSetReferenceRequest
-from src.common.structures import \
-    TargetMarker
 import datetime
 import logging
 import platform
@@ -46,12 +38,6 @@ class PoseSolverPanel(BasePanel):
     _controller: MCTController
 
     _pose_solver_selector: ParameterSelector
-    _reference_marker_id_spinbox: ParameterSpinboxInteger
-    _reference_marker_diameter_spinbox: ParameterSpinboxFloat
-    _reference_target_submit_button: wx.Button
-    _tracked_marker_id_spinbox: ParameterSpinboxInteger
-    _tracked_marker_diameter_spinbox: ParameterSpinboxFloat
-    _tracked_target_submit_button: wx.Button
     _tracking_table: TrackingTable
 
     _control_blocking_request_id: uuid.UUID | None
@@ -108,54 +94,6 @@ class PoseSolverPanel(BasePanel):
             parent=control_panel,
             sizer=control_sizer)
 
-        self._reference_marker_id_spinbox = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Reference Marker ID",
-            minimum_value=0,
-            maximum_value=99,
-            initial_value=0)
-
-        self._reference_marker_diameter_spinbox: ParameterSpinboxFloat = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Marker diameter (mm)",
-            minimum_value=1.0,
-            maximum_value=1000.0,
-            initial_value=10.0,
-            step_value=0.5)
-
-        self._reference_target_submit_button: wx.Button = self.add_control_button(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Set Reference Marker")
-
-        self._tracked_marker_id_spinbox = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Tracked Marker ID",
-            minimum_value=0,
-            maximum_value=99,
-            initial_value=1)
-
-        self._tracked_marker_diameter_spinbox: ParameterSpinboxFloat = self.add_control_spinbox_float(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Marker diameter (mm)",
-            minimum_value=1.0,
-            maximum_value=1000.0,
-            initial_value=10.0,
-            step_value=0.5)
-
-        self._tracked_target_submit_button: wx.Button = self.add_control_button(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Add Tracked Marker")
-
-        self.add_horizontal_line_to_spacer(
-            parent=control_panel,
-            sizer=control_sizer)
-
         self._tracking_table = TrackingTable(parent=control_panel)
         control_sizer.Add(
             window=self._tracking_table,
@@ -201,12 +139,6 @@ class PoseSolverPanel(BasePanel):
         self._pose_solver_selector.selector.Bind(
             event=wx.EVT_CHOICE,
             handler=self.on_pose_solver_select)
-        self._reference_target_submit_button.Bind(
-            event=wx.EVT_BUTTON,
-            handler=self.on_reference_target_submit_pressed)
-        self._tracked_target_submit_button.Bind(
-            event=wx.EVT_BUTTON,
-            handler=self.on_tracked_target_submit_pressed)
         self._tracking_table.table.Bind(
             event=wx.grid.EVT_GRID_SELECT_CELL,
             handler=self.on_tracking_row_selected)
@@ -240,31 +172,6 @@ class PoseSolverPanel(BasePanel):
         self._update_ui_controls()
 
     def on_pose_solver_select(self, _event: wx.CommandEvent) -> None:
-        self._update_ui_controls()
-
-    def on_reference_target_submit_pressed(self, _event: wx.CommandEvent) -> None:
-        request_series: MCTRequestSeries = MCTRequestSeries(series=[
-            PoseSolverSetReferenceRequest(
-                marker_id=self._reference_marker_id_spinbox.spinbox.GetValue(),
-                marker_diameter=self._reference_marker_diameter_spinbox.spinbox.GetValue())])
-        selected_pose_solver_label: str = self._pose_solver_selector.selector.GetStringSelection()
-        self._control_blocking_request_id = self._controller.request_series_push(
-            connection_label=selected_pose_solver_label,
-            request_series=request_series)
-        self._update_ui_controls()
-
-    def on_tracked_target_submit_pressed(self, _event: wx.CommandEvent) -> None:
-        target_id: str = str(self._tracked_marker_id_spinbox.spinbox.GetValue())
-        request_series: MCTRequestSeries = MCTRequestSeries(series=[
-            PoseSolverAddTargetMarkerRequest(
-                target=TargetMarker(
-                    target_id=target_id,
-                    marker_id=target_id,
-                    marker_size=self._tracked_marker_diameter_spinbox.spinbox.GetValue()))])
-        selected_pose_solver_label: str = self._pose_solver_selector.selector.GetStringSelection()
-        self._control_blocking_request_id = self._controller.request_series_push(
-            connection_label=selected_pose_solver_label,
-            request_series=request_series)
         self._update_ui_controls()
 
     def on_tracking_row_selected(self, _event: wx.grid.GridEvent) -> None:
@@ -375,10 +282,6 @@ class PoseSolverPanel(BasePanel):
 
     def _update_ui_controls(self) -> None:
         self._pose_solver_selector.Enable(False)
-        self._reference_marker_id_spinbox.Enable(False)
-        self._reference_target_submit_button.Enable(False)
-        self._tracked_marker_id_spinbox.Enable(False)
-        self._tracked_target_submit_button.Enable(False)
         self._tracking_table.Enable(False)
         self._tracking_display_textbox.Enable(False)
         if self._controller.is_transitioning() or (self._control_blocking_request_id is not None):
@@ -387,10 +290,6 @@ class PoseSolverPanel(BasePanel):
         selected_pose_solver: str = self._pose_solver_selector.selector.GetStringSelection()
         if selected_pose_solver is None or len(selected_pose_solver) <= 0:
             return
-        self._reference_marker_id_spinbox.Enable(True)
-        self._reference_target_submit_button.Enable(True)
-        self._tracked_marker_id_spinbox.Enable(True)
-        self._tracked_target_submit_button.Enable(True)
         if len(self._tracked_target_poses) > 0:
             self._tracking_table.Enable(True)
             tracked_target_index: int = self._tracking_table.get_selected_row_index()

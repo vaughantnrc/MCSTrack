@@ -1,8 +1,4 @@
 from .base_panel import BasePanel
-from .parameters import \
-    ParameterSelector, \
-    ParameterSpinboxInteger, \
-    ParameterText
 from .specialized import \
     ConnectionTable, \
     LogPanel
@@ -10,15 +6,10 @@ from src.common import \
     DequeueStatusMessagesResponse, \
     StatusMessageSource
 from src.common.structures import \
-    COMPONENT_ROLE_LABEL_DETECTOR, \
-    COMPONENT_ROLE_LABEL_POSE_SOLVER, \
     StatusMessage
 from src.controller import \
-    MCTComponentAddress, \
     MCTController, \
     ConnectionReport
-from ipaddress import IPv4Address
-from pydantic import ValidationError
 from typing import Final
 import wx
 import wx.grid
@@ -30,17 +21,10 @@ _STATUS_MESSAGE_TABLE_SUBSCRIBER_LABEL: Final[str] = "status_message_table"
 class ControllerPanel(BasePanel):
 
     _controller: MCTController
-    _parameter_label: ParameterText
-    _parameter_role: ParameterSelector
-    _parameter_ipaddress: ParameterText
-    _parameter_port: ParameterSpinboxInteger
-    _add_new_button: wx.Button
-    _connection_table: ConnectionTable
-    _remove_button: wx.Button
-    _controller_status_textbox: wx.TextCtrl
-    _start_detectors_only_button: wx.Button
-    _start_detectors_solvers_button: wx.Button
+    _start_from_configuration_button: wx.Button
     _stop_button: wx.Button
+    _connection_table: ConnectionTable
+    _controller_status_textbox: wx.TextCtrl
     _log_panel: LogPanel
 
     _controller_status: str  # last status reported by MCTController
@@ -80,52 +64,19 @@ class ControllerPanel(BasePanel):
 
         control_sizer: wx.BoxSizer = wx.BoxSizer(orient=wx.VERTICAL)
 
-        self._parameter_label = self.add_control_text_input(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Label")
-
-        self._parameter_role: ParameterSelector = self.add_control_selector(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Role",
-            selectable_values=[
-                COMPONENT_ROLE_LABEL_DETECTOR,
-                COMPONENT_ROLE_LABEL_POSE_SOLVER])
-
-        self._parameter_ipaddress = self.add_control_text_input(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="IP Address",
-            value="127.0.0.1")
-
-        self._parameter_port = self.add_control_spinbox_integer(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Port",
-            minimum_value=0,
-            maximum_value=65535,
-            initial_value=8000)
-
-        self.add_new_button: wx.Button = self.add_control_button(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Add New")
-
         self.add_horizontal_line_to_spacer(
             parent=control_panel,
             sizer=control_sizer)
 
-        self._connection_table = ConnectionTable(parent=control_panel)
-        control_sizer.Add(
-            window=self._connection_table,
-            flags=wx.SizerFlags(0).Expand())
-        control_sizer.AddSpacer(size=BasePanel.DEFAULT_SPACING_PX_VERTICAL)
-
-        self._remove_button: wx.Button = self.add_control_button(
+        self._start_from_configuration_button: wx.Button = self.add_control_button(
             parent=control_panel,
             sizer=control_sizer,
-            label="Remove")
+            label="Start From File")
+
+        self._stop_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Stop")
 
         self.add_horizontal_line_to_spacer(
             parent=control_panel,
@@ -141,20 +92,11 @@ class ControllerPanel(BasePanel):
             flags=wx.SizerFlags(0).Expand())
         control_sizer.AddSpacer(size=BasePanel.DEFAULT_SPACING_PX_VERTICAL)
 
-        self._start_detectors_only_button: wx.Button = self.add_control_button(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Start Detectors Only")
-
-        self._start_detectors_solvers_button: wx.Button = self.add_control_button(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Start Detectors And Solvers")
-
-        self._stop_button: wx.Button = self.add_control_button(
-            parent=control_panel,
-            sizer=control_sizer,
-            label="Stop")
+        self._connection_table = ConnectionTable(parent=control_panel)
+        control_sizer.Add(
+            window=self._connection_table,
+            flags=wx.SizerFlags(0).Expand())
+        control_sizer.AddSpacer(size=BasePanel.DEFAULT_SPACING_PX_VERTICAL)
 
         control_spacer_sizer: wx.BoxSizer = wx.BoxSizer(orient=wx.HORIZONTAL)
         control_sizer.Add(
@@ -178,28 +120,12 @@ class ControllerPanel(BasePanel):
 
         self.SetSizerAndFit(sizer=horizontal_split_sizer)
 
-        self._parameter_label.Bind(
-            event=wx.EVT_TEXT,
-            handler=self.on_add_new_parameters_changed)
-        self.add_new_button.Bind(
+        self._start_from_configuration_button.Bind(
             event=wx.EVT_BUTTON,
-            handler=self.on_add_new_pressed)
-        self._connection_table.table.Bind(
-            event=wx.grid.EVT_GRID_SELECT_CELL,
-            handler=self.on_connection_selected)
-        self._remove_button.Bind(
-            event=wx.EVT_BUTTON,
-            handler=self.on_remove_pressed)
-        self._start_detectors_only_button.Bind(
-            event=wx.EVT_BUTTON,
-            handler=self.on_start_detectors_only_pressed)
-        self._start_detectors_solvers_button.Bind(
-            event=wx.EVT_BUTTON,
-            handler=self.on_start_detectors_solvers_pressed)
+            handler=self.on_start_from_configuration_pressed)
         self._stop_button.Bind(
             event=wx.EVT_BUTTON,
             handler=self.on_stop_pressed)
-        self.add_new_button.Enable(enable=False)
 
         self._controller_status = str()
         self._connection_reports = list()
@@ -207,69 +133,14 @@ class ControllerPanel(BasePanel):
 
         self.update_controller_buttons()
 
-    def on_add_new_parameters_changed(self, _event: wx.CommandEvent) -> None:
-        label: str = self._parameter_label.textbox.GetValue()
-        if len(label) < 1:
-            self.add_new_button.Enable(enable=False)
+    def on_start_from_configuration_pressed(self, _event: wx.CommandEvent) -> None:
+        dialog: wx.FileDialog = wx.FileDialog(
+            parent=self,
+            message="Select a configuration file",
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        if dialog.ShowModal() == wx.ID_CANCEL:
             return
-        self.add_new_button.Enable(enable=True)
-
-    def on_add_new_pressed(self, _event: wx.CommandEvent) -> None:
-        label: str = self._parameter_label.textbox.GetValue()
-        if len(label) < 1:
-            message: str = f"Provided label must contain 1 or more characters."
-            self._controller.add_status_message(
-                severity="error",
-                message=message)
-            return
-        if self._controller.contains_connection_label(label=label):
-            message: str = f"Provided label {label} already exists. Remove existing before adding again."
-            self._controller.add_status_message(
-                severity="error",
-                message=message)
-            return
-        ip_address: IPv4Address
-        ip_address_str: str = self._parameter_ipaddress.textbox.GetValue()
-        try:
-            ip_address = IPv4Address(ip_address_str)
-        except ValueError:
-            message: str = f"Provided IP Address {ip_address_str} does not appear to be valid."
-            self._controller.add_status_message(
-                severity="error",
-                message=message)
-            return
-        component_address: MCTComponentAddress
-        try:
-            selected_role_index: int = self._parameter_role.selector.GetSelection()
-            component_address: MCTComponentAddress = MCTComponentAddress(
-                label=label,
-                role=self._parameter_role.selector.GetString(n=selected_role_index),
-                ip_address=ip_address,
-                port=self._parameter_port.spinbox.GetValue())
-        except ValidationError as e:
-            message: str = f"Unexpected validation error {e}"
-            self._controller.add_status_message(
-                severity="error",
-                message=message)
-            return
-        self._controller.add_connection(component_address=component_address)
-        self.update_controller_buttons()
-        self._parameter_label.textbox.SetValue(value=str())
-
-    def on_connection_selected(self, event: wx.grid.GridEvent):
-        if self._is_updating:
-            return  # updates may repopulate the grid automatically, we are only interested in user-initiated events
-        if event.Selecting():
-            self._remove_button.Enable(enable=True)
-        else:
-            self._remove_button.Enable(enable=False)
-
-    def on_start_detectors_only_pressed(self, _event: wx.CommandEvent) -> None:
-        self._controller.start_up(mode=MCTController.StartupMode.DETECTING_ONLY)
-        self.update_controller_buttons()
-
-    def on_start_detectors_solvers_pressed(self, _event: wx.CommandEvent) -> None:
-        self._controller.start_up(mode=MCTController.StartupMode.DETECTING_AND_SOLVING)
+        self._controller.start_from_configuration_filepath(dialog.GetPath())
         self.update_controller_buttons()
 
     def on_stop_pressed(self, _event: wx.CommandEvent) -> None:
@@ -281,7 +152,6 @@ class ControllerPanel(BasePanel):
         self._controller.remove_connection(label=selected_row_label)
         self.update_connection_table_display()
         self.update_controller_buttons()
-        self._remove_button.Enable(enable=False)
 
     def update_loop(self):
         super().update_loop()
@@ -296,17 +166,12 @@ class ControllerPanel(BasePanel):
         self._is_updating = False
 
     def update_controller_buttons(self):
-        self._start_detectors_only_button.Enable(enable=False)
-        self._start_detectors_solvers_button.Enable(enable=False)
+        self._start_from_configuration_button.Enable(enable=False)
         self._stop_button.Enable(enable=False)
         if self._controller.is_running():
             self._stop_button.Enable(enable=True)
         elif self._controller.is_idle():
-            detector_list: list = self._controller.get_component_labels(role=COMPONENT_ROLE_LABEL_DETECTOR)
-            contains_detectors: bool = len(detector_list) > 0
-            if contains_detectors:
-                self._start_detectors_only_button.Enable(enable=True)
-                self._start_detectors_solvers_button.Enable(enable=True)
+            self._start_from_configuration_button.Enable(enable=True)
 
     def update_connection_table_display(self) -> None:
         # Return if there is no change

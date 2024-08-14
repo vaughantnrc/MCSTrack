@@ -54,7 +54,6 @@ from src.common import \
     MCTResponse
 from src.common.structures import \
     DetectorFrame, \
-    DetectionParameters, \
     ImageResolution, \
     IntrinsicCalibration, \
     KeyValueMetaAbstract
@@ -302,7 +301,6 @@ class Detector(MCTComponent):
         return EmptyResponse()
 
     def marker_parameters_get(self, **_kwargs) -> MarkerParametersGetResponse | ErrorResponse:
-        parameters: DetectionParameters
         try:
             parameters = self._marker.get_parameters()
         except MCTDetectorRuntimeError as e:

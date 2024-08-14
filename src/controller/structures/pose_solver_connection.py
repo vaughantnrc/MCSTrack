@@ -5,12 +5,17 @@ from src.common.api import \
     DequeueStatusMessagesResponse, \
     EmptyResponse, \
     ErrorResponse, \
+    MCTRequest, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries
-from src.common.structures import Pose
+from src.common.structures import \
+    KeyValueSimpleAny, \
+    Pose, \
+    TargetBase
 from src.pose_solver.api import \
     PoseSolverGetPosesResponse, \
+    PoseSolverSetTargetsRequest, \
     PoseSolverStartRequest, \
     PoseSolverStopRequest
 import datetime
@@ -20,6 +25,10 @@ import uuid
 class PoseSolverConnection(Connection):
 
     # These are variables used directly by the MCTController for storing data
+
+    configured_solver_parameters: list[KeyValueSimpleAny] | None
+    configured_targets: list[TargetBase] | None
+
     request_id: uuid.UUID | None
     detector_poses: list[Pose]
     target_poses: list[Pose]
@@ -32,6 +41,10 @@ class PoseSolverConnection(Connection):
         component_address: MCTComponentAddress
     ):
         super().__init__(component_address=component_address)
+
+        self.configured_solver_parameters = None
+        self.configured_targets = None
+
         self.request_id = None
         self.detector_poses = list()
         self.target_poses = list()
@@ -43,7 +56,10 @@ class PoseSolverConnection(Connection):
         return MCTRequestSeries(series=[PoseSolverStopRequest()])
 
     def create_initialization_request_series(self) -> MCTRequestSeries:
-        return MCTRequestSeries(series=[PoseSolverStartRequest()])
+        series: list[MCTRequest] = [PoseSolverStartRequest()]
+        if self.configured_targets is not None:
+            series.append(PoseSolverSetTargetsRequest(targets=self.configured_targets))
+        return MCTRequestSeries(series=series)
 
     def handle_deinitialization_response_series(
         self,
