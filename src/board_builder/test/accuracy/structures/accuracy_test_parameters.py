@@ -12,11 +12,11 @@ class AccuracyTestParameters:
 
     # Scene generation
     BOARD_MARKER_SIZE = 10  # Size of the markers in mm
-    NUMBER_OF_SNAPSHOTS = 100  # Number of scenes generated for the collection of data
+    NUMBER_OF_SNAPSHOTS = 1  # Number of scenes generated for the collection of data
     SCENE_NAME = 'two_markers'  # Name of the board definition (two_markers, cube, planar)
-    SCENE_GENERATION_X_BOUNDS = (100, 400)
-    SCENE_GENERATION_Y_BOUNDS = (-100, 100)
-    SCENE_GENERATION_Z_BOUNDS = (0, 150)
+    SCENE_GENERATION_X_BOUNDS = (0, 0)
+    SCENE_GENERATION_Y_BOUNDS = (0, 0)
+    SCENE_GENERATION_Z_BOUNDS = (0, 0)
     SCENE_GENERATION_ROTATION_LIMIT = 30  # Amount of degrees a marker can rotate from its original definition
 
     # Plotting

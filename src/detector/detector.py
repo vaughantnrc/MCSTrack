@@ -344,7 +344,7 @@ class Detector(MCTComponent):
         return return_value
 
     async def update(self):
-        if not self._syncing_time:
+        if not self.time_sync_active:
             if self._camera.get_status() == CameraStatus.RUNNING:
                 try:
                     self._camera.update()

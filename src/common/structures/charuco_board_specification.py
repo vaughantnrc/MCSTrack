@@ -37,6 +37,13 @@ class CharucoBoardSpecification(BaseModel):
         return charuco_board
 
     def get_marker_center_points(self) -> list[list[float]]:
+        """
+        Note that the coordinates assume (based on portrait orientation):
+        origin: at bottom-left of board
+        x-axis: goes right
+        y-axis: goes up the page
+        z-axis: comes out of the image and toward the viewer
+        """
         points = []
         for y in range(self.square_count_y):
             for x in range(self.square_count_x):
@@ -44,6 +51,34 @@ class CharucoBoardSpecification(BaseModel):
                     point_x = (x + 0.5) * self.square_size_px / self.px_per_mm
                     point_y = (self.square_count_y - y - 0.5) * self.square_size_px / self.px_per_mm
                     points.append([point_x, point_y, 0.0])
+        return points
+
+    def get_marker_corner_points(self) -> list[list[float]]:
+        """
+        Note that the coordinates assume the same axes as get_marker_center_points,
+        but the origin is in the center of the board, not the bottom-left corner.
+        """
+        points = []
+        marker_size_mm: float = self.marker_size_px / self.px_per_mm
+        square_size_mm: float = self.square_size_px / self.px_per_mm
+        for y_sq in range(self.square_count_y):
+            for x_sq in range(self.square_count_x):
+                if (x_sq + y_sq) % 2 == 1:  # Only add the points for the white squares
+                    x_sq_centered: float = x_sq - (self.square_count_x / 2.0)
+                    y_sq_centered: float = y_sq - (self.square_count_y / 2.0)
+                    for corner_index in range(0, 4):
+                        x_mm: float = (x_sq_centered + 0.5) * square_size_mm
+                        if corner_index == 0 or corner_index == 3:
+                            x_mm -= (marker_size_mm / 2.0)
+                        else:
+                            x_mm += (marker_size_mm / 2.0)
+                        y_mm: float = (-(y_sq_centered + 0.5)) * square_size_mm
+                        if corner_index == 0 or corner_index == 1:
+                            y_mm += (marker_size_mm / 2.0)
+                        else:
+                            y_mm -= (marker_size_mm / 2.0)
+                        z_mm: float = 0.0
+                        points.append([x_mm, y_mm, z_mm])
         return points
 
     def get_marker_ids(self) -> list[int]:

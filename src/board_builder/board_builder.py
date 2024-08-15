@@ -8,11 +8,17 @@ from typing import Final
 
 from .utils import BoardBuilderPoseSolver
 from .structures import PoseLocation
-from src.common.structures import Pose, MarkerSnapshot, MarkerCorners, Matrix4x4
-from ..pose_solver.structures import Marker, TargetBoard
+from src.common.structures import \
+    Pose, \
+    Matrix4x4, \
+    Marker, \
+    MarkerSnapshot, \
+    MarkerCorners, \
+    TargetBoard
 
 _HOMOGENEOUS_POINT_COORD: Final[int] = 4
 TESTED_BOARD_NAME: str = 'top_data.json'  # If collecting data for repeatability test, specify the file name. cube_data.json, planar_data.json, top_data.json
+
 
 class BoardBuilder:
     _detector_poses_median: dict[str, PoseLocation]

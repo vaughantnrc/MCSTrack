@@ -7,12 +7,12 @@ from .structures import \
     CalibrationMap, \
     CalibrationMapValue, \
     CalibrationResultMetadata, \
-    CalibrationResultState, \
-    CharucoBoardSpecification
+    CalibrationResultState
 from src.common import \
     ImageCoding, \
     StatusMessageSource
 from src.common.structures import \
+    CharucoBoardSpecification, \
     ImageResolution, \
     IntrinsicCalibration, \
     IntrinsicCalibrationFrameResult, \
