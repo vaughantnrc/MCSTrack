@@ -33,7 +33,7 @@ ParsableDynamicSingle = TypeVar('ParsableDynamicSingle', bound=MCTParsable)
 class MCTComponent(abc.ABC):
 
     _status_message_source: StatusMessageSource
-    _syncing_time: bool
+    time_sync_active: bool
 
     def __init__(
         self,
@@ -43,7 +43,7 @@ class MCTComponent(abc.ABC):
         self._status_message_source = StatusMessageSource(
             source_label=status_source_label,
             send_to_logger=send_status_messages_to_logger)
-        self._syncing_time = False
+        self.time_sync_active = False
 
     def add_status_message(
         self,
@@ -121,11 +121,11 @@ class MCTComponent(abc.ABC):
             responder_timestamp_utc_iso8601=timestamp_utc_iso8601)
     
     def time_sync_start(self, **kwargs) -> EmptyResponse:
-        self._syncing_time = True
+        self.time_sync_active = True
         return EmptyResponse()
     
     def time_sync_stop(self, **kwargs) -> EmptyResponse:
-        self._syncing_time = False
+        self.time_sync_active = False
         return EmptyResponse()
     
     async def websocket_handler(self, websocket: WebSocket) -> None:
