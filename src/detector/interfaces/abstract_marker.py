@@ -3,9 +3,10 @@ from ..structures import \
     MarkerStatus
 from src.common import StatusMessageSource
 from src.common.structures import \
-    DetectionParameters, \
     MarkerSnapshot, \
-    SeverityLabel
+    SeverityLabel, \
+    KeyValueMetaAny, \
+    KeyValueSimpleAny
 import abc
 import datetime
 import numpy
@@ -51,14 +52,14 @@ class AbstractMarker(abc.ABC):
     def get_markers_rejected(self) -> list[MarkerSnapshot]: ...
 
     @abc.abstractmethod
-    def get_parameters(self) -> DetectionParameters: ...
+    def get_parameters(self) -> list[KeyValueMetaAny]: ...
 
     @staticmethod
     @abc.abstractmethod
     def get_type_identifier() -> str: ...  # Unique string associated with this type
 
     @abc.abstractmethod
-    def set_parameters(self, parameters: DetectionParameters) -> None: ...
+    def set_parameters(self, parameters: list[KeyValueSimpleAny]) -> None: ...
 
     @abc.abstractmethod
     def update(self, image: numpy.ndarray) -> None: ...

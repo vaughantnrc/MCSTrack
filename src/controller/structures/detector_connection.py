@@ -2,13 +2,16 @@ from .mct_component_address import MCTComponentAddress
 from .connection import Connection
 from src.common.api import \
     EmptyResponse, \
+    MCTRequest, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries
 from src.common.structures import \
     DetectorFrame, \
     ImageResolution, \
-    IntrinsicParameters
+    IntrinsicParameters, \
+    KeyValueSimpleAny, \
+    Matrix4x4
 from src.detector.api import \
     CalibrationCalculateResponse, \
     CalibrationImageAddResponse, \
@@ -20,6 +23,7 @@ from src.detector.api import \
     CalibrationResultMetadataListResponse, \
     CameraImageGetResponse, \
     CameraParametersGetResponse, \
+    CameraParametersSetRequest, \
     CameraParametersSetResponse, \
     CameraResolutionGetResponse, \
     DetectorFrameGetResponse, \
@@ -30,6 +34,10 @@ import uuid
 
 
 class DetectorConnection(Connection):
+
+    configured_transform_to_reference: Matrix4x4 | None
+    configured_camera_parameters: list[KeyValueSimpleAny] | None
+    configured_marker_parameters: list[KeyValueSimpleAny] | None
 
     # These are variables used directly by the MCTController for storing data
     request_id: uuid.UUID | None
@@ -43,6 +51,11 @@ class DetectorConnection(Connection):
         component_address: MCTComponentAddress
     ):
         super().__init__(component_address=component_address)
+
+        self.configured_transform_to_reference = None
+        self.configured_camera_parameters = None
+        self.configured_marker_parameters = None
+
         self.request_id = None
         self.current_resolution = None
         self.current_intrinsic_parameters = None
@@ -53,7 +66,10 @@ class DetectorConnection(Connection):
         return MCTRequestSeries(series=[DetectorStopRequest()])
 
     def create_initialization_request_series(self) -> MCTRequestSeries:
-        return MCTRequestSeries(series=[DetectorStartRequest()])
+        series: list[MCTRequest] = [DetectorStartRequest()]
+        if self.configured_camera_parameters is not None:
+            series.append(CameraParametersSetRequest(parameters=self.configured_camera_parameters))
+        return MCTRequestSeries(series=series)
 
     def handle_deinitialization_response_series(
         self,
@@ -64,7 +80,7 @@ class DetectorConnection(Connection):
             self.enqueue_status_message(
                 severity="warning",
                 message=f"Expected exactly one response to deinitialization requests. Got {response_count}.")
-        elif not isinstance(response_series.series[0], EmptyResponse):
+        elif not isinstance(response_series.series[0], (EmptyResponse, CameraParametersSetResponse)):
             self.enqueue_status_message(
                 severity="warning",
                 message=f"The deinitialization response was not of the expected type EmptyResponse.")

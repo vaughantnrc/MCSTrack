@@ -8,20 +8,74 @@ from src.common.structures import \
     CornerRefinementMethod, \
     CORNER_REFINEMENT_METHOD_DICTIONARY_INT_TO_TEXT, \
     CORNER_REFINEMENT_METHOD_DICTIONARY_TEXT_TO_INT, \
-    DetectionParameters, \
-    MarkerSnapshot, \
-    MarkerCornerImagePoint
+    KeyValueMetaAny, \
+    KeyValueMetaBool, \
+    KeyValueMetaEnum, \
+    KeyValueMetaFloat, \
+    KeyValueMetaInt, \
+    KeyValueSimpleAbstract, \
+    KeyValueSimpleAny, \
+    KeyValueSimpleBool, \
+    KeyValueSimpleFloat, \
+    KeyValueSimpleInt, \
+    KeyValueSimpleString, \
+    MarkerCornerImagePoint, \
+    MarkerSnapshot
 import cv2.aruco
 import datetime
 import logging
 import numpy
-from typing import Any
+from typing import Any, Final, get_args
 
 
 logger = logging.getLogger(__name__)
 
 
+# Look at https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html
+# for documentation on individual parameters
+
+# Adaptive Thresholding
+KEY_ADAPTIVE_THRESH_WIN_SIZE_MIN: Final[str] = "adaptiveThreshWinSizeMin"
+KEY_ADAPTIVE_THRESH_WIN_SIZE_MAX: Final[str] = "adaptiveThreshWinSizeMax"
+KEY_ADAPTIVE_THRESH_WIN_SIZE_STEP: Final[str] = "adaptiveThreshWinSizeStep"
+KEY_ADAPTIVE_THRESH_CONSTANT: Final[str] = "adaptiveThreshConstant"
+# Contour Filtering
+KEY_MIN_MARKER_PERIMETER_RATE: Final[str] = "minMarkerPerimeterRate"  # Marker size ratio
+KEY_MAX_MARKER_PERIMETER_RATE: Final[str] = "maxMarkerPerimeterRate"
+KEY_POLYGONAL_APPROX_ACCURACY_RATE: Final[str] = "polygonalApproxAccuracyRate"  # Square tolerance ratio
+KEY_MIN_CORNER_DISTANCE_RATE: Final[str] = "minCornerDistanceRate"  # Corner separation ratio
+KEY_MIN_MARKER_DISTANCE_RATE: Final[str] = "minMarkerDistanceRate"  # Marker separation ratio
+KEY_MIN_DISTANCE_TO_BORDER: Final[str] = "minDistanceToBorder"  # Border distance in pixels
+# Bits Extraction
+KEY_MARKER_BORDER_BITS: Final[str] = "markerBorderBits"  # Border width (px)
+KEY_MIN_OTSU_STDDEV: Final[str] = "minOtsuStdDev"  # Minimum brightness stdev
+KEY_PERSPECTIVE_REMOVE_PIXEL_PER_CELL: Final[str] = "perspectiveRemovePixelPerCell"  # Bit Sampling Rate
+KEY_PERSPECTIVE_REMOVE_IGNORED_MARGIN_PER_CELL: Final[str] = "perspectiveRemoveIgnoredMarginPerCell"  # Bit Margin Ratio
+# Marker Identification
+KEY_MAX_ERRONEOUS_BITS_IN_BORDER_RATE: Final[str] = "maxErroneousBitsInBorderRate"  # Border Error Rate
+KEY_ERROR_CORRECTION_RATE: Final[str] = "errorCorrectionRate"  # Error Correction Rat
+KEY_DETECT_INVERTED_MARKER: Final[str] = "detectInvertedMarker"
+KEY_CORNER_REFINEMENT_METHOD: Final[str] = "cornerRefinementMethod"
+KEY_CORNER_REFINEMENT_WIN_SIZE: Final[str] = "cornerRefinementWinSize"
+KEY_CORNER_REFINEMENT_MAX_ITERATIONS: Final[str] = "cornerRefinementMaxIterations"
+KEY_CORNER_REFINEMENT_MIN_ACCURACY: Final[str] = "cornerRefinementMinAccuracy"
+# April Tag Only
+KEY_APRIL_TAG_CRITICAL_RAD: Final[str] = "aprilTagCriticalRad"
+KEY_APRIL_TAG_DEGLITCH: Final[str] = "aprilTagDeglitch"
+KEY_APRIL_TAG_MAX_LINE_FIT_MSE: Final[str] = "aprilTagMaxLineFitMse"
+KEY_APRIL_TAG_MAX_N_MAXIMA: Final[str] = "aprilTagMaxNmaxima"
+KEY_APRIL_TAG_MIN_CLUSTER_PIXELS: Final[str] = "aprilTagMinClusterPixels"
+KEY_APRIL_TAG_MIN_WHITE_BLACK_DIFF: Final[str] = "aprilTagMinWhiteBlackDiff"
+KEY_APRIL_TAG_QUAD_DECIMATE: Final[str] = "aprilTagQuadDecimate"
+KEY_APRIL_TAG_QUAD_SIGMA: Final[str] = "aprilTagQuadSigma"
+# ArUco 3
+KEY_USE_ARUCO_3_DETECTION: Final[str] = "useAruco3Detection"
+KEY_MIN_MARKER_LENGTH_RATIO_ORIGINAL_IMG: Final[str] = "minMarkerLengthRatioOriginalImg"
+KEY_MIN_SIDE_LENGTH_CANONICAL_IMG: Final[str] = "minSideLengthCanonicalImg"
+
+
 class ArucoOpenCVMarker(AbstractMarker):
+
     _marker_dictionary: Any | None  # created by OpenCV, type cv2.aruco.Dictionary
     _marker_parameters: Any  # created by OpenCV, type cv2.aruco.DetectorParameters
     _marker_label_reverse_dictionary: dict[int, str]
@@ -44,10 +98,7 @@ class ArucoOpenCVMarker(AbstractMarker):
         self._marker_detected_snapshots = list()  # Markers that are determined to be valid, and are identified
         self._marker_rejected_snapshots = list()  # Things that looked at first like markers but got later filtered out
         self._marker_timestamp_utc = datetime.datetime.min
-        self.set_status(MarkerStatus.STOPPED)
-
-        # TODO: DEBUGGING
-        self.set_status(MarkerStatus.RUNNING)
+        self.set_status(MarkerStatus.RUNNING)  # Always running
 
     def get_changed_timestamp(self) -> datetime.datetime:
         return self._marker_timestamp_utc
@@ -58,44 +109,220 @@ class ArucoOpenCVMarker(AbstractMarker):
     def get_markers_rejected(self) -> list[MarkerSnapshot]:
         return self._marker_rejected_snapshots
 
-    def get_parameters(self) -> DetectionParameters:
+    def get_parameters(self) -> list[KeyValueMetaAny]:
+        return_value: list[KeyValueMetaAny] = list()
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_ADAPTIVE_THRESH_WIN_SIZE_MIN,
+            value=self._marker_parameters.adaptiveThreshWinSizeMin,
+            range_minimum=1,
+            range_maximum=99))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_ADAPTIVE_THRESH_WIN_SIZE_MAX,
+            value=self._marker_parameters.adaptiveThreshWinSizeMax,
+            range_minimum=1,
+            range_maximum=99))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_ADAPTIVE_THRESH_WIN_SIZE_STEP,
+            value=self._marker_parameters.adaptiveThreshWinSizeStep,
+            range_minimum=1,
+            range_maximum=99,
+            range_step=2))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_ADAPTIVE_THRESH_CONSTANT,
+            value=self._marker_parameters.adaptiveThreshConstant,
+            range_minimum=-255.0,
+            range_maximum=255.0,
+            range_step=1.0))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_MIN_MARKER_PERIMETER_RATE,
+            value=self._marker_parameters.minMarkerPerimeterRate,
+            range_minimum=0,
+            range_maximum=8.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_MAX_MARKER_PERIMETER_RATE,
+            value=self._marker_parameters.maxMarkerPerimeterRate,
+            range_minimum=0.0,
+            range_maximum=8.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_POLYGONAL_APPROX_ACCURACY_RATE,
+            value=self._marker_parameters.polygonalApproxAccuracyRate,
+            range_minimum=0.0,
+            range_maximum=1.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_MIN_CORNER_DISTANCE_RATE,
+            value=self._marker_parameters.minCornerDistanceRate,
+            range_minimum=0.0,
+            range_maximum=1.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_MIN_MARKER_DISTANCE_RATE,
+            value=self._marker_parameters.minMarkerDistanceRate,
+            range_minimum=0.0,
+            range_maximum=1.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_MIN_DISTANCE_TO_BORDER,
+            value=self._marker_parameters.minDistanceToBorder,
+            range_minimum=0,
+            range_maximum=512))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_MARKER_BORDER_BITS,
+            value=self._marker_parameters.markerBorderBits,
+            range_minimum=1,
+            range_maximum=9))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_MIN_OTSU_STDDEV,
+            value=self._marker_parameters.minOtsuStdDev,
+            range_minimum=0.0,
+            range_maximum=256.0,
+            range_step=1.0))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_PERSPECTIVE_REMOVE_PIXEL_PER_CELL,
+            value=self._marker_parameters.perspectiveRemovePixelPerCell,
+            range_minimum=1,
+            range_maximum=20))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_PERSPECTIVE_REMOVE_IGNORED_MARGIN_PER_CELL,
+            value=self._marker_parameters.perspectiveRemoveIgnoredMarginPerCell,
+            range_minimum=0.0,
+            range_maximum=0.5,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_MAX_ERRONEOUS_BITS_IN_BORDER_RATE,
+            value=self._marker_parameters.maxErroneousBitsInBorderRate,
+            range_minimum=0.0,
+            range_maximum=1.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_ERROR_CORRECTION_RATE,
+            value=self._marker_parameters.errorCorrectionRate,
+            range_minimum=-0.0,
+            range_maximum=1.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaBool(
+            key=KEY_DETECT_INVERTED_MARKER,
+            value=self._marker_parameters.detectInvertedMarker))
+
         if self._marker_parameters.cornerRefinementMethod not in CORNER_REFINEMENT_METHOD_DICTIONARY_INT_TO_TEXT:
             raise MCTDetectorRuntimeError(
                 message=f"Corner refinement method appears to be set to an invalid value: "
                         f"{self._marker_parameters.corner_refinement_method}.")
         corner_refinement_method_text: CornerRefinementMethod = \
             CORNER_REFINEMENT_METHOD_DICTIONARY_INT_TO_TEXT[self._marker_parameters.cornerRefinementMethod]
-        params: DetectionParameters = DetectionParameters(
-            adaptive_thresh_constant=self._marker_parameters.adaptiveThreshConstant,
-            adaptive_thresh_win_size_max=self._marker_parameters.adaptiveThreshWinSizeMax,
-            adaptive_thresh_win_size_min=self._marker_parameters.adaptiveThreshWinSizeMin,
-            adaptive_thresh_win_size_step=self._marker_parameters.adaptiveThreshWinSizeStep,
-            april_tag_critical_rad=self._marker_parameters.aprilTagCriticalRad,
-            april_tag_deglitch=self._marker_parameters.aprilTagDeglitch,
-            april_tag_max_line_fit_mse=self._marker_parameters.aprilTagMaxLineFitMse,
-            april_tag_max_nmaxima=self._marker_parameters.aprilTagMaxNmaxima,
-            april_tag_min_cluster_pixels=self._marker_parameters.aprilTagMinClusterPixels,
-            april_tag_min_white_black_diff=self._marker_parameters.aprilTagMinWhiteBlackDiff,
-            april_tag_quad_decimate=self._marker_parameters.aprilTagQuadDecimate,
-            april_tag_quad_sigma=self._marker_parameters.aprilTagQuadSigma,
-            corner_refinement_max_iterations=self._marker_parameters.cornerRefinementMaxIterations,
-            corner_refinement_method=corner_refinement_method_text,
-            corner_refinement_min_accuracy=self._marker_parameters.cornerRefinementMinAccuracy,
-            corner_refinement_win_size=self._marker_parameters.cornerRefinementWinSize,
-            detect_inverted_marker=self._marker_parameters.detectInvertedMarker,
-            error_correction_rate=self._marker_parameters.errorCorrectionRate,
-            marker_border_bits=self._marker_parameters.markerBorderBits,
-            max_erroneous_bits_in_border_rate=self._marker_parameters.maxErroneousBitsInBorderRate,
-            max_marker_perimeter_rate=self._marker_parameters.maxMarkerPerimeterRate,
-            min_corner_distance_rate=self._marker_parameters.minCornerDistanceRate,
-            min_distance_to_border=self._marker_parameters.minDistanceToBorder,
-            min_marker_distance_rate=self._marker_parameters.minMarkerDistanceRate,
-            min_marker_perimeter_rate=self._marker_parameters.minMarkerPerimeterRate,
-            min_otsu_std_dev=self._marker_parameters.minOtsuStdDev,
-            perspective_remove_ignored_margin_per_cell=self._marker_parameters.perspectiveRemoveIgnoredMarginPerCell,
-            perspective_remove_pixel_per_cell=self._marker_parameters.perspectiveRemovePixelPerCell,
-            polygonal_approx_accuracy_rate=self._marker_parameters.polygonalApproxAccuracyRate)
-        return params
+        return_value.append(KeyValueMetaEnum(
+            key=KEY_CORNER_REFINEMENT_METHOD,
+            value=corner_refinement_method_text,
+            allowable_values=get_args(CornerRefinementMethod)))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_CORNER_REFINEMENT_WIN_SIZE,
+            value=self._marker_parameters.cornerRefinementWinSize,
+            range_minimum=1,
+            range_maximum=9))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_CORNER_REFINEMENT_MAX_ITERATIONS,
+            value=self._marker_parameters.cornerRefinementMaxIterations,
+            range_minimum=1,
+            range_maximum=100))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_CORNER_REFINEMENT_MIN_ACCURACY,
+            value=self._marker_parameters.cornerRefinementMinAccuracy,
+            range_minimum=0.0,
+            range_maximum=5.0,
+            range_step=0.1))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_APRIL_TAG_CRITICAL_RAD,
+            value=self._marker_parameters.aprilTagCriticalRad,
+            range_minimum=-0.0,
+            range_maximum=numpy.pi,
+            range_step=numpy.pi / 20.0))
+
+        return_value.append(KeyValueMetaBool(
+            key=KEY_APRIL_TAG_DEGLITCH,
+            value=self._marker_parameters.aprilTagDeglitch))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_APRIL_TAG_MAX_LINE_FIT_MSE,
+            value=self._marker_parameters.aprilTagMaxLineFitMse,
+            range_minimum=0.0,
+            range_maximum=512.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_APRIL_TAG_MAX_N_MAXIMA,
+            value=self._marker_parameters.aprilTagMaxNmaxima,
+            range_minimum=1,
+            range_maximum=100))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_APRIL_TAG_MIN_CLUSTER_PIXELS,
+            value=self._marker_parameters.aprilTagMinClusterPixels,
+            range_minimum=0,
+            range_maximum=512))
+
+        return_value.append(KeyValueMetaInt(
+            key=KEY_APRIL_TAG_MIN_WHITE_BLACK_DIFF,
+            value=self._marker_parameters.aprilTagMinWhiteBlackDiff,
+            range_minimum=0,
+            range_maximum=256))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_APRIL_TAG_QUAD_DECIMATE,
+            value=self._marker_parameters.aprilTagQuadDecimate,
+            range_minimum=0.0,
+            range_maximum=1.0,
+            range_step=0.01))
+
+        return_value.append(KeyValueMetaFloat(
+            key=KEY_APRIL_TAG_QUAD_SIGMA,
+            value=self._marker_parameters.aprilTagQuadSigma,
+            range_minimum=0.0,
+            range_maximum=1.0,
+            range_step=0.01))
+
+        # Note: a relatively recent addition to OpenCV, may not be available in some python versions
+        if hasattr(self._marker_parameters, "useAruco3Detection"):
+            return_value.append(KeyValueMetaBool(
+                key=KEY_USE_ARUCO_3_DETECTION,
+                value=self._marker_parameters.useAruco3Detection))
+
+            return_value.append(KeyValueMetaFloat(
+                key=KEY_MIN_MARKER_LENGTH_RATIO_ORIGINAL_IMG,
+                value=self._marker_parameters.minMarkerLengthRatioOriginalImg,
+                range_minimum=0.0,
+                range_maximum=1.0,
+                range_step=0.01))
+
+            return_value.append(KeyValueMetaInt(
+                key=KEY_MIN_SIDE_LENGTH_CANONICAL_IMG,
+                value=self._marker_parameters.minSideLengthCanonicalImg,
+                range_minimum=1,
+                range_maximum=512))
+
+        return return_value
 
     @staticmethod
     def get_type_identifier() -> str:
@@ -116,89 +343,184 @@ class ArucoOpenCVMarker(AbstractMarker):
     # noinspection DuplicatedCode
     def set_parameters(
         self,
-        parameters: DetectionParameters
+        parameters: list[KeyValueSimpleAny]
     ) -> None:
-
-        p: DetectionParameters = parameters
-
-        if p.adaptive_thresh_win_size_min:
-            self._marker_parameters.adaptiveThreshWinSizeMin = p.adaptive_thresh_win_size_min
-        if p.adaptive_thresh_win_size_max:
-            self._marker_parameters.adaptiveThreshWinSizeMax = p.adaptive_thresh_win_size_max
-        if p.adaptive_thresh_win_size_step:
-            self._marker_parameters.adaptiveThreshWinSizeStep = p.adaptive_thresh_win_size_step
-        if p.adaptive_thresh_constant:
-            self._marker_parameters.adaptiveThreshConstant = p.adaptive_thresh_constant
-
-        if p.min_marker_perimeter_rate:
-            self._marker_parameters.minMarkerPerimeterRate = p.min_marker_perimeter_rate
-        if p.max_marker_perimeter_rate:
-            self._marker_parameters.maxMarkerPerimeterRate = p.max_marker_perimeter_rate
-        if p.polygonal_approx_accuracy_rate:
-            self._marker_parameters.polygonalApproxAccuracyRate = p.polygonal_approx_accuracy_rate
-        if p.min_corner_distance_rate:
-            self._marker_parameters.minCornerDistanceRate = p.min_corner_distance_rate
-        if p.min_marker_distance_rate:
-            self._marker_parameters.minMarkerDistanceRate = p.min_marker_distance_rate
-        if p.min_distance_to_border:
-            self._marker_parameters.minDistanceToBorder = p.min_distance_to_border
-
-        if p.corner_refinement_max_iterations:
-            self._marker_parameters.cornerRefinementMaxIterations = p.corner_refinement_max_iterations
-        if p.corner_refinement_method:
-            if p.corner_refinement_method in CORNER_REFINEMENT_METHOD_DICTIONARY_TEXT_TO_INT:
-                self._marker_parameters.cornerRefinementMethod = \
-                    CORNER_REFINEMENT_METHOD_DICTIONARY_TEXT_TO_INT[p.corner_refinement_method]
+        mismatched_keys: list[str] = list()
+        key_value: KeyValueSimpleAbstract
+        for key_value in parameters:
+            if key_value.key == KEY_ADAPTIVE_THRESH_WIN_SIZE_MIN:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.adaptiveThreshWinSizeMin = key_value.value
+            elif key_value.key == KEY_ADAPTIVE_THRESH_WIN_SIZE_MAX:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.adaptiveThreshWinSizeMax = key_value.value
+            elif key_value.key == KEY_ADAPTIVE_THRESH_WIN_SIZE_STEP:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.adaptiveThreshWinSizeStep = key_value.value
+            elif key_value.key == KEY_ADAPTIVE_THRESH_CONSTANT:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.adaptiveThreshConstant = key_value.value
+            elif key_value.key == KEY_MIN_MARKER_PERIMETER_RATE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.minMarkerPerimeterRate = key_value.value
+            elif key_value.key == KEY_MAX_MARKER_PERIMETER_RATE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.maxMarkerPerimeterRate = key_value.value
+            elif key_value.key == KEY_POLYGONAL_APPROX_ACCURACY_RATE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.polygonalApproxAccuracyRate = key_value.value
+            elif key_value.key == KEY_MIN_CORNER_DISTANCE_RATE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.minCornerDistanceRate = key_value.value
+            elif key_value.key == KEY_MIN_MARKER_DISTANCE_RATE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.minMarkerDistanceRate = key_value.value
+            elif key_value.key == KEY_MIN_DISTANCE_TO_BORDER:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.minDistanceToBorder = key_value.value
+            elif key_value.key == KEY_MARKER_BORDER_BITS:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.markerBorderBits = key_value.value
+            elif key_value.key == KEY_MIN_OTSU_STDDEV:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.minOtsuStdDev = key_value.value
+            elif key_value.key == KEY_PERSPECTIVE_REMOVE_PIXEL_PER_CELL:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.perspectiveRemovePixelPerCell = key_value.value
+            elif key_value.key == KEY_PERSPECTIVE_REMOVE_IGNORED_MARGIN_PER_CELL:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.perspectiveRemoveIgnoredMarginPerCell = key_value.value
+            elif key_value.key == KEY_MAX_ERRONEOUS_BITS_IN_BORDER_RATE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.maxErroneousBitsInBorderRate = key_value.value
+            elif key_value.key == KEY_ERROR_CORRECTION_RATE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.errorCorrectionRate = key_value.value
+            elif key_value.key == KEY_DETECT_INVERTED_MARKER:
+                if not isinstance(key_value, KeyValueSimpleBool):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.detectInvertedMarker = key_value.value
+            elif key_value.key == KEY_CORNER_REFINEMENT_METHOD:
+                if not isinstance(key_value, KeyValueSimpleString):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                corner_refinement_method: str = key_value.value
+                if corner_refinement_method in CORNER_REFINEMENT_METHOD_DICTIONARY_TEXT_TO_INT:
+                    # noinspection PyTypeChecker
+                    self._marker_parameters.cornerRefinementMethod = \
+                        CORNER_REFINEMENT_METHOD_DICTIONARY_TEXT_TO_INT[corner_refinement_method]
+                else:
+                    raise MCTDetectorRuntimeError(
+                        message=f"Failed to find corner refinement method {corner_refinement_method}.")
+            elif key_value.key == KEY_CORNER_REFINEMENT_WIN_SIZE:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.cornerRefinementWinSize = key_value.value
+            elif key_value.key == KEY_CORNER_REFINEMENT_MAX_ITERATIONS:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.cornerRefinementMaxIterations = key_value.value
+            elif key_value.key == KEY_CORNER_REFINEMENT_MIN_ACCURACY:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.cornerRefinementMinAccuracy = key_value.value
+            elif key_value.key == KEY_APRIL_TAG_CRITICAL_RAD:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.aprilTagCriticalRad = key_value.value
+            elif key_value.key == KEY_APRIL_TAG_DEGLITCH:
+                if not isinstance(key_value, KeyValueSimpleBool):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.aprilTagDeglitch = int(key_value.value)
+            elif key_value.key == KEY_APRIL_TAG_MAX_LINE_FIT_MSE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.aprilTagMaxLineFitMse = key_value.value
+            elif key_value.key == KEY_APRIL_TAG_MAX_N_MAXIMA:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.aprilTagMaxNmaxima = key_value.value
+            elif key_value.key == KEY_APRIL_TAG_MIN_CLUSTER_PIXELS:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.aprilTagMinClusterPixels = key_value.value
+            elif key_value.key == KEY_APRIL_TAG_MIN_WHITE_BLACK_DIFF:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.aprilTagMinWhiteBlackDiff = key_value.value
+            elif key_value.key == KEY_APRIL_TAG_QUAD_DECIMATE:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.aprilTagQuadDecimate = key_value.value
+            elif key_value.key == KEY_APRIL_TAG_QUAD_SIGMA:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.aprilTagQuadSigma = key_value.value
+            elif key_value.key == KEY_USE_ARUCO_3_DETECTION:
+                if not isinstance(key_value, KeyValueSimpleBool):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.useAruco3Detection = key_value.value
+            elif key_value.key == KEY_MIN_MARKER_LENGTH_RATIO_ORIGINAL_IMG:
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.minMarkerLengthRatioOriginalImg = key_value.value
+            elif key_value.key == KEY_MIN_SIDE_LENGTH_CANONICAL_IMG:
+                if not isinstance(key_value, KeyValueSimpleInt):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._marker_parameters.minSideLengthCanonicalImg = key_value.value
             else:
-                raise MCTDetectorRuntimeError(
-                    message=f"Failed to find corner refinement method {p.corner_refinement_method}.")
-        if p.corner_refinement_min_accuracy:
-            self._marker_parameters.cornerRefinementMinAccuracy = p.corner_refinement_min_accuracy
-        if p.corner_refinement_win_size:
-            self._marker_parameters.cornerRefinementWinSize = p.corner_refinement_win_size
+                mismatched_keys.append(key_value.key)
 
-        if p.marker_border_bits:
-            self._marker_parameters.markerBorderBits = p.marker_border_bits
-        if p.min_otsu_std_dev:
-            self._marker_parameters.minOtsuStdDev = p.min_otsu_std_dev
-        if p.perspective_remove_pixel_per_cell:
-            self._marker_parameters.perspectiveRemovePixelPerCell = p.perspective_remove_pixel_per_cell
-        if p.perspective_remove_ignored_margin_per_cell:
-            self._marker_parameters.perspectiveRemoveIgnoredMarginPerCell = \
-                p.perspective_remove_ignored_margin_per_cell
-
-        if p.max_erroneous_bits_in_border_rate:
-            self._marker_parameters.maxErroneousBitsInBorderRate = p.max_erroneous_bits_in_border_rate
-        if p.error_correction_rate:
-            self._marker_parameters.errorCorrectionRate = p.error_correction_rate
-        if p.detect_inverted_marker:
-            self._marker_parameters.detectInvertedMarker = p.detect_inverted_marker
-
-        if p.april_tag_critical_rad:
-            self._marker_parameters.aprilTagCriticalRad = p.april_tag_critical_rad
-        if p.april_tag_deglitch:
-            self._marker_parameters.aprilTagDeglitch = p.april_tag_deglitch
-        if p.april_tag_max_line_fit_mse:
-            self._marker_parameters.aprilTagMaxLineFitMse = p.april_tag_max_line_fit_mse
-        if p.april_tag_max_nmaxima:
-            self._marker_parameters.aprilTagMaxNmaxima = p.april_tag_max_nmaxima
-        if p.april_tag_min_cluster_pixels:
-            self._marker_parameters.aprilTagMinClusterPixels = p.april_tag_min_cluster_pixels
-        if p.april_tag_min_white_black_diff:
-            self._marker_parameters.aprilTagMinWhiteBlackDiff = p.april_tag_min_white_black_diff
-        if p.april_tag_quad_decimate:
-            self._marker_parameters.aprilTagQuadDecimate = p.april_tag_quad_decimate
-        if p.april_tag_quad_sigma:
-            self._marker_parameters.aprilTagQuadSigma = p.april_tag_quad_sigma
-
-        # Note: a relatively recent addition to OpenCV, may not be available in some python versions
-        if hasattr(self._marker_parameters, "useAruco3Detection"):
-            if p.use_aruco_3_detection:
-                self._marker_parameters.useAruco3Detection = p.use_aruco_3_detection
-            if p.min_side_length_canonical_img:
-                self._marker_parameters.minSideLengthCanonicalImg = p.min_side_length_canonical_img
-            if p.min_marker_length_ratio_original_img:
-                self._marker_parameters.minMarkerLengthRatioOriginalImg = p.min_marker_length_ratio_original_img
+        if len(mismatched_keys) > 0:
+            raise MCTDetectorRuntimeError(
+                message=f"The following parameters could not be applied due to key mismatch: {str(mismatched_keys)}")
 
     def update(
         self,

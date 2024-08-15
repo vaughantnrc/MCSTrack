@@ -1,4 +1,5 @@
 from .parameters import \
+    ParameterBase, \
     ParameterCheckbox, \
     ParameterSelector, \
     ParameterSpinboxFloat, \
@@ -8,6 +9,19 @@ from src.common import \
     ErrorResponse, \
     MCTResponse, \
     StatusMessageSource
+from src.common.structures import \
+    KeyValueSimpleAbstract, \
+    KeyValueSimpleAny, \
+    KeyValueSimpleBool, \
+    KeyValueSimpleString, \
+    KeyValueSimpleFloat, \
+    KeyValueSimpleInt, \
+    KeyValueMetaAbstract, \
+    KeyValueMetaAny, \
+    KeyValueMetaBool, \
+    KeyValueMetaEnum, \
+    KeyValueMetaFloat, \
+    KeyValueMetaInt
 from typing import Final
 import wx
 
@@ -36,6 +50,79 @@ class BasePanel(wx.Panel):
 
         self._update_loop_running = True
         wx.CallLater(_UPDATE_INTERVAL_MILLISECONDS, self.update_loop)
+
+    def populate_key_value_list_from_dynamic_ui(
+        self,
+        parameter_uis: list[ParameterBase]
+    ) -> list[KeyValueSimpleAny]:
+        key_values: list[KeyValueSimpleAny] = list()
+        for parameter_ui in parameter_uis:
+            parameter_type: type[KeyValueSimpleAbstract]
+            label: str = parameter_ui.label.GetLabelText()
+            if isinstance(parameter_ui, ParameterCheckbox):
+                parameter_type = KeyValueSimpleBool
+            elif isinstance(parameter_ui, ParameterSelector):
+                parameter_type = KeyValueSimpleString
+            elif isinstance(parameter_ui, ParameterSpinboxFloat):
+                parameter_type = KeyValueSimpleFloat
+            elif isinstance(parameter_ui, ParameterSpinboxInteger):
+                parameter_type = KeyValueSimpleInt
+            else:
+                self.status_message_source.enqueue_status_message(
+                    severity="error",
+                    message=f"Failed to determine parameter type from UI element for key {label}.")
+                continue
+            key_values.append(parameter_type(
+                key=label,
+                value=parameter_ui.get_value()))
+        return key_values
+
+    def populate_dynamic_ui_from_key_value_list(
+        self,
+        key_value_list: list[KeyValueMetaAny],
+        containing_panel: wx.Panel,
+        containing_sizer: wx.BoxSizer
+    ) -> list[ParameterBase]:
+        return_value: list[ParameterBase] = list()
+        key_value: KeyValueMetaAbstract
+        for key_value in key_value_list:
+            if isinstance(key_value, KeyValueMetaBool):
+                return_value.append(self.add_control_checkbox(
+                    parent=containing_panel,
+                    sizer=containing_sizer,
+                    label=key_value.key,
+                    value=key_value.value))
+            elif isinstance(key_value, KeyValueMetaEnum):
+                return_value.append(self.add_control_selector(
+                    parent=containing_panel,
+                    sizer=containing_sizer,
+                    label=key_value.key,
+                    selectable_values=key_value.allowable_values,
+                    value=key_value.value))
+            elif isinstance(key_value, KeyValueMetaFloat):
+                return_value.append(self.add_control_spinbox_float(
+                    parent=containing_panel,
+                    sizer=containing_sizer,
+                    label=key_value.key,
+                    minimum_value=key_value.range_minimum,
+                    maximum_value=key_value.range_maximum,
+                    initial_value=key_value.value,
+                    step_value=key_value.range_step,
+                    digit_count=key_value.digit_count))
+            elif isinstance(key_value, KeyValueMetaInt):
+                return_value.append(self.add_control_spinbox_integer(
+                    parent=containing_panel,
+                    sizer=containing_sizer,
+                    label=key_value.key,
+                    minimum_value=key_value.range_minimum,
+                    maximum_value=key_value.range_maximum,
+                    initial_value=key_value.value,
+                    step_value=key_value.range_step))
+            else:
+                self.status_message_source.enqueue_status_message(
+                    severity="error",
+                    message=f"Unsupported parameter type {key_value.parsable_type} will not be handled")
+        return return_value
 
     def handle_error_response(
         self,
@@ -242,4 +329,3 @@ class BasePanel(wx.Panel):
             flags=wx.SizerFlags(0).Expand())
         sizer.AddSpacer(size=BasePanel.DEFAULT_SPACING_PX_VERTICAL)
         return toggle_button
-

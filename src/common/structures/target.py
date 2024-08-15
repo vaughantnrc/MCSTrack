@@ -1,6 +1,6 @@
 import abc
 import numpy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 
 class _Marker(BaseModel):
@@ -65,7 +65,11 @@ class TargetMarker(TargetBase, _Marker):
 
 class TargetBoard(TargetBase):
     markers: list[_Marker] = Field()
-    _marker_dict: None | dict[str, _Marker] = Field(exclude=True, default=None)  # used for optimization only
+    _marker_dict: None | dict[str, _Marker] = PrivateAttr()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._marker_dict = None
 
     def get_marker_ids(self) -> list[str]:
         return [marker.marker_id for marker in self.markers]
