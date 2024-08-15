@@ -20,9 +20,7 @@ from src.pose_solver.util import \
     convex_quadrilateral_area, \
     closest_intersection_between_n_lines, \
     IterativeClosestPointParameters, \
-    iterative_closest_point_for_points_and_rays, \
-    register_corresponding_points
-    vector_image_to_opengl
+    iterative_closest_point_for_points_and_rays
 import cv2
 import cv2.aruco
 import datetime

@@ -12,11 +12,13 @@ from src.common.structures import Pose, MarkerSnapshot, MarkerCorners, Matrix4x4
 from ..pose_solver.structures import Marker, TargetBoard
 
 _HOMOGENEOUS_POINT_COORD: Final[int] = 4
+TESTED_BOARD_NAME: str = 'top_data.json'  # If collecting data for repeatability test, specify the file name. cube_data.json, planar_data.json, top_data.json
 
 class BoardBuilder:
     _detector_poses_median: dict[str, PoseLocation]
     _detector_poses: list[Pose]
     _target_poses: list[Pose]
+    marker_size: float
     _index_to_marker_uuid: dict[int, str]
     _index_to_marker_id: dict[int, str]
 
@@ -25,13 +27,16 @@ class BoardBuilder:
     relative_pose_matrix = list[list[PoseLocation | None]]  # Indexed as [row_index][col_index]
     local_corners = list[list[int]]  # Indexed as [point_index][coordinate_index]
 
+    board_label: str
+    repeatability_testing: bool
+
     def __init__(self, marker_size):
 
         # pose solver init
         self._detector_poses_median = dict()
         self.detector_poses = list()
         self.target_poses = list()
-        self.marker_size = marker_size
+        self.marker_size = marker_size  # in mm
         self._index_to_marker_uuid = dict()
         self._index_to_marker_id = dict()
         self.pose_solver = BoardBuilderPoseSolver()
@@ -45,6 +50,10 @@ class BoardBuilder:
             [marker_size / 2, marker_size / 2, 0, 1],  # Top-right
             [marker_size / 2, -marker_size / 2, 0, 1],  # Bottom-right
             [-marker_size / 2, -marker_size / 2, 0, 1]]  # Bottom-left
+
+        # files
+        self.board_label = ""
+        self.repeatability_testing = False  # True if collecting data for repeatability testing
 
         # clear data recording file
         self._clear_data_recording_file()
@@ -166,14 +175,14 @@ class BoardBuilder:
                 self._index_to_marker_uuid[self._matrix_uuid_index] = pose.target_id
                 self._matrix_uuid_index += 1
 
-    @staticmethod
-    def _write_corners_dict_to_repeatability_test_file(corners_dict, filename):
+    def _write_corners_dict_to_repeatability_test_file(self, corners_dict):
         corners_dict_serializable = {k: v.tolist() for k, v in corners_dict.items()}
+        filename = f'{self.board_label}_data.json'
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        repeatability_dir = os.path.join(script_dir, 'test', 'repeatability')
+        repeatability_dir = os.path.join(script_dir, 'test', 'repeatability', 'results')
         if not os.path.exists(repeatability_dir):
-            os.makedirs(repeatability_dir)
+            os.makedirs(repeatability_dir, exist_ok=True)
         file_path = os.path.join(repeatability_dir, filename)
 
         data = []
@@ -191,14 +200,16 @@ class BoardBuilder:
             json.dump(data, file, indent=4)
 
     @staticmethod
-    def _write_detector_data_to_file(detector_data: dict[str, list[MarkerSnapshot]], data_description: str):
+    def _write_detector_data_to_recording_file(detector_data: dict[str, list[MarkerSnapshot]], data_description: str):
         formatted_data = {}
+        timestamp = datetime.datetime.utcnow()
         for detector_name, snapshots in detector_data.items():
             formatted_data[detector_name] = []
             for snapshot in snapshots:
                 snapshot_data = {
                     "label": snapshot.label,
-                    "corner_image_points": [{"x_px": pt.x_px, "y_px": pt.y_px} for pt in snapshot.corner_image_points]
+                    "corner_image_points": [{"x_px": pt.x_px, "y_px": pt.y_px} for pt in snapshot.corner_image_points],
+                    "timestamp": timestamp
                 }
                 formatted_data[detector_name].append(snapshot_data)
 
@@ -231,7 +242,7 @@ class BoardBuilder:
 
     # public methods
     def locate_reference_board(self, detector_data: dict[str, list[MarkerSnapshot]]):
-        self._write_detector_data_to_file(detector_data, "LOCATE REFERENCE DATA")
+        self._write_detector_data_to_recording_file(detector_data, "LOCATE REFERENCE DATA")
         if all(isinstance(v, list) and len(v) == 0 for v in detector_data.values()):
             return
         self.detector_poses = []
@@ -266,7 +277,7 @@ class BoardBuilder:
 
     def collect_data(self, detector_data: dict[str, list[MarkerSnapshot]]):
         """ Collects data of relative position and is entered in matrix. Returns a dictionary of its corners"""
-        self._write_detector_data_to_file(detector_data, "COLLECTION DATA")
+        self._write_detector_data_to_recording_file(detector_data, "COLLECTION DATA")
         detector_data = self._filter_markers_appearing_in_multiple_detectors(detector_data)
         if all(isinstance(v, list) and len(v) == 0 for v in detector_data.values()):
             return
@@ -308,7 +319,7 @@ class BoardBuilder:
 
         return corners_dict
 
-    def build_board(self, repeatability_testing=False):
+    def build_board(self):
         # TODO: Build board isn't currently able to get the positions of markers with no direct relation with the
         #  reference (appeared in the same frame more than once). A search algorithm needs to be developed
 
@@ -342,8 +353,8 @@ class BoardBuilder:
                 corners = self._calculate_corners_location(T, self.local_corners)
             predicted_corners[marker_id] = corners
 
-        if repeatability_testing:
-            self._write_corners_dict_to_repeatability_test_file(predicted_corners, 'cube_data.json')
+        if self.repeatability_testing:  # If collecting data for repeatability testing
+            self._write_corners_dict_to_repeatability_test_file(predicted_corners)
 
         # Convert to target board
         markers = []
@@ -352,4 +363,4 @@ class BoardBuilder:
             points = [list(point) for point in points]
             marker = Marker(marker_id=marker_id, points=points)
             markers.append(marker)
-        return TargetBoard(target_id='board 1', markers=markers)
+        return TargetBoard(target_id='board_builder_output', markers=markers)
