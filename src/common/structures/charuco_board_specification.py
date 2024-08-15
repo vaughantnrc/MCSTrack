@@ -37,6 +37,13 @@ class CharucoBoardSpecification(BaseModel):
         return charuco_board
 
     def get_marker_center_points(self) -> list[list[float]]:
+        """
+        Note that the coordinates assume (based on portrait orientation):
+        origin: at bottom-left of board
+        x-axis: goes right
+        y-axis: goes up the page
+        z-axis: comes out of the image and toward the viewer
+        """
         points = []
         for y in range(self.square_count_y):
             for x in range(self.square_count_x):
@@ -47,6 +54,10 @@ class CharucoBoardSpecification(BaseModel):
         return points
 
     def get_marker_corner_points(self) -> list[list[float]]:
+        """
+        Note that the coordinates assume the same axes as get_marker_center_points,
+        but the origin is in the center of the board, not the bottom-left corner.
+        """
         points = []
         marker_size_mm: float = self.marker_size_px / self.px_per_mm
         square_size_mm: float = self.square_size_px / self.px_per_mm
