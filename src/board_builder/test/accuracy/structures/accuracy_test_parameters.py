@@ -7,16 +7,16 @@ class AccuracyTestParameters:
 
     # Noise
     ACCURACY_PERCENTAGE = 95.44  # Percentage of data within two standard deviations
-    NOISE_LEVEL = 2  # Max noise level of corner data within two standard deviations
+    NOISE_LEVEL = 0  # Max noise level of corner data within two standard deviations
     HIGH_NOISE_LEVEL = 1.5  # Multiplier for noise level of corner data outside two standard deviations
 
     # Scene generation
     BOARD_MARKER_SIZE = 10  # Size of the markers in mm
     NUMBER_OF_SNAPSHOTS = 1  # Number of scenes generated for the collection of data
     SCENE_NAME = 'two_markers'  # Name of the board definition (two_markers, cube, planar)
-    SCENE_GENERATION_X_BOUNDS = (0, 0)
-    SCENE_GENERATION_Y_BOUNDS = (0, 0)
-    SCENE_GENERATION_Z_BOUNDS = (0, 0)
+    SCENE_GENERATION_X_BOUNDS = (240, 240)  # (100, 400)
+    SCENE_GENERATION_Y_BOUNDS = (0, 0)  # (-100, 100)
+    SCENE_GENERATION_Z_BOUNDS = (0, 0)  # (0, 150)
     SCENE_GENERATION_ROTATION_LIMIT = 30  # Amount of degrees a marker can rotate from its original definition
 
     # Plotting

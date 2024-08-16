@@ -2,13 +2,14 @@ import numpy as np
 import importlib
 from itertools import combinations
 
-from src.pose_solver.structures import Marker, TargetBoard
 from structures import AccuracyTestParameters
 from src.board_builder.board_builder import BoardBuilder
 from src.common.util import register_corresponding_points
 from src.common.structures import \
     MarkerCornerImagePoint, \
-    MarkerSnapshot
+    MarkerSnapshot, \
+    TargetBoard, \
+    Marker
 from utils import \
     generate_virtual_snapshots, \
     generate_data, \
@@ -24,7 +25,8 @@ class AccuracyTest:
 
     def _add_noise_to_corners(self, data):
         """
-        Adds a limited amount of noise to a percentage of data within two standard deviations and adds more noise to the remainder
+        Adds a limited amount of noise to a percentage of data within two standard deviations and adds more noise to
+        the remainder. Noise is added to both the x and y coordinates.
         """
         noisy_data = {}
         noise_mean = 0
@@ -36,34 +38,24 @@ class AccuracyTest:
                 noisy_corners = []
                 total_points = len(marker_snapshot.corner_image_points)
 
-                # Generate noise for the majority of the points (within ±2 standard deviations)
-                noise_within_limit = np.random.normal(noise_mean, noise_std_dev,
-                                                      int(self._parameters.ACCURACY_PERCENTAGE / 100 * total_points * 2))
-
-                # Generate noise for the remaining points (between ±2 and ±3.5 standard deviations)
-                remaining_points = total_points * 2 - noise_within_limit.size
-                noise_outside_limit = np.concatenate((
-                    np.random.uniform(-self._parameters.NOISE_LEVEL * self._parameters.HIGH_NOISE_LEVEL,
-                                      -self._parameters.NOISE_LEVEL, remaining_points // 2),
-                    np.random.uniform(self._parameters.NOISE_LEVEL,
-                                      self._parameters.NOISE_LEVEL * self._parameters.HIGH_NOISE_LEVEL,
-                                      remaining_points - (remaining_points // 2))
-                ))
-
-                combined_noise = np.concatenate((noise_within_limit, noise_outside_limit))
-                np.random.shuffle(combined_noise)
+                # Generate noise for all points, clamped to 2-3 standard deviations
+                # We multiply the size by two because noise is added to both x and y coordinates
+                noise = np.clip(
+                    np.random.normal(noise_mean, noise_std_dev, total_points * 2),
+                    -self._parameters.NOISE_LEVEL * self._parameters.HIGH_NOISE_LEVEL,
+                    self._parameters.NOISE_LEVEL * self._parameters.HIGH_NOISE_LEVEL
+                )
 
                 # Apply noise
                 for i, corner in enumerate(marker_snapshot.corner_image_points):
-                    noisy_corner_x = corner.x_px + combined_noise[i * 2]
-                    noisy_corner_y = corner.y_px + combined_noise[i * 2 + 1]
+                    noisy_corner_x = corner.x_px + noise[i * 2]
+                    noisy_corner_y = corner.y_px + noise[i * 2 + 1]
                     noisy_corners.append(MarkerCornerImagePoint(x_px=noisy_corner_x, y_px=noisy_corner_y))
 
                 noisy_marker_snapshot = MarkerSnapshot(label=marker_snapshot.label, corner_image_points=noisy_corners)
                 noisy_marker_snapshots.append(noisy_marker_snapshot)
 
             noisy_data[detector_name] = noisy_marker_snapshots
-
         return noisy_data
 
     @staticmethod
@@ -75,8 +67,8 @@ class AccuracyTest:
             return transformed_point_h[:3]  # convert back to 3D coordinates
 
         # Extract points from the boards
-        target_points = target_board.get_points()
-        simulated_points = simulated_board.get_points()
+        target_points: list[list[float]] = target_board.get_points()
+        simulated_points: list[list[float]] = simulated_board.get_points()
 
         # Get the transformation matrix
         transformation_matrix = register_corresponding_points(target_points, simulated_points)
@@ -94,15 +86,18 @@ class AccuracyTest:
         return TargetBoard(target_id=target_board.target_id, markers=aligned_markers)
 
     @staticmethod
-    def _calculate_generate_snapshots_inaccuracy(board_definition, snapshots):
+    def _calculate_generate_snapshots_inaccuracy(
+            board_definition: dict[int, list[list[float]]],
+            snapshots: list[dict[int, list[list[float]]]]
+    ) -> float:
         """
         Validation method that calculates the difference between the generated board and the original input board
         """
-        def compare_transforms(T1, T2):
+        def compare_transforms(T1: np.ndarray, T2: np.ndarray) -> float:
             return np.linalg.norm(T1 - T2)
 
-        def calculate_relative_transform(marker0_points, marker1_points):
-            def calculate_transform(points):
+        def calculate_relative_transform(marker0_points: np.ndarray, marker1_points: np.ndarray):
+            def calculate_transform(points: np.ndarray) -> np.ndarray:
                 center = np.mean(points, axis=0)
                 v1 = points[1] - points[0]
                 v2 = points[3] - points[0]
@@ -142,15 +137,16 @@ class AccuracyTest:
         return average_difference
 
     @staticmethod
-    def _calculate_rms_error_of_two_corner_dataset(simulated_board_arrangement, algorithm_board_arrangement):
+    def _calculate_rms_error_of_two_corner_dataset(
+            simulated_board_arrangement: TargetBoard,
+            algorithm_board_arrangement: TargetBoard
+    ) -> float:
         """
         Calculates the RMS difference between the output board arrangement with the input board arrangement
         """
-        def get_corners(target_board):
-            return target_board.get_points()
 
-        simulated_data = get_corners(simulated_board_arrangement)
-        algorithm_data = get_corners(algorithm_board_arrangement)
+        simulated_data: list[list[float]] = simulated_board_arrangement.get_points()
+        algorithm_data: list[list[float]] = algorithm_board_arrangement.get_points()
 
         if len(simulated_data) != len(algorithm_data):
             raise ValueError("Theoretical and experimental data must have the same length.")
@@ -158,6 +154,7 @@ class AccuracyTest:
         rms_error = 0.0
         total_points = 0
 
+        # Simulated data and algorithm data are both sorted in increasing id order
         for arr1, arr2 in zip(simulated_data, algorithm_data):
             if len(arr1) != len(arr2):
                 raise ValueError("Corresponding arrays must have the same length.")
@@ -185,18 +182,19 @@ class AccuracyTest:
 
         ### COLLECTION DATA ###
         two_dimension_collection_data = []
-        predicted_corners = []
 
         for snapshot in snapshots:
             collection_data = generate_data(snapshot, self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE, remove_markers_out_of_frame=True)
             two_dimension_collection_data.append(collection_data)
             noisy_collection_data = self._add_noise_to_corners(collection_data)
-            collection_corners = self.board_builder.collect_data(noisy_collection_data)
-            predicted_corners.append(collection_corners)
+            # TODO: The predicted target pose seems to have an offset (around 6 mm) in the x direction of the world
+            #  reference system. This might be a problem in either the projection (input data), pose solver
+            #  (algorithm), or detector intrinsics (calibration)
+            self.board_builder.collect_data(noisy_collection_data)
         #graph_renderer(snapshots, two_dimension_collection_data, self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE)
 
         ### BUILD BOARD ###
-        predicted_board = self.board_builder.build_board(repeatability_testing=False)
+        predicted_board = self.board_builder.build_board()
 
         # Center the board definition around the reference marker
         board_definition_np = {k: np.array(v) for k, v in board_definition.items()}
@@ -206,15 +204,13 @@ class AccuracyTest:
 
         simulated_markers = [
             Marker(marker_id=k, points=v.tolist())
-            for k, v in simulated_board_definition.items()
+            for k, v in sorted(simulated_board_definition.items())
         ]
         simulated_board = TargetBoard(target_id='simulated_board', markers=simulated_markers)
 
         # RMS
-        # TODO: FIX RMS ERROR
-        #  If we compare predicted board vs simulated board, the y and z value error is lower than 0.5, but the x value
-        #  seems to be consistently off by around 6 mm, which is where the error is mainly coming from. I can't find
-        #  why that is right now.
+        if not predicted_board or not simulated_board:
+            return None
         aligned_board = self.align_boards(predicted_board, simulated_board)
         rms_error = self._calculate_rms_error_of_two_corner_dataset(aligned_board, simulated_board)
         print(f"RMS Error of board corners: {rms_error}")

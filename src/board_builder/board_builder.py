@@ -208,7 +208,7 @@ class BoardBuilder:
     @staticmethod
     def _write_detector_data_to_recording_file(detector_data: dict[str, list[MarkerSnapshot]], data_description: str):
         formatted_data = {}
-        timestamp = datetime.datetime.utcnow()
+        timestamp = datetime.datetime.utcnow().isoformat()
         for detector_name, snapshots in detector_data.items():
             formatted_data[detector_name] = []
             for snapshot in snapshots:
@@ -364,7 +364,7 @@ class BoardBuilder:
 
         # Convert to target board
         markers = []
-        for marker_id, points in predicted_corners.items():
+        for marker_id, points in sorted(predicted_corners.items()):
             # Ensure points is a list of lists
             points = [list(point) for point in points]
             marker = Marker(marker_id=marker_id, points=points)
