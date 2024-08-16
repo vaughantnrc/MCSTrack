@@ -130,7 +130,7 @@ class Detector(MCTComponent):
 
     def calibration_image_add(self, **_kwargs) -> CalibrationImageAddResponse | ErrorResponse:
         try:
-            image_base64: str = self._camera.get_encoded_image(image_format=".png")
+            image_base64: str = self._camera.get_encoded_image(image_format=".png", requested_resolution=None)
             image_identifier: str = self._calibrator.add_image(image_base64=image_base64)
         except MCTDetectorRuntimeError as e:
             return ErrorResponse(message=e.message)
@@ -238,7 +238,9 @@ class Detector(MCTComponent):
             arg_type=CameraImageGetRequest)
         encoded_image_base64: str
         try:
-            encoded_image_base64 = self._camera.get_encoded_image(image_format=request.format)
+            encoded_image_base64 = self._camera.get_encoded_image(
+                image_format=request.format,
+                requested_resolution=request.requested_resolution)
         except MCTDetectorRuntimeError as e:
             return ErrorResponse(message=e.message)
         return CameraImageGetResponse(
@@ -284,7 +286,8 @@ class Detector(MCTComponent):
             detector_frame = DetectorFrame(
                 detected_marker_snapshots=list(),
                 rejected_marker_snapshots=list(),
-                timestamp_utc_iso8601=self._marker.get_changed_timestamp().isoformat())
+                timestamp_utc_iso8601=self._marker.get_changed_timestamp().isoformat(),
+                image_resolution=self._camera.get_resolution())
             if request.include_detected:
                 detector_frame.detected_marker_snapshots = self._marker.get_markers_detected()
             if request.include_rejected:

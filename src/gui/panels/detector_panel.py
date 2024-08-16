@@ -5,6 +5,7 @@ from .feedback import \
 from .parameters import \
     ParameterBase, \
     ParameterCheckbox, \
+    ParameterSpinboxFloat, \
     ParameterSelector
 from src.common import \
     ErrorResponse, \
@@ -73,11 +74,13 @@ class DetectorPanel(BasePanel):
     _control_blocking_request_id: uuid.UUID | None
     _live_preview_request_id: uuid.UUID | None
 
-    _live_image_base64: str | None
+    _live_preview_image_base64: str | None
     _live_markers_detected: list[MarkerSnapshot]
     _live_markers_rejected: list[MarkerSnapshot]
+    _live_resolution: ImageResolution | None
 
     _detector_selector: ParameterSelector
+    _preview_scale_factor: ParameterSpinboxFloat
     _preview_image_checkbox: ParameterCheckbox
     _annotate_detected_checkbox: ParameterCheckbox
     _annotate_rejected_checkbox: ParameterCheckbox
@@ -112,9 +115,10 @@ class DetectorPanel(BasePanel):
         self._live_preview_request_id = None
         self._control_blocking_request_id = None
 
-        self._live_image_base64 = None
+        self._live_preview_image_base64 = None
         self._live_markers_detected = list()
         self._live_markers_rejected = list()
+        self._live_resolution = None
 
         self._camera_parameter_uis = list()
         self._marker_parameter_uis = list()
@@ -157,6 +161,16 @@ class DetectorPanel(BasePanel):
             parent=control_panel,
             sizer=control_sizer,
             label="Preview Image")
+
+        self._preview_scale_factor = self.add_control_spinbox_float(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Preview Scale",
+            minimum_value=0.03125,  # 1/32 in each dimension, for a minimum of 1/1024 original resolution
+            maximum_value=1,  # No scaling
+            initial_value=0.25,  # 1/4 in each dimension, for a default of 1/16 original resolution
+            step_value=0.125,
+            digit_count=4)
 
         self._annotate_detected_checkbox = self.add_control_checkbox(
             parent=control_panel,
@@ -273,10 +287,12 @@ class DetectorPanel(BasePanel):
             request_series=request_series)
         self._update_ui_controls()
 
-    def begin_capture_snapshot(self):
+    def begin_capture_snapshot(self, requested_resolution: ImageResolution | None = None):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         request_series: MCTRequestSeries = MCTRequestSeries(
-            series=[CameraImageGetRequest(format=_CAPTURE_FORMAT)])
+            series=[CameraImageGetRequest(
+                format=_CAPTURE_FORMAT,
+                requested_resolution=requested_resolution)])
         self._live_preview_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
@@ -351,7 +367,7 @@ class DetectorPanel(BasePanel):
         response: CameraImageGetResponse
     ):
         if self._preview_image_checkbox.checkbox.GetValue():
-            self._live_image_base64 = response.image_base64
+            self._live_preview_image_base64 = response.image_base64
 
     # noinspection DuplicatedCode
     def _handle_get_capture_parameters_response(
@@ -401,14 +417,14 @@ class DetectorPanel(BasePanel):
         self.begin_capture_calibration()
 
     def on_detector_selected(self, _event: wx.CommandEvent):
-        self._live_image_base64 = None
+        self._live_preview_image_base64 = None
         self.begin_get_detector_parameters()
         self._update_ui_image()
         self._update_ui_controls()
 
     def on_display_mode_changed(self, _event: wx.CommandEvent):
         if not self._preview_image_checkbox.checkbox.GetValue():
-            self._live_image_base64 = None
+            self._live_preview_image_base64 = None
         self._update_ui_image()
 
     def on_page_select(self):
@@ -428,6 +444,7 @@ class DetectorPanel(BasePanel):
         enable: bool
     ):
         self._preview_image_checkbox.Enable(enable=enable)
+        self._preview_scale_factor.Enable(enable=enable)
         self._annotate_detected_checkbox.Enable(enable=enable)
         self._annotate_rejected_checkbox.Enable(enable=enable)
 
@@ -460,13 +477,20 @@ class DetectorPanel(BasePanel):
 
         detector_label: str = self._detector_selector.selector.GetStringSelection()
         if detector_label is not None and len(detector_label) > 0:
-            if self._preview_image_checkbox.checkbox.GetValue() and self._live_preview_request_id is None:
-                self.begin_capture_snapshot()
             detector_frame: DetectorFrame | None = self._controller.get_live_detector_frame(
                 detector_label=detector_label)
             if detector_frame is not None:
                 self._live_markers_detected = detector_frame.detected_marker_snapshots
                 self._live_markers_rejected = detector_frame.rejected_marker_snapshots
+                self._live_resolution = detector_frame.image_resolution
+            if self._preview_image_checkbox.checkbox.GetValue() and self._live_preview_request_id is None:
+                if self._live_resolution is not None:
+                    preview_resolution: ImageResolution = ImageResolution(
+                        x_px=int(round(self._live_resolution.x_px * self._preview_scale_factor.get_value())),
+                        y_px=int(round(self._live_resolution.y_px * self._preview_scale_factor.get_value())))
+                    self.begin_capture_snapshot(requested_resolution=preview_resolution)
+                else:
+                    self.begin_capture_snapshot()
 
         if self._preview_image_checkbox.checkbox.GetValue() or \
            self._annotate_detected_checkbox.checkbox.GetValue() or \
@@ -491,49 +515,46 @@ class DetectorPanel(BasePanel):
         self._calibration_capture_button.Enable(enable=True)
 
     def _update_ui_image(self):
-        # TODO: The Detector should tell us the resolution of the image it operated on.
-        resolution_str: str = str(StandardResolutions.RES_640X480)
         display_image: numpy.ndarray
-        scale: float | None
-        if self._live_image_base64 is not None:
-            opencv_image: numpy.ndarray = ImageCoding.base64_to_image(input_base64=self._live_image_base64)
-            display_image: numpy.ndarray = ImageUtils.image_resize_to_fit(
-                opencv_image=opencv_image,
-                available_size=self._image_panel.GetSize())
-            scale: float = display_image.shape[0] / opencv_image.shape[0]  # note: opencv idx 0 corresponds to height
-        elif resolution_str is not None and len(resolution_str) > 0:
-            panel_size_px: tuple[int, int] = self._image_panel.GetSize()
-            image_resolution: ImageResolution = ImageResolution.from_str(in_str=resolution_str)
-            rescaled_resolution_px: tuple[int, int] = ImageUtils.scale_factor_for_available_space_px(
-                source_resolution_px=(image_resolution.x_px, image_resolution.y_px),
-                available_size_px=panel_size_px)
-            display_image = ImageUtils.black_image(resolution_px=rescaled_resolution_px)
-            scale: float = rescaled_resolution_px[1] / image_resolution.y_px
-        else:
+        if self._live_resolution is None:
             display_image = ImageUtils.black_image(resolution_px=self._image_panel.GetSize())
-            scale = None  # not available
+        else:
+            scale: float | None
+            if self._live_preview_image_base64 is not None:
+                opencv_image: numpy.ndarray = ImageCoding.base64_to_image(input_base64=self._live_preview_image_base64)
+                display_image: numpy.ndarray = ImageUtils.image_resize_to_fit(
+                    opencv_image=opencv_image,
+                    available_size=self._image_panel.GetSize())
+                scale: float = self._preview_scale_factor.get_value() * display_image.shape[0] / opencv_image.shape[0]
+            else:
+                display_image = ImageUtils.black_image(resolution_px=self._image_panel.GetSize())
+                panel_size_px: tuple[int, int] = self._image_panel.GetSize()
+                rescaled_resolution_px: tuple[int, int] = ImageUtils.scale_factor_for_available_space_px(
+                    source_resolution_px=(self._live_resolution.x_px, self._live_resolution.y_px),
+                    available_size_px=panel_size_px)
+                scale: float = rescaled_resolution_px[1] / self._live_resolution.y_px
 
-        if scale is not None:
-            if self._annotate_detected_checkbox.checkbox.GetValue():
-                corners: numpy.ndarray = self._marker_snapshot_list_to_opencv_points(
-                    marker_snapshot_list=self._live_markers_detected,
-                    scale=scale)
-                cv2.polylines(
-                    img=display_image,
-                    pts=corners,
-                    isClosed=True,
-                    color=[255, 191, 127],  # blue
-                    thickness=2)
-            if self._annotate_rejected_checkbox.checkbox.GetValue():
-                corners: numpy.ndarray = self._marker_snapshot_list_to_opencv_points(
-                    marker_snapshot_list=self._live_markers_rejected,
-                    scale=scale)
-                cv2.polylines(
-                    img=display_image,
-                    pts=corners,
-                    isClosed=True,
-                    color=[127, 191, 255],  # orange
-                    thickness=2)
+            if scale is not None:
+                if self._annotate_detected_checkbox.checkbox.GetValue():
+                    corners: numpy.ndarray = self._marker_snapshot_list_to_opencv_points(
+                        marker_snapshot_list=self._live_markers_detected,
+                        scale=scale)
+                    cv2.polylines(
+                        img=display_image,
+                        pts=corners,
+                        isClosed=True,
+                        color=[255, 191, 127],  # blue
+                        thickness=2)
+                if self._annotate_rejected_checkbox.checkbox.GetValue():
+                    corners: numpy.ndarray = self._marker_snapshot_list_to_opencv_points(
+                        marker_snapshot_list=self._live_markers_rejected,
+                        scale=scale)
+                    cv2.polylines(
+                        img=display_image,
+                        pts=corners,
+                        isClosed=True,
+                        color=[127, 191, 255],  # orange
+                        thickness=2)
 
         image_buffer: bytes = ImageCoding.image_to_bytes(image_data=display_image, image_format=".jpg")
         image_buffer_io: BytesIO = BytesIO(image_buffer)
