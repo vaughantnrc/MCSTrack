@@ -186,7 +186,7 @@ class BoardBuilder:
         filename = f'{self.board_label}_data.json'
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        repeatability_dir = os.path.join(script_dir, 'test', 'repeatability', 'results')
+        repeatability_dir = os.path.join(script_dir, 'test', 'repeatability', 'collected_data')
         if not os.path.exists(repeatability_dir):
             os.makedirs(repeatability_dir, exist_ok=True)
         file_path = os.path.join(repeatability_dir, filename)

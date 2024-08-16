@@ -115,6 +115,77 @@ class AccuracyTest:
         rms_error = np.sqrt(rms_error / total_points)
         return rms_error
 
+    def _write_results_to_file(self, module_name: str, snapshots, two_dimension_collection_data, predicted_board,
+                               simulated_board, rms_error: float) -> None:
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'accuracy_test_results')
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        output_file_path = os.path.join(output_dir, f"{module_name}_results.json")
+
+        # Convert data to serializable format
+        parameters_serializable = {}
+        for key, value in self._parameters.__dict__.items():
+            try:
+                json.dumps(value)  # Check if the value is JSON serializable
+                parameters_serializable[key] = value
+            except TypeError:
+                parameters_serializable[key] = str(
+                    value)  # Convert non-serializable objects to their string representation
+
+        snapshots_serializable = [
+            {
+                key: [list(point) for point in points]  # Ensure each point is a list
+                for key, points in snapshot.items()
+            }
+            for snapshot in snapshots
+        ]
+
+        two_dimension_collection_data_serializable = [
+            {
+                detector_name: [
+                    {
+                        "label": snapshot.label,
+                        "corner_image_points": [{"x_px": pt.x_px, "y_px": pt.y_px} for pt in
+                                                snapshot.corner_image_points]
+                    }
+                    for snapshot in snapshots
+                ]
+                for detector_name, snapshots in data.items()
+            }
+            for data in two_dimension_collection_data
+        ]
+
+        # Format data
+        results_data = {
+            "parameters": parameters_serializable,
+            "generated_board_poses": snapshots_serializable,
+            "projected_2D_points": two_dimension_collection_data_serializable,
+            "predicted_board": {
+                "target_id": predicted_board.target_id,
+                "markers": [
+                    {
+                        "marker_id": marker.marker_id,
+                        "points": [list(point) for point in marker.points]
+                    } for marker in predicted_board.markers
+                ]
+            },
+            "simulated_board": {
+                "target_id": simulated_board.target_id,
+                "markers": [
+                    {
+                        "marker_id": marker.marker_id,
+                        "points": [list(point) for point in marker.points]
+                    } for marker in simulated_board.markers
+                ]
+            },
+            "rms_error": rms_error
+        }
+
+        # Write the data to the JSON file
+        with open(output_file_path, 'w') as json_file:
+            json.dump(results_data, json_file, indent=4)
+
     def run_accuracy_tester(self):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         board_definitions_dir = os.path.join(script_dir, 'board_definitions')
@@ -179,76 +250,7 @@ class AccuracyTest:
                 rms_error = self._calculate_rms_error_of_two_corner_dataset(aligned_board, simulated_board)
                 print(f"RMS Error of board corners for {module_name}: {rms_error}")
 
-                ### Write results to file ###
-                output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'accuracy_test_results')
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir, exist_ok=True)
-
-                output_file_path = os.path.join(output_dir, f"{module_name}_results.json")
-
-                # Convert data to serializable
-                parameters_serializable = {}
-                for key, value in self._parameters.__dict__.items():
-                    try:
-                        json.dumps(value)  # Check if the value is JSON serializable
-                        parameters_serializable[key] = value
-                    except TypeError:
-                        parameters_serializable[key] = str(
-                            value)  # Convert non-serializable objects to their string representation
-
-                snapshots_serializable = [
-                    {
-                        key: [list(point) for point in points]  # Ensure each point is a list
-                        for key, points in snapshot.items()
-                    }
-                    for snapshot in snapshots
-                ]
-
-                two_dimension_collection_data_serializable = [
-                    {
-                        detector_name: [
-                            {
-                                "label": snapshot.label,
-                                "corner_image_points": [{"x_px": pt.x_px, "y_px": pt.y_px} for pt in
-                                                        snapshot.corner_image_points]
-                            }
-                            for snapshot in snapshots
-                        ]
-                        for detector_name, snapshots in data.items()
-                    }
-                    for data in two_dimension_collection_data
-                ]
-
-                # Format data
-                results_data = {
-                    "parameters": parameters_serializable,
-                    "generated_board_poses": snapshots_serializable,
-                    "projected_2D_points": two_dimension_collection_data_serializable,
-                    "predicted_board": {
-                        "target_id": predicted_board.target_id,
-                        "markers": [
-                            {
-                                "marker_id": marker.marker_id,
-                                "points": [list(point) for point in marker.points]
-                            } for marker in predicted_board.markers
-                        ]
-                    },
-                    "simulated_board": {
-                        "target_id": simulated_board.target_id,
-                        "markers": [
-                            {
-                                "marker_id": marker.marker_id,
-                                "points": [list(point) for point in marker.points]
-                            } for marker in simulated_board.markers
-                        ]
-                    },
-                    "rms_error": rms_error
-                }
-
-                # Write the data to the JSON file
-                with open(output_file_path, 'w') as json_file:
-                    json.dump(results_data, json_file, indent=4)
-
+                self._write_results_to_file(module_name, snapshots, two_dimension_collection_data, predicted_board, simulated_board, rms_error)
 
 accuracy_tester = AccuracyTest()
 accuracy_tester.run_accuracy_tester()

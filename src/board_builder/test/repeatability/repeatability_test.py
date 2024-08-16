@@ -46,17 +46,44 @@ def compute_distances_to_mean(data, mean_corners):
 
     return mean_distance, std_distance
 
+def write_results_to_file(output_file, mean_corners, mean_distance, std_distance):
+    results = {
+        "mean_corners": mean_corners,
+        "mean_distance_to_theoretical_values": mean_distance,
+        "standard_deviation_of_distances": std_distance
+    }
+
+    # Write the results to the output JSON file
+    with open(output_file, 'w') as f:
+        json.dump(results, f, indent=4)
+
 
 if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    script_name = 'top_data.json'  # top_data.json, planar_data.json
-    input_file = os.path.join(script_dir, 'planar_data.json')
+    results_dir = os.path.join(script_dir, 'collected_data')
+    output_dir = os.path.join(script_dir, 'repeatability_test_results')
 
-    mean_corners, data = compute_mean_corners(input_file)
-    mean_distance, std_distance = compute_distances_to_mean(data, mean_corners)
+    # Ensure the output directory exists
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    # Print the results
-    print("Mean Corners:")
-    print(json.dumps(mean_corners, indent=4))
-    print(f"Total Mean Distance to Theoretical Values: {mean_distance}")
-    print(f"Standard Deviation of Distances: {std_distance}")
+    # Iterate over each JSON file in the results directory
+    for filename in os.listdir(results_dir):
+        if filename.endswith('.json'):
+            input_file = os.path.join(results_dir, filename)
+
+            mean_corners, data = compute_mean_corners(input_file)
+            mean_distance, std_distance = compute_distances_to_mean(data, mean_corners)
+
+            # Create the output filename by replacing _data.json with _result.json
+            output_filename = filename.replace('_data.json', '_results.json')
+            output_file = os.path.join(output_dir, output_filename)
+
+            # Write the results to the output file
+            write_results_to_file(output_file, mean_corners, mean_distance, std_distance)
+
+            # Print the results for each file
+            print(f"Results for {filename}:")
+            print(f"Total Mean Distance to Theoretical Values: {mean_distance}")
+            print(f"Standard Deviation of Distances: {std_distance}")
+            print("\n" + "-"*50 + "\n")
