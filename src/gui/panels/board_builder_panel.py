@@ -362,13 +362,13 @@ class BoardBuilderPanel(BasePanel):
     def update_loop(self) -> None:
         super().update_loop()
 
-        response_series: MCTResponseSeries | None
-
         if self._renderer is not None:
             self._renderer.render()
 
         if self._controller.is_running():
             detector_data: dict[str, list[MarkerSnapshot]] = {}
+            should_refresh = False  # Add this flag
+
             for preview in self.live_detector_previews:
                 if preview.image_request_id is None:
                     self._begin_capture_snapshot(preview)
@@ -385,11 +385,16 @@ class BoardBuilderPanel(BasePanel):
                         request_series_id=preview.image_request_id)
                     if response_series is not None:  # self._live_preview_request_id will be None
                         self.handle_response_series(response_series)
+                        should_refresh = True  # Only refresh when new data is received
 
                 detector_data[detector_label] = preview.detector_frame.detected_marker_snapshots
+
             if detector_data:
                 self._run_board_builder(detector_data)
-        self.Refresh()
+                should_refresh = True
+
+            if should_refresh:
+                self.Refresh()  # Refresh only if new data is available
 
     # Used for updating the GUI camera preview
     def _begin_capture_snapshot(self, preview: LiveDetectorPreview):
