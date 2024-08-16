@@ -575,11 +575,11 @@ class MCTController(MCTComponent):
             if report.role == COMPONENT_ROLE_LABEL_POSE_SOLVER and not self._recording_pose_solver:
                 continue
 
-            frames_dict = [frame.dict() for frame in connection.recording]
-            frames_json = json.dumps(frames_dict)
-
-            with open(os.path.join(self._recording_save_path, report.role+"_log.json"), 'w') as f:
-                f.write(frames_json)
+            if self._recording_save_path is not None:
+                frames_dict = [frame.dict() for frame in connection.recording]
+                frames_json = json.dumps(frames_dict)
+                with open(os.path.join(self._recording_save_path, report.role+"_log.json"), 'w') as f:
+                    f.write(frames_json)
 
         self._recording_detector = False
         self._recording_pose_solver = False
