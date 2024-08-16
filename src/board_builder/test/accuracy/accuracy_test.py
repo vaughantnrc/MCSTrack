@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import importlib
 from itertools import combinations
@@ -19,7 +21,6 @@ from utils import \
 class AccuracyTest:
     def __init__(self):
         self._parameters = AccuracyTestParameters
-        self.board_builder_with_noise = BoardBuilder(self._parameters.BOARD_MARKER_SIZE)
         self.board_builder = BoardBuilder(self._parameters.BOARD_MARKER_SIZE)
         self.board_builder.pose_solver.set_board_marker_size(self._parameters.BOARD_MARKER_SIZE)
 
@@ -86,57 +87,6 @@ class AccuracyTest:
         return TargetBoard(target_id=target_board.target_id, markers=aligned_markers)
 
     @staticmethod
-    def _calculate_generate_snapshots_inaccuracy(
-            board_definition: dict[int, list[list[float]]],
-            snapshots: list[dict[int, list[list[float]]]]
-    ) -> float:
-        """
-        Validation method that calculates the difference between the generated board and the original input board
-        """
-        def compare_transforms(T1: np.ndarray, T2: np.ndarray) -> float:
-            return np.linalg.norm(T1 - T2)
-
-        def calculate_relative_transform(marker0_points: np.ndarray, marker1_points: np.ndarray):
-            def calculate_transform(points: np.ndarray) -> np.ndarray:
-                center = np.mean(points, axis=0)
-                v1 = points[1] - points[0]
-                v2 = points[3] - points[0]
-                normal = np.cross(v1, v2)
-                x_axis = v1 / np.linalg.norm(v1)
-                z_axis = normal / np.linalg.norm(normal)
-                y_axis = np.cross(z_axis, x_axis)
-                rotation = np.column_stack((x_axis, y_axis, z_axis))
-                transform = np.eye(4)
-                transform[:3, :3] = rotation
-                transform[:3, 3] = center
-                return transform
-
-            T0 = calculate_transform(marker0_points)
-            T1 = calculate_transform(marker1_points)
-            T0_to_T1 = np.linalg.inv(T0) @ T1
-            return T0_to_T1
-
-        theoretical_transforms = {}
-        for (i, j) in combinations(board_definition.keys(), 2):
-            theoretical_transforms[(i, j)] = calculate_relative_transform(
-                np.array(board_definition[i]), np.array(board_definition[j]))
-
-        # Calculate and compare relative transforms for each snapshot
-        total_difference = 0
-        num_comparisons = 0
-        for snapshot in snapshots:
-            for (i, j) in combinations(snapshot.keys(), 2):
-                snapshot_transform = calculate_relative_transform(
-                    np.array(snapshot[i]), np.array(snapshot[j]))
-                difference = compare_transforms(theoretical_transforms[(i, j)], snapshot_transform)
-                total_difference += difference
-                num_comparisons += 1
-
-        average_difference = total_difference / num_comparisons
-
-        return average_difference
-
-    @staticmethod
     def _calculate_rms_error_of_two_corner_dataset(
             simulated_board_arrangement: TargetBoard,
             algorithm_board_arrangement: TargetBoard
@@ -166,54 +116,64 @@ class AccuracyTest:
         return rms_error
 
     def run_accuracy_tester(self):
-        module = importlib.import_module(f"src.board_builder.test.accuracy.board_definitions.{self._parameters.SCENE_NAME}")
-        board_definition = getattr(module, "BOARD_DEFINITION")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        board_definitions_dir = os.path.join(script_dir, 'board_definitions')
 
-        ### REFERENCE DATA ###
-        for pose in self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE:
-            self.board_builder.pose_solver.set_intrinsic_parameters(pose.target_id, self._parameters.DETECTOR_INTRINSICS)
+        if not os.path.exists(board_definitions_dir):
+            raise FileNotFoundError(f"The directory {board_definitions_dir} does not exist.")
 
-        self.board_builder.pose_solver.set_detector_poses(self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE)
+        for filename in os.listdir(board_definitions_dir):
+            if filename.endswith('.py') and filename != '__init__.py':
+                # Import the module dynamically
+                module_name = filename[:-3]  # Remove the .py extension
+                module = importlib.import_module(f"src.board_builder.test.accuracy.board_definitions.{module_name}")
+                board_definition = getattr(module, "BOARD_DEFINITION")
 
-        ### GENERATE SNAPSHOTS OF THE SCENE ###
-        snapshots = generate_virtual_snapshots(board_definition, self._parameters.NUMBER_OF_SNAPSHOTS)
-        average_difference = self._calculate_generate_snapshots_inaccuracy(board_definition, snapshots)
-        print(f"Generated snapshots inaccuracy (average Frobenius norm difference): {average_difference}")
+                ### REFERENCE DATA ###
+                self.board_builder = BoardBuilder(self._parameters.BOARD_MARKER_SIZE)
+                self.board_builder.pose_solver.set_board_marker_size(self._parameters.BOARD_MARKER_SIZE)
+                for pose in self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE:
+                    self.board_builder.pose_solver.set_intrinsic_parameters(pose.target_id,
+                                                                            self._parameters.DETECTOR_INTRINSICS)
 
-        ### COLLECTION DATA ###
-        two_dimension_collection_data = []
+                self.board_builder.pose_solver.set_detector_poses(self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE)
 
-        for snapshot in snapshots:
-            collection_data = generate_data(snapshot, self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE, remove_markers_out_of_frame=True)
-            two_dimension_collection_data.append(collection_data)
-            noisy_collection_data = self._add_noise_to_corners(collection_data)
-            # TODO: The predicted target pose seems to have an offset (around 6 mm) in the x direction of the world
-            #  reference system. This might be a problem in either the projection (input data), pose solver
-            #  (algorithm), or detector intrinsics (calibration)
-            self.board_builder.collect_data(noisy_collection_data)
-        #graph_renderer(snapshots, two_dimension_collection_data, self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE)
+                ### GENERATE SNAPSHOTS OF THE SCENE ###
+                snapshots = generate_virtual_snapshots(board_definition, self._parameters.NUMBER_OF_SNAPSHOTS)
 
-        ### BUILD BOARD ###
-        predicted_board = self.board_builder.build_board()
+                ### COLLECTION DATA ###
+                two_dimension_collection_data = []
 
-        # Center the board definition around the reference marker
-        board_definition_np = {k: np.array(v) for k, v in board_definition.items()}
-        marker_0_corners = board_definition_np[0]
-        center_marker_0 = np.mean(marker_0_corners, axis=0)
-        simulated_board_definition = {str(k): v - center_marker_0 for k, v in board_definition_np.items()}
+                for snapshot in snapshots:
+                    collection_data = generate_data(snapshot, self._parameters.DETECTOR_POSES_IN_WORLD_REFERENCE,
+                                                    remove_markers_out_of_frame=True)
+                    two_dimension_collection_data.append(collection_data)
+                    noisy_collection_data = self._add_noise_to_corners(collection_data)
+                    self.board_builder.collect_data(noisy_collection_data)
 
-        simulated_markers = [
-            Marker(marker_id=k, points=v.tolist())
-            for k, v in sorted(simulated_board_definition.items())
-        ]
-        simulated_board = TargetBoard(target_id='simulated_board', markers=simulated_markers)
+                ### BUILD BOARD ###
+                predicted_board = self.board_builder.build_board()
 
-        # RMS
-        if not predicted_board or not simulated_board:
-            return None
-        aligned_board = self.align_boards(predicted_board, simulated_board)
-        rms_error = self._calculate_rms_error_of_two_corner_dataset(aligned_board, simulated_board)
-        print(f"RMS Error of board corners: {rms_error}")
+                # Center the board definition around the reference marker
+                board_definition_np = {k: np.array(v) for k, v in board_definition.items()}
+                marker_0_corners = board_definition_np[0]
+                center_marker_0 = np.mean(marker_0_corners, axis=0)
+                simulated_board_definition = {str(k): v - center_marker_0 for k, v in board_definition_np.items()}
+
+                simulated_markers = [
+                    Marker(marker_id=k, points=v.tolist())
+                    for k, v in sorted(simulated_board_definition.items())
+                ]
+                simulated_board = TargetBoard(target_id='simulated_board', markers=simulated_markers)
+
+                # RMS
+                if not predicted_board or not simulated_board:
+                    print(f"No predicted or simulated board for {module_name}.")
+                    continue
+
+                aligned_board = self.align_boards(predicted_board, simulated_board)
+                rms_error = self._calculate_rms_error_of_two_corner_dataset(aligned_board, simulated_board)
+                print(f"RMS Error of board corners for {module_name}: {rms_error}")
 
 
 accuracy_tester = AccuracyTest()
