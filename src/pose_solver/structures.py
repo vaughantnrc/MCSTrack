@@ -63,11 +63,9 @@ class DetectorFrameRecord:
 
 class DetectorRecord:
     _frame_records_by_marker_id: dict[str, DetectorFrameRecord] = Field(default_factory=dict)
-    _marker_ids: set[str]
 
     def __init__(self):
         self._frame_records_by_marker_id = dict()
-        self._marker_ids = set()
 
     def add_frame_record(
         self,
@@ -78,6 +76,9 @@ class DetectorRecord:
             if marker_id not in self._frame_records_by_marker_id or \
                frame_record.get_timestamp_utc() > self._frame_records_by_marker_id[marker_id].get_timestamp_utc():
                 self._frame_records_by_marker_id[marker_id] = frame_record
+
+    def clear_frame_records(self):
+        self._frame_records_by_marker_id.clear()
 
     def clear_frame_records_older_than(
         self,
