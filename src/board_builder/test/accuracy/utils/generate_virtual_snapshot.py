@@ -1,6 +1,6 @@
 import numpy as np
 from src.board_builder.test.accuracy.structures import AccuracyTestParameters
-
+from scipy.spatial.transform import Rotation
 
 def generate_bounded_corners(board_definition, parameters):
     new_corners = {}
@@ -55,26 +55,21 @@ def calculate_transform(original_corners, new_corners):
 
 
 def rotation_matrix_to_axis_angle(R):
-    angle = np.arccos((np.trace(R) - 1) / 2)
+    # Convert the rotation matrix to a scipy Rotation object
+    rotation = Rotation.from_matrix(R)
+    # Extract the axis-angle representation
+    axis, angle = rotation.as_rotvec(), rotation.magnitude()
     if angle == 0:
         return np.array([1, 0, 0]), 0
-    rx = R[2, 1] - R[1, 2]
-    ry = R[0, 2] - R[2, 0]
-    rz = R[1, 0] - R[0, 1]
-    axis = np.array([rx, ry, rz])
-    axis = axis / np.linalg.norm(axis)
-    return axis, angle
+    # Return the unit vector axis and the angle
+    return axis / np.linalg.norm(axis), angle
 
 
 def axis_angle_to_rotation_matrix(axis, angle):
-    K = np.array([
-        [0, -axis[2], axis[1]],
-        [axis[2], 0, -axis[0]],
-        [-axis[1], axis[0], 0]
-    ])
-    I = np.eye(3)
-    R = I + np.sin(angle) * K + (1 - np.cos(angle)) * K @ K
-    return R
+    # Create a scipy Rotation object from the axis-angle representation
+    rotation = Rotation.from_rotvec(axis * angle)
+    # Convert the rotation to a matrix and return it
+    return rotation.as_matrix()
 
 
 def apply_transform(board_definition, parameters):

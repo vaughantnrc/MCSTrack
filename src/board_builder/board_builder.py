@@ -327,7 +327,8 @@ class BoardBuilder:
 
     def build_board(self):
         # TODO: Build board isn't currently able to get the positions of markers with no direct relation with the
-        #  reference (appeared in the same frame more than once). A search algorithm needs to be developed
+        #  reference (appeared in the same frame more than once). A search algorithm needs to be developed.
+        #  UPDATE: This is dealt with in a separate branch called search_algorithm
 
         if not self.relative_pose_matrix:
             return
