@@ -154,5 +154,7 @@ class PoseSolverAPI(MCTComponent):
         return return_value
 
     async def update(self):
+        if self.time_sync_active:
+            return
         if self._status.solve_status == PoseSolverStatus.Solve.RUNNING:
             self._pose_solver.update()

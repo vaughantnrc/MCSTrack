@@ -107,7 +107,7 @@ class Connection(abc.ABC):
     network_latency_seconds: float
     network_plus_offset_samples_seconds: list[float]
     controller_offset_samples_seconds: list[float]
-    controller_offset_seconds: float
+    controller_offset_seconds: float  # how much time to be ADDED to go from controller time to component
 
     def __init__(
         self,
@@ -173,6 +173,9 @@ class Connection(abc.ABC):
 
     def get_current_state(self) -> str:
         return self._state
+
+    def get_label(self) -> str:
+        return self._component_address.label
 
     def get_report(self) -> ConnectionReport:
         return ConnectionReport(
