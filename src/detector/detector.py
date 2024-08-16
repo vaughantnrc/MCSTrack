@@ -56,7 +56,10 @@ from src.common.structures import \
     DetectorFrame, \
     ImageResolution, \
     IntrinsicCalibration, \
-    KeyValueMetaAbstract
+    KeyValueMetaAbstract, \
+    KeyValueMetaAny, \
+    key_value_meta_to_simple, \
+    KeyValueSimpleAny
 import logging
 from typing import Callable
 
@@ -107,7 +110,11 @@ class Detector(MCTComponent):
         result_identifier: str
         intrinsic_calibration: IntrinsicCalibration
         try:
-            result_identifier, intrinsic_calibration = self._calibrator.calculate(request.image_resolution)
+            marker_parameters_kvm: list[KeyValueMetaAny] = self._marker.get_parameters()
+            marker_parameters_kvs: list[KeyValueSimpleAny] = key_value_meta_to_simple(marker_parameters_kvm)
+            result_identifier, intrinsic_calibration = self._calibrator.calculate(
+                image_resolution=request.image_resolution,
+                marker_parameters=marker_parameters_kvs)
         except MCTDetectorRuntimeError as e:
             return ErrorResponse(message=e.message)
         return CalibrationCalculateResponse(
@@ -353,7 +360,7 @@ class Detector(MCTComponent):
             except MCTDetectorRuntimeError as e:
                 self.add_status_message(severity="error", message=e.message)
         if self._marker.get_status() == MarkerStatus.RUNNING and \
-        self._camera.get_changed_timestamp() > self._marker.get_changed_timestamp():
+           self._camera.get_changed_timestamp() > self._marker.get_changed_timestamp():
             self._marker.update(self._camera.get_image())
         self._frame_count += 1
         if self._frame_count % 1000 == 0:

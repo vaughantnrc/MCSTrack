@@ -30,7 +30,8 @@ from .key_value_structures import \
     KeyValueMetaBool, \
     KeyValueMetaEnum, \
     KeyValueMetaFloat, \
-    KeyValueMetaInt
+    KeyValueMetaInt, \
+    key_value_meta_to_simple
 from .marker_corner_image_point import MarkerCornerImagePoint
 from .marker_corners import MarkerCorners
 from .marker_definition import MarkerDefinition

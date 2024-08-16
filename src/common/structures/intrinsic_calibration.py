@@ -1,7 +1,7 @@
 from .image_resolution import ImageResolution
 from .intrinsic_parameters import IntrinsicParameters
+from .key_value_structures import KeyValueSimpleAny
 from .vec3 import Vec3
-import datetime
 from pydantic import BaseModel, Field
 
 
@@ -17,7 +17,8 @@ class IntrinsicCalibrationFrameResult(BaseModel):
 class IntrinsicCalibration(BaseModel):
     timestamp_utc: str = Field()
     image_resolution: ImageResolution = Field()
+    reprojection_error: float = Field()
     calibrated_values: IntrinsicParameters = Field()
     calibrated_stdevs: list[float] = Field()
-    reprojection_error: float = Field()
+    marker_parameters: list[KeyValueSimpleAny] = Field()
     frame_results: list[IntrinsicCalibrationFrameResult] = Field(default=list())
