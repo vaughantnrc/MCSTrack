@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import hjson
 from ipaddress import IPv4Address
 import json
@@ -7,14 +8,18 @@ import numpy as np
 import os
 from time import sleep
 from timeit import main
-
+from scipy.spatial.transform import Rotation as R
 
 from src.board_builder.board_builder import BoardBuilder
 from src.common.structures.component_role_label import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
 from src.controller.mct_controller import MCTController
 from src.controller.structures.mct_component_address import MCTComponentAddress
+from src.pose_solver.util import average_quaternion, average_vector
 
-input_filepath = "/home/adminpi5/Documents/MCSTrack/data/measure_detector_to_reference_config.json"
+# input_filepath = "/home/adminpi5/Documents/MCSTrack/data/measure_detector_to_reference_config.json"
+if len(sys.argv) < 2:
+    raise Exception("No input filepath specified")
+input_filepath = sys.argv[1]
 
 with open(input_filepath, 'r') as file:
     data = hjson.load(file)
@@ -22,7 +27,6 @@ with open(input_filepath, 'r') as file:
     startup_mode = data['startup_mode']
     detectors = data['detectors']
     pose_solvers = data['pose_solvers']
-    detector_params = data['detector_params']
 
 controller = MCTController(
         serial_identifier="controller",
@@ -76,9 +80,27 @@ async def main():
 
     final_matrices = {}
     for detector_label in all_measured_transforms_by_detector.keys():
-        # Find the average of all measured transforms
-        matrix_sum = np.sum(all_measured_transforms_by_detector[detector_label],axis=0)
-        avg_matrix = matrix_sum / ITERATIONS
+        quaternions = []
+        translations = []
+
+        for matrix in all_measured_transforms_by_detector[detector_label]:
+            rotation_matrix = matrix[:3,:3]
+            translation = matrix[:3,3]
+
+            quaternion = R.from_matrix(rotation_matrix).as_quat()
+
+            quaternions.append(quaternion)
+            translations.append(translation)
+
+        avg_quaternion = average_quaternion(quaternions)
+        avg_translation = average_vector(translations)
+
+        avg_rotation_matrix = R.from_quat(avg_quaternion).as_matrix()
+
+        avg_matrix = np.eye(4)
+        avg_matrix[:3,:3] = avg_rotation_matrix
+        avg_matrix[:3,3] = avg_translation
+
         final_matrices[detector_label] = avg_matrix
         print("Calculated detector_to_reference transform for Detector " + detector_label + ": ")
         print(avg_matrix)
@@ -86,7 +108,7 @@ async def main():
 
         for detector in data['detectors']:
             if detector['label'] == detector_label:
-                detector['detector_to_reference_transform'] = avg_matrix.tolist()
+                detector['fixed_transform_to_reference'] = avg_matrix.flatten().tolist()
 
     dir, filename = os.path.split(input_filepath)
     # Prepend filename with "output_"
