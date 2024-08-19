@@ -27,7 +27,6 @@ with open(input_filepath, 'r') as file:
     startup_mode = data['startup_mode']
     detectors = data['detectors']
     pose_solvers = data['pose_solvers']
-    detector_params = data['detector_params']
 
 controller = MCTController(
         serial_identifier="controller",

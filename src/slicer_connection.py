@@ -1,30 +1,37 @@
 import asyncio
+import sys
+import hjson
+import numpy as np
 import pyigtl
 import time as t
 import logging
 
 from src.common.api.mct_request_series import MCTRequestSeries
 from src.common.structures.component_role_label import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
+from src.common.structures.target import TargetBase
 from src.controller.mct_controller import MCTController
 from src.controller.structures.mct_component_address import MCTComponentAddress
 from ipaddress import IPv4Address
 
 from src.pose_solver.api import PoseSolverAddTargetMarkerRequest
+from src.pose_solver.api import TargetMarker
 from src.pose_solver.api import PoseSolverSetReferenceRequest
 
 from src.controller.structures.connection import Connection
-from src.pose_solver.structures import TargetMarker
+# from src.pose_solver.structures import TargetMarker
 
-# TODO: these setup-specific lines need to be updated/removed
-# Would be better to pass a configuration to the controller
-pose_solver_label = "p"
-detector_labels_and_IPs = [
-    ("d101",IPv4Address('192.168.0.101')),
-    ("d102",IPv4Address('192.168.0.102'))]
+
+# Input filepath is specified by command line arguments
+if len(sys.argv) < 2:
+    raise Exception("No input filepath specified")
+input_filepath = sys.argv[1]
+
+with open(input_filepath, 'r') as file:
+    data = hjson.load(file)
 
 server = pyigtl.OpenIGTLinkServer(port=18944,local_server=False)
 
-async def update(controller):
+async def update(controller,pose_solver_label):
     try:
         await controller.update()
     except Exception as e:
@@ -45,7 +52,7 @@ async def update(controller):
         server.send_message(message,wait=True)
 
     event_loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
-    event_loop.create_task(update(controller))
+    event_loop.create_task(update(controller,pose_solver_label))
 
 async def main():
     logging.basicConfig(level=logging.INFO)
@@ -58,52 +65,13 @@ async def main():
             severity="info",
             message=f"Slicer client connected")
 
-    # TODO: this assumes pose solver is running on the same computer
-    # Should be updated/removed and instead determined by a config file passed to controller
-    controller.add_connection(MCTComponentAddress(
-            label=pose_solver_label,
-            role=COMPONENT_ROLE_LABEL_POSE_SOLVER,
-            ip_address=IPv4Address("127.0.0.1"),
-            port=8000
-        ))
-    
-    for (label, ip) in detector_labels_and_IPs:
-        controller.add_connection(MCTComponentAddress(
-                label=label,
-                role=COMPONENT_ROLE_LABEL_DETECTOR,
-                ip_address=ip,
-                port=8001
-            ))
-
-    controller.start_up()
+    controller.start_from_configuration_filepath(input_filepath)
 
     while controller.is_transitioning():
         await controller.update()
 
-    # TODO: these setup-specific lines need to be updated/removed
-    # Tracked and reference marker should be set via controller config file
-    # Set reference marker for pose solver
-    request_series: MCTRequestSeries = MCTRequestSeries(series=[
-        PoseSolverSetReferenceRequest(
-                    marker_id=1,
-                    marker_diameter=10)])
-    controller.request_series_push(
-        connection_label=pose_solver_label,
-        request_series=request_series)
-
-    # Set tracked marker for pose solver
-    request_series: MCTRequestSeries = MCTRequestSeries(series=[
-        PoseSolverAddTargetMarkerRequest(
-                target=TargetMarker(
-                    target_id=0,
-                    marker_id=0,
-                    marker_size=10))])
-    controller.request_series_push(
-        connection_label=pose_solver_label,
-        request_series=request_series)
-
     event_loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
-    event_loop.create_task(update(controller=controller))
+    event_loop.create_task(update(controller=controller, pose_solver_label="ps"))
 
     while True:
         await asyncio.sleep(1)
@@ -111,6 +79,14 @@ async def main():
 if __name__ == "__main__":
     while not server.is_connected():
         t.sleep(0.1)
+
+    # for detector in detectors:
+    #     message = pyigtl.TransformMessage(
+    #         matrix=np.array(detector['detector_to_reference_transform']),
+    #         # timestamp=target_poses.solver_timestamp_utc_iso8601,
+    #         device_name=detector['label']
+    #     )
+    #     server.send_message(message,wait=True)
 
     asyncio.run(main())
     
