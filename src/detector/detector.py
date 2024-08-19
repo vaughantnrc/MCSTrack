@@ -56,7 +56,10 @@ from src.common.structures import \
     DetectorFrame, \
     ImageResolution, \
     IntrinsicCalibration, \
-    KeyValueMetaAbstract
+    KeyValueMetaAbstract, \
+    KeyValueMetaAny, \
+    key_value_meta_to_simple, \
+    KeyValueSimpleAny
 import logging
 from typing import Callable
 
@@ -107,7 +110,11 @@ class Detector(MCTComponent):
         result_identifier: str
         intrinsic_calibration: IntrinsicCalibration
         try:
-            result_identifier, intrinsic_calibration = self._calibrator.calculate(request.image_resolution)
+            marker_parameters_kvm: list[KeyValueMetaAny] = self._marker.get_parameters()
+            marker_parameters_kvs: list[KeyValueSimpleAny] = key_value_meta_to_simple(marker_parameters_kvm)
+            result_identifier, intrinsic_calibration = self._calibrator.calculate(
+                image_resolution=request.image_resolution,
+                marker_parameters=marker_parameters_kvs)
         except MCTDetectorRuntimeError as e:
             return ErrorResponse(message=e.message)
         return CalibrationCalculateResponse(
@@ -123,7 +130,7 @@ class Detector(MCTComponent):
 
     def calibration_image_add(self, **_kwargs) -> CalibrationImageAddResponse | ErrorResponse:
         try:
-            image_base64: str = self._camera.get_encoded_image(image_format=".png")
+            image_base64: str = self._camera.get_encoded_image(image_format=".png", requested_resolution=None)
             image_identifier: str = self._calibrator.add_image(image_base64=image_base64)
         except MCTDetectorRuntimeError as e:
             return ErrorResponse(message=e.message)
@@ -231,7 +238,9 @@ class Detector(MCTComponent):
             arg_type=CameraImageGetRequest)
         encoded_image_base64: str
         try:
-            encoded_image_base64 = self._camera.get_encoded_image(image_format=request.format)
+            encoded_image_base64 = self._camera.get_encoded_image(
+                image_format=request.format,
+                requested_resolution=request.requested_resolution)
         except MCTDetectorRuntimeError as e:
             return ErrorResponse(message=e.message)
         return CameraImageGetResponse(
@@ -277,7 +286,8 @@ class Detector(MCTComponent):
             detector_frame = DetectorFrame(
                 detected_marker_snapshots=list(),
                 rejected_marker_snapshots=list(),
-                timestamp_utc_iso8601=self._marker.get_changed_timestamp().isoformat())
+                timestamp_utc_iso8601=self._marker.get_changed_timestamp().isoformat(),
+                image_resolution=self._camera.get_resolution())
             if request.include_detected:
                 detector_frame.detected_marker_snapshots = self._marker.get_markers_detected()
             if request.include_rejected:
@@ -344,15 +354,17 @@ class Detector(MCTComponent):
         return return_value
 
     async def update(self):
-        if not self.time_sync_active:
-            if self._camera.get_status() == CameraStatus.RUNNING:
-                try:
-                    self._camera.update()
-                except MCTDetectorRuntimeError as e:
-                    self.add_status_message(severity="error", message=e.message)
-            if self._marker.get_status() == MarkerStatus.RUNNING and \
-            self._camera.get_changed_timestamp() > self._marker.get_changed_timestamp():
-                self._marker.update(self._camera.get_image())
-            self._frame_count += 1
-            if self._frame_count % 1000 == 0:
-                print(f"Update count: {self._frame_count}")
+        if self.time_sync_active:
+            return
+
+        if self._camera.get_status() == CameraStatus.RUNNING:
+            try:
+                self._camera.update()
+            except MCTDetectorRuntimeError as e:
+                self.add_status_message(severity="error", message=e.message)
+        if self._marker.get_status() == MarkerStatus.RUNNING and \
+           self._camera.get_changed_timestamp() > self._marker.get_changed_timestamp():
+            self._marker.update(self._camera.get_image())
+        self._frame_count += 1
+        if self._frame_count % 1000 == 0:
+            print(f"Update count: {self._frame_count}")

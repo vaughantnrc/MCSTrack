@@ -8,6 +8,7 @@ from .structures import \
     CalibrationMapValue, \
     CalibrationResultMetadata, \
     CalibrationResultState
+from .util import assign_key_value_list_to_aruco_detection_parameters
 from src.common import \
     ImageCoding, \
     StatusMessageSource
@@ -17,6 +18,7 @@ from src.common.structures import \
     IntrinsicCalibration, \
     IntrinsicCalibrationFrameResult, \
     IntrinsicParameters, \
+    KeyValueSimpleAny, \
     Vec3
 from src.common.util import \
     IOUtils
@@ -101,7 +103,8 @@ class Calibrator:
 
     def calculate(
         self,
-        image_resolution: ImageResolution
+        image_resolution: ImageResolution,
+        marker_parameters: list[KeyValueSimpleAny]
     ) -> tuple[str, IntrinsicCalibration]:
 
         calibration_key: ImageResolution = image_resolution
@@ -109,12 +112,15 @@ class Calibrator:
             raise MCTDetectorRuntimeError(
                 message=f"No images for given resolution {str(image_resolution)} found.")
 
-        # TODO: Instead of detecting the markers here, maybe the detector could do it instead (just send the points/ids)
+        aruco_detector_parameters: ... = cv2.aruco.DetectorParameters_create()
+        mismatched_keys: list[str] = assign_key_value_list_to_aruco_detection_parameters(
+            detection_parameters=aruco_detector_parameters,
+            key_value_list=marker_parameters)
+        if len(mismatched_keys) > 0:
+            raise MCTDetectorRuntimeError(
+                message=f"The following parameters could not be applied due to key mismatch: {str(mismatched_keys)}")
 
-        # TODO: Detection parameters to come from the detector, somehow
-        aruco_detector_parameters = cv2.aruco.DetectorParameters_create()
-
-        # TODO: ChArUco board to come from somewhere (user???)
+        # TODO: ChArUco board to come from somewhere (user? currently assumed to be 10x8 DICT4x4_100)
         charuco_spec = CharucoBoardSpecification()
         # noinspection PyUnresolvedReferences
         charuco_board: cv2.aruco.CharucoBoard = charuco_spec.create_board()
@@ -193,6 +199,7 @@ class Calibrator:
         intrinsic_calibration: IntrinsicCalibration = IntrinsicCalibration(
             timestamp_utc=str(datetime.datetime.utcnow()),
             image_resolution=image_resolution,
+            reprojection_error=charuco_overall_reprojection_error,
             calibrated_values=IntrinsicParameters(
                 focal_length_x_px=charuco_camera_matrix[0, 0],
                 focal_length_y_px=charuco_camera_matrix[1, 1],
@@ -206,7 +213,7 @@ class Calibrator:
                     charuco_distortion_coefficients[2, 0],
                     charuco_distortion_coefficients[3, 0]]),
             calibrated_stdevs=[value[0] for value in charuco_intrinsic_stdevs],
-            reprojection_error=charuco_overall_reprojection_error,
+            marker_parameters=marker_parameters,
             frame_results=[
                 IntrinsicCalibrationFrameResult(
                     image_identifier=image_identifiers[i],

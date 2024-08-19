@@ -40,16 +40,25 @@ class KeyValueMetaAbstract(BaseModel, abc.ABC):
     parsable_type: str
     key: str = Field()
 
+    @abc.abstractmethod
+    def to_simple(self) -> KeyValueSimpleAbstract: ...
+
 
 class KeyValueMetaBool(KeyValueMetaAbstract):
     parsable_type: str = Field(default="bool", const=True)
     value: bool = Field()
+
+    def to_simple(self) -> KeyValueSimpleBool:
+        return KeyValueSimpleBool(key=self.key, value=self.value)
 
 
 class KeyValueMetaEnum(KeyValueMetaAbstract):
     parsable_type: str = Field(default="enum", const=True)
     value: str = Field()
     allowable_values: list[str] = Field(default_factory=list)
+
+    def to_simple(self) -> KeyValueSimpleString:
+        return KeyValueSimpleString(key=self.key, value=self.value)
 
 
 class KeyValueMetaFloat(KeyValueMetaAbstract):
@@ -60,6 +69,9 @@ class KeyValueMetaFloat(KeyValueMetaAbstract):
     range_step: float = Field(default=1.0)
     digit_count: int = Field(default=2)
 
+    def to_simple(self) -> KeyValueSimpleFloat:
+        return KeyValueSimpleFloat(key=self.key, value=self.value)
+
 
 class KeyValueMetaInt(KeyValueMetaAbstract):
     parsable_type: str = Field(default="int", const=True)
@@ -67,6 +79,9 @@ class KeyValueMetaInt(KeyValueMetaAbstract):
     range_minimum: int = Field()
     range_maximum: int = Field()
     range_step: int = Field(default=1)
+
+    def to_simple(self) -> KeyValueSimpleInt:
+        return KeyValueSimpleInt(key=self.key, value=self.value)
 
 
 # pydantic doesn't appear to handle very well typing's (TypeA, TypeB, ...) notation of a union
@@ -80,3 +95,9 @@ KeyValueMetaAny = Union[
     KeyValueMetaEnum,
     KeyValueMetaFloat,
     KeyValueMetaInt]
+
+
+def key_value_meta_to_simple(
+    key_value_meta_list: list[KeyValueMetaAny]
+) -> list[KeyValueSimpleAny]:
+    return [key_value_meta.to_simple() for key_value_meta in key_value_meta_list]

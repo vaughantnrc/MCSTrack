@@ -1,19 +1,20 @@
 from src.pose_solver.pose_solver import PoseSolver
 from src.common.structures import \
     DetectorFrame, \
+    ImageResolution, \
     IntrinsicParameters, \
     MarkerCornerImagePoint, \
     MarkerSnapshot, \
     Matrix4x4, \
-    Pose, \
-    MarkerCorners
-from src.pose_solver.structures import \
+    Pose
+from src.common.structures import \
     TargetMarker
 import datetime
 from typing import Final
 import unittest
 
 
+IMAGE_RESOLUTION: Final[ImageResolution] = ImageResolution(x_px=640, y_px=480)
 MARKER_SIZE_MM: Final[float] = 10.0
 REFERENCE_TARGET_ID: Final[str] = "reference"
 REFERENCE_MARKER_ID: Final[str] = "0"
@@ -128,6 +129,7 @@ class TestPoseSolver(unittest.TestCase):
                             MarkerCornerImagePoint(x_px=580, y_px=388),
                             MarkerCornerImagePoint(x_px=540, y_px=387)])],
                 rejected_marker_snapshots=list(),
+                image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.update()
         detector_poses: list[Pose]
@@ -198,6 +200,7 @@ class TestPoseSolver(unittest.TestCase):
                             MarkerCornerImagePoint(x_px=178, y_px=291),
                             MarkerCornerImagePoint(x_px=167, y_px=275)])],
                 rejected_marker_snapshots=list(),
+                image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.add_detector_frame(
             detector_label=DETECTOR_SKY_NAME,
@@ -218,6 +221,7 @@ class TestPoseSolver(unittest.TestCase):
                             MarkerCornerImagePoint(x_px=332, y_px=333),
                             MarkerCornerImagePoint(x_px=296, y_px=317)])],
                 rejected_marker_snapshots=list(),
+                image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.add_detector_frame(
             detector_label=DETECTOR_GREEN_NAME,
@@ -238,6 +242,7 @@ class TestPoseSolver(unittest.TestCase):
                             MarkerCornerImagePoint(x_px=438, y_px=299),
                             MarkerCornerImagePoint(x_px=403, y_px=305)])],
                 rejected_marker_snapshots=list(),
+                image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.add_detector_frame(
             detector_label=DETECTOR_YELLOW_NAME,
@@ -258,6 +263,7 @@ class TestPoseSolver(unittest.TestCase):
                             MarkerCornerImagePoint(x_px=372, y_px=163),
                             MarkerCornerImagePoint(x_px=361, y_px=185)])],
                 rejected_marker_snapshots=list(),
+                image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.update()
         detector_poses: list[Pose]

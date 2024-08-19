@@ -44,11 +44,15 @@ class AbstractCamera(abc.ABC):
 
     def get_encoded_image(
         self,
-        image_format: CaptureFormat
+        image_format: CaptureFormat,
+        requested_resolution: ImageResolution | None  # None means to not alter the image dimensions
     ) -> str:
+        image: numpy.ndarray = self.get_image()
+        if requested_resolution is not None:
+            image = cv2.resize(src=image, dsize=(requested_resolution.x_px, requested_resolution.y_px))
         encoded_frame: bool
         encoded_image_rgb_single_row: numpy.array
-        encoded, encoded_image_rgb_single_row = cv2.imencode(image_format, self.get_image())
+        encoded, encoded_image_rgb_single_row = cv2.imencode(image_format, image)
         encoded_image_rgb_bytes: bytes = encoded_image_rgb_single_row.tobytes()
         # noinspection PyTypeChecker
         encoded_image_rgb_base64: str = base64.b64encode(encoded_image_rgb_bytes)

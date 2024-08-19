@@ -433,7 +433,11 @@ class MCTController(MCTComponent):
                 severity="error",
                 message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
-        detector_connection.latest_frame = response.frame
+        frame: DetectorFrame = response.frame
+        adjusted_timestamp_utc: datetime.datetime = \
+            frame.timestamp_utc() - datetime.timedelta(seconds=detector_connection.controller_offset_seconds)
+        frame.timestamp_utc_iso8601 = adjusted_timestamp_utc.isoformat()
+        detector_connection.latest_frame = frame
 
     def handle_response_get_poses(
         self,
@@ -450,30 +454,34 @@ class MCTController(MCTComponent):
             return
         pose_solver_connection.detector_poses = response.detector_poses
         pose_solver_connection.target_poses = response.target_poses
-        pose_solver_connection.poses_timestamp = \
-            datetime.datetime.utcnow()  # TODO: This should come from the pose solver
+        pose_solver_connection.poses_timestamp = (
+            datetime.datetime.utcnow() -  # TODO: This should come from the pose solver
+            datetime.timedelta(seconds=pose_solver_connection.controller_offset_seconds))
 
     def handle_response_timestamp_get(
         self,
         response: TimestampGetResponse,
         component_label: str
     ) -> None:
-        connection: PoseSolverConnection = self._get_connection(
+        connection: Connection = self._get_connection(
             connection_label=component_label,
             connection_type=Connection)
         utc_now: datetime.datetime = datetime.datetime.utcnow()
-        requester_timestamp: datetime.datetime = datetime.datetime.fromisoformat(response.requester_timestamp_utc_iso8601)
+        requester_timestamp: datetime.datetime
+        requester_timestamp = datetime.datetime.fromisoformat(response.requester_timestamp_utc_iso8601)
         round_trip_seconds: float = (utc_now - requester_timestamp).total_seconds()
         connection.network_latency_samples_seconds.append(round_trip_seconds)
-        responder_timestamp: datetime.datetime = datetime.datetime.fromisoformat(response.responder_timestamp_utc_iso8601)
+        responder_timestamp: datetime.datetime
+        responder_timestamp = datetime.datetime.fromisoformat(response.responder_timestamp_utc_iso8601)
         network_plus_offset_seconds: float = (responder_timestamp - requester_timestamp).total_seconds()
         connection.network_plus_offset_samples_seconds.append(network_plus_offset_seconds)
         if self._time_sync_sample_count >= _TIME_SYNC_SAMPLE_MAXIMUM_COUNT:
             connection.network_latency_seconds = numpy.median(connection.network_latency_samples_seconds)
-            connection.controller_offset_samples_seconds = list(
-                numpy.asarray(connection.network_plus_offset_samples_seconds) - (connection.network_latency_seconds / 2.0))
+            connection.controller_offset_samples_seconds = [
+                network_plus_offset_sample_seconds - (connection.network_latency_seconds / 2.0)
+                for network_plus_offset_sample_seconds in connection.network_plus_offset_samples_seconds]
             connection.controller_offset_seconds = numpy.median(connection.controller_offset_samples_seconds)
-            print(f"Calculated offset: {connection.controller_offset_seconds}")
+            print(f"Calculated offset to {connection.get_label()}: {connection.controller_offset_seconds}")
 
     def handle_response_unknown(
         self,
@@ -575,11 +583,11 @@ class MCTController(MCTComponent):
             if report.role == COMPONENT_ROLE_LABEL_POSE_SOLVER and not self._recording_pose_solver:
                 continue
 
-            frames_dict = [frame.dict() for frame in connection.recording]
-            frames_json = json.dumps(frames_dict)
-
-            with open(os.path.join(self._recording_save_path, report.role+"_log.json"), 'w') as f:
-                f.write(frames_json)
+            if self._recording_save_path is not None:
+                frames_dict = [frame.dict() for frame in connection.recording]
+                frames_json = json.dumps(frames_dict)
+                with open(os.path.join(self._recording_save_path, report.role+"_log.json"), 'w') as f:
+                    f.write(frames_json)
 
         self._recording_detector = False
         self._recording_pose_solver = False
@@ -783,9 +791,14 @@ class MCTController(MCTComponent):
                         if current_is_new:
                             pose_solver_connection.detector_timestamps[detector_label] = \
                                 current_detector_frame_timestamp
+                            adjusted_detector_frame: DetectorFrame = current_detector_frame.copy()
+                            adjusted_timestamp_utc: datetime.datetime = \
+                                current_detector_frame.timestamp_utc() + \
+                                datetime.timedelta(seconds=pose_solver_connection.controller_offset_seconds)
+                            adjusted_detector_frame.timestamp_utc_iso8601 = adjusted_timestamp_utc.isoformat()
                             marker_request: PoseSolverAddDetectorFrameRequest = PoseSolverAddDetectorFrameRequest(
                                 detector_label=detector_label,
-                                detector_frame=current_detector_frame)
+                                detector_frame=adjusted_detector_frame)
                             solver_request_list.append(marker_request)
 
                             if self._recording_detector:

@@ -95,6 +95,7 @@ class PoseSolver:
             frame=detector_frame)
         if detector_label not in self._detector_records_by_detector_label:
             self._detector_records_by_detector_label[detector_label] = DetectorRecord()
+        self._detector_records_by_detector_label[detector_label].clear_frame_records()
         self._detector_records_by_detector_label[detector_label].add_frame_record(detector_frame_record)
         self._last_change_timestamp_utc = datetime.datetime.utcnow()
 
@@ -319,17 +320,13 @@ class PoseSolver:
         #     ray_sets=most_recent_pose.ray_sets)
 
     def update(self) -> None:
-        now_timestamp_utc: datetime.datetime = datetime.datetime.utcnow()
-        expired_timestamp_utc: datetime.datetime = \
-            now_timestamp_utc - datetime.timedelta(seconds=self._minimum_marker_age_before_removal_seconds)
-        # TODO: Re-enable after temporal synchronization has been implemented
-        # for detector_record in self._detector_records_by_detector_label.values():
-        #     if detector_record.clear_frame_records_older_than(timestamp_utc=expired_timestamp_utc):
-        #         self._last_change_timestamp_utc = now_timestamp_utc
-
         if self._last_updated_timestamp_utc >= self._last_change_timestamp_utc:
             return
 
+        if len(self._targets) == 0:
+            return
+
+        self._last_updated_timestamp_utc = datetime.datetime.utcnow()
         self._poses_by_detector_label.clear()
         self._poses_by_target_id.clear()
 
