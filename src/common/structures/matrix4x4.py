@@ -34,8 +34,15 @@ class Matrix4x4(BaseModel):
         return Matrix4x4(values=list(result_numpy_array.flatten()))
 
     def get_translation(self) -> list[float]:
+        """
+        Return a vector of [x,y,z] representing translation.
+        """
         a = self.values
         return [a[3], a[7], a[11]]
+
+    def inverse(self) -> 'Matrix4x4':
+        inv_numpy_array = numpy.linalg.inv(self.as_numpy_array())
+        return Matrix4x4.from_numpy_array(inv_numpy_array)
 
     @staticmethod
     def from_raw_values(
