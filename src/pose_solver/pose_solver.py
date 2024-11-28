@@ -10,8 +10,7 @@ from .util import \
     average_vector, \
     closest_intersection_between_n_lines, \
     IterativeClosestPointParameters, \
-    iterative_closest_point_for_points_and_rays, \
-    register_corresponding_points
+    iterative_closest_point_for_points_and_rays
 from src.common.structures import \
     DetectorFrame, \
     IntrinsicParameters, \
@@ -19,7 +18,8 @@ from src.common.structures import \
     Pose, \
     TargetBase
 from src.common.util import \
-    MathUtils
+    MathUtils, \
+    register_corresponding_points
 import cv2
 import cv2.aruco
 import datetime

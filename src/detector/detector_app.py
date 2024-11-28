@@ -22,11 +22,11 @@ from src.detector.api import \
 from src.detector.interfaces import \
     AbstractCamera, \
     AbstractMarker
+import asyncio
 import base64
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.websockets import WebSocket
-from fastapi_utils.tasks import repeat_every
 import hjson
 import logging
 import os
@@ -63,7 +63,7 @@ def create_app() -> FastAPI:
         marker_type = ArucoOpenCVMarker
     else:
         raise RuntimeError(f"Unsupported marker method {detector_configuration.marker_configuration.method}.")
-    
+
     detector = Detector(
         detector_configuration=detector_configuration,
         camera_type=camera_type,
@@ -158,11 +158,11 @@ def create_app() -> FastAPI:
         await detector.websocket_handler(websocket=websocket)
 
     @detector_app.on_event("startup")
-    @repeat_every(seconds=0.001)
     async def internal_update() -> None:
         await detector.update()
+        asyncio.create_task(internal_update())
 
     return detector_app
 
 
-app = create_app()
+app: FastAPI = create_app()

@@ -12,10 +12,10 @@ from .structures import \
 from src.common import \
     EmptyResponse, \
     ErrorResponse
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.websockets import WebSocket
-from fastapi_utils.tasks import repeat_every
 import hjson
 import logging
 import os
@@ -82,11 +82,11 @@ def create_app() -> FastAPI:
         await pose_solver_api.websocket_handler(websocket=websocket)
 
     @pose_solver_app.on_event("startup")
-    @repeat_every(seconds=0.001)
     async def internal_update() -> None:
         await pose_solver_api.update()
+        asyncio.create_task(internal_update())
 
     return pose_solver_app
 
 
-app = create_app()
+app: FastAPI = create_app()
