@@ -645,7 +645,7 @@ class MCTController(MCTComponent):
             elif response_result.status == Connection.PopResponseSeriesResult.Status.RESPONDED:
                 return None, response_result.response_series
             else:  # queued, in progress
-                return request_series_id, None  # Connection is tracking desired request series, but awaiting response
+                return request_series_id, None  # Connection is tracking desired request series, waiting for response
         # Cannot be found
         raise ResponseSeriesNotExpected()
 
@@ -711,12 +711,12 @@ class MCTController(MCTComponent):
         return super().supported_request_types()
 
     # Right now this function doesn't update on its own - must be called externally and regularly
-    async def update(
+    def update(
         self
     ) -> None:
         connections = list(self._connections.values())
         for connection in connections:
-            await connection.update()
+            connection.update()
 
         if self._status == MCTController.Status.STARTING and \
            self._startup_state == MCTController.StartupState.CONNECTING:

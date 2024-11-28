@@ -52,11 +52,11 @@ async def main():
     controller.start_up()
 
     while controller.is_transitioning():
-        await controller.update()
+        controller.update()
 
     for i in range(ITERATIONS):
 
-        await controller.update()
+        controller.update()
         detectors_and_their_frames = {}
 
         for detector_label in controller.get_active_detector_labels():
@@ -66,7 +66,7 @@ async def main():
             frame = controller.get_live_detector_frame(detector_label)
             # Keep trying if it is a None frame, which happens on startup
             while not frame:
-                await controller.update()
+                controller.update()
                 frame = controller.get_live_detector_frame(detector_label)
 
             detectors_and_their_frames[detector_label] = frame.detected_marker_snapshots

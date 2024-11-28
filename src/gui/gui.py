@@ -7,10 +7,8 @@ from src.gui.panels import \
     PoseSolverPanel
 from src.common import StatusMessageSource
 from src.controller import MCTController
-import asyncio
 import logging
 import wx
-import wxasync
 from typing import Final
 
 
@@ -110,6 +108,10 @@ class ControllerFrame(wx.Frame):
         self.CreateStatusBar()
         self.SetStatusText("")
 
+        self.Bind(
+            event=wx.EVT_IDLE,
+            handler=self.update)
+
     def on_page_changed(self, event: wx.BookCtrlEvent):
         pages: list[BasePanel] = [
             self._controller_panel,
@@ -128,36 +130,29 @@ class ControllerFrame(wx.Frame):
                 page.on_page_select()
                 break
 
-
-async def controller_frame_repeat(controller: MCTController):
-    # noinspection PyBroadException
-    try:
-        await controller.update()
-    except Exception as e:
-        controller.add_status_message(
-            severity="error",
-            message=f"Exception occurred in controller loop: {str(e)}")
-    event_loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
-    event_loop.create_task(controller_frame_repeat(controller=controller))
+    def update(self, *_args):
+        # noinspection PyBroadException
+        try:
+            self._controller.update()
+        except Exception as e:
+            self._controller.add_status_message(
+                severity="error",
+                message=f"Exception occurred in controller loop: {str(e)}")
 
 
-async def main():
+def main():
     logging.basicConfig(level=logging.INFO)
-
     controller = MCTController(
         serial_identifier="controller",
         send_status_messages_to_logger=True)
-    event_loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
-    event_loop.create_task(controller_frame_repeat(controller=controller))
-
-    app: wxasync.WxAsyncApp = wxasync.WxAsyncApp()
+    app: wx.App = wx.App()
     frame: ControllerFrame = ControllerFrame(
         controller=controller,
         parent=None,
         title="MCT Controller")
     frame.Show()
-    await app.MainLoop()
+    app.MainLoop()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

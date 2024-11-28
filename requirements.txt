@@ -10,7 +10,6 @@ PyOpenGL-accelerate==3.1.7
 scipy
 uvicorn[standard]
 websocket
-websockets
-wxasync
+websockets~=13.1
 wxpython
 

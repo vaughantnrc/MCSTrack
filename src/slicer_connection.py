@@ -29,11 +29,27 @@ with open(input_filepath, 'r') as file:
 
 server = pyigtl.OpenIGTLinkServer(port=18944,local_server=False)
 
-async def update(controller,pose_solver_label):
-    try:
-        await controller.update()
+while not server.is_connected():
+    t.sleep(0.1)
 
-        ps_frame = controller.get_live_pose_solver_frame(pose_solver_label)
+logging.basicConfig(level=logging.INFO)
+
+controller = MCTController(
+    serial_identifier="controller",
+    send_status_messages_to_logger=True)
+
+controller.add_status_message(
+        severity="info",
+        message=f"Slicer client connected")
+
+controller.start_from_configuration_filepath(input_filepath)
+
+while True:
+    controller.update()
+
+    done_transitioning: bool = (not controller.is_transitioning())
+    if done_transitioning:
+        ps_frame = controller.get_live_pose_solver_frame("sol")
         timestamp = ps_frame.timestamp_utc_iso8601
 
         if len(ps_frame.target_poses) > 0:
@@ -44,39 +60,5 @@ async def update(controller,pose_solver_label):
                 device_name=target_poses.target_id
             )
             server.send_message(message,wait=True)
-    except Exception as e:
-        controller.add_status_message(
-            severity="error",
-            message=f"Exception occurred in controller loop: {str(e)}")
-        
-    event_loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
-    event_loop.create_task(update(controller,pose_solver_label))
+            break
 
-async def main():
-    logging.basicConfig(level=logging.INFO)
-
-    controller = MCTController(
-        serial_identifier="controller",
-        send_status_messages_to_logger=True)
-    
-    controller.add_status_message(
-            severity="info",
-            message=f"Slicer client connected")
-
-    controller.start_from_configuration_filepath(input_filepath)
-
-    while controller.is_transitioning():
-        await controller.update()
-
-    event_loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
-    event_loop.create_task(update(controller=controller, pose_solver_label="sol"))
-
-    while True:
-        await asyncio.sleep(1)
-
-if __name__ == "__main__":
-    while not server.is_connected():
-        t.sleep(0.1)
-
-    asyncio.run(main())
-    
