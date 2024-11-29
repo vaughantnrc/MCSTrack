@@ -1,6 +1,6 @@
 import abc
 from pydantic import BaseModel, Field
-from typing import Union
+from typing import Final, Literal, Union
 
 
 class KeyValueSimpleAbstract(BaseModel, abc.ABC):
@@ -13,22 +13,38 @@ class KeyValueSimpleAbstract(BaseModel, abc.ABC):
 
 
 class KeyValueSimpleBool(KeyValueSimpleAbstract):
-    parsable_type: str = Field(default="bool", const=True)
+    _TYPE_IDENTIFIER: Final[str] = "bool"
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     value: bool = Field()
 
 
 class KeyValueSimpleFloat(KeyValueSimpleAbstract):
-    parsable_type: str = Field(default="float", const=True)
+    _TYPE_IDENTIFIER: Final[str] = "float"
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     value: float = Field()
 
 
 class KeyValueSimpleInt(KeyValueSimpleAbstract):
-    parsable_type: str = Field(default="int", const=True)
+    _TYPE_IDENTIFIER: Final[str] = "int"
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     value: int = Field()
 
 
 class KeyValueSimpleString(KeyValueSimpleAbstract):
-    parsable_type: str = Field(default="str", const=True)
+    _TYPE_IDENTIFIER: Final[str] = "str"
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     value: str = Field()
 
 
@@ -45,7 +61,11 @@ class KeyValueMetaAbstract(BaseModel, abc.ABC):
 
 
 class KeyValueMetaBool(KeyValueMetaAbstract):
-    parsable_type: str = Field(default="bool", const=True)
+    _TYPE_IDENTIFIER: Final[str] = "bool"
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     value: bool = Field()
 
     def to_simple(self) -> KeyValueSimpleBool:
@@ -53,7 +73,11 @@ class KeyValueMetaBool(KeyValueMetaAbstract):
 
 
 class KeyValueMetaEnum(KeyValueMetaAbstract):
-    parsable_type: str = Field(default="enum", const=True)
+    _TYPE_IDENTIFIER: Final[str] = "enum"
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     value: str = Field()
     allowable_values: list[str] = Field(default_factory=list)
 
@@ -62,7 +86,11 @@ class KeyValueMetaEnum(KeyValueMetaAbstract):
 
 
 class KeyValueMetaFloat(KeyValueMetaAbstract):
-    parsable_type: str = Field(default="float", const=True)
+    _TYPE_IDENTIFIER: Final[str] = "float"
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     value: float = Field()
     range_minimum: float = Field()
     range_maximum: float = Field()
@@ -74,7 +102,11 @@ class KeyValueMetaFloat(KeyValueMetaAbstract):
 
 
 class KeyValueMetaInt(KeyValueMetaAbstract):
-    parsable_type: str = Field(default="int", const=True)
+    _TYPE_IDENTIFIER: Final[str] = "int"
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     value: int = Field()
     range_minimum: int = Field()
     range_maximum: int = Field()

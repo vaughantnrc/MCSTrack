@@ -2,7 +2,7 @@ from .image_resolution import ImageResolution
 from .intrinsic_parameters import IntrinsicParameters
 from .key_value_structures import KeyValueSimpleAny
 from .vec3 import Vec3
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SerializeAsAny
 
 
 class IntrinsicCalibrationFrameResult(BaseModel):
@@ -20,5 +20,5 @@ class IntrinsicCalibration(BaseModel):
     reprojection_error: float = Field()
     calibrated_values: IntrinsicParameters = Field()
     calibrated_stdevs: list[float] = Field()
-    marker_parameters: list[KeyValueSimpleAny] = Field()
+    marker_parameters: list[SerializeAsAny[KeyValueSimpleAny]] = Field()
     frame_results: list[IntrinsicCalibrationFrameResult] = Field(default=list())

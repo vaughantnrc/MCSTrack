@@ -256,8 +256,7 @@ class Connection(abc.ABC):
         if self._current_request_id is None and len(self._request_series_queue) > 0:
             request_series: MCTRequestSeries
             (request_series, self._current_request_id) = self._request_series_queue[0]
-            request_series_as_dict: dict = request_series.dict()
-            request_series_as_str: str = json.dumps(request_series_as_dict)
+            request_series_as_str: str = request_series.model_dump_json()
             try:
                 self._socket.send(request_series_as_str)
                 self._request_series_queue.pop(0)
@@ -289,7 +288,7 @@ class Connection(abc.ABC):
         # for response in response_series.series:
         #     if isinstance(response, DequeueStatusMessagesResponse):
         #         for status_message in response.status_messages:
-        #             status_message_dict = status_message.dict()
+        #             status_message_dict = status_message.model_dump()
         #             status_message_dict["source_label"] = self._component_address.label
         #             self._enqueue_status_message(**status_message_dict)
         return Connection.SendRecvResult.NORMAL

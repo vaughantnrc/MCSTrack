@@ -1,13 +1,17 @@
 from .mct_response import MCTResponse
 from pydantic import Field
+from typing import Final, Literal
 
 
 class TimestampGetResponse(MCTResponse):
+    _TYPE_IDENTIFIER: Final[str] = "timestamp_get_response"
 
     @staticmethod
     def parsable_type_identifier() -> str:
-        return "timestamp_get_response"
+        return TimestampGetResponse._TYPE_IDENTIFIER
 
-    parsable_type: str = Field(default=parsable_type_identifier(), const=True)
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
     requester_timestamp_utc_iso8601: str = Field()
     responder_timestamp_utc_iso8601: str = Field()
