@@ -19,7 +19,6 @@ import datetime
 import logging
 import numpy
 from picamera2 import Picamera2
-from picamera2.configuration import CameraConfiguration as Picamera2Configuration
 from typing import Final
 
 
@@ -64,6 +63,17 @@ _CAMERA_SHARPNESS_MINIMUM: Final[float] = 0.0  # From PiCamera2 manual
 _CAMERA_SHARPNESS_MAXIMUM: Final[float] = 16.0  # From PiCamera2 manual
 _CAMERA_SHARPNESS_DEFAULT: Final[float] = 1.0  # From PiCamera2 manual
 _CAMERA_SHARPNESS_DIGIT_COUNT: Final[int] = 2
+_CAMERA_AUTO_WHITE_BALANCE_KEY: Final[str] = "AutoWhiteBalance"
+_CAMERA_COLOUR_GAIN_RED_KEY: Final[str] = "ColourGainRed"
+_CAMERA_COLOUR_GAIN_RED_MINIMUM: Final[float] = 0.0  # From PiCamera2 manual
+_CAMERA_COLOUR_GAIN_RED_MAXIMUM: Final[float] = 32.0  # From PiCamera2 manual
+_CAMERA_COLOUR_GAIN_RED_DEFAULT: Final[float] = 1.0  # Arbitrarily-chosen value
+_CAMERA_COLOUR_GAIN_RED_DIGIT_COUNT: Final[int] = 2
+_CAMERA_COLOUR_GAIN_BLUE_KEY: Final[str] = "ColourGainBlue"
+_CAMERA_COLOUR_GAIN_BLUE_MINIMUM: Final[float] = 0.0  # From PiCamera2 manual
+_CAMERA_COLOUR_GAIN_BLUE_MAXIMUM: Final[float] = 32.0  # From PiCamera2 manual
+_CAMERA_COLOUR_GAIN_BLUE_DEFAULT: Final[float] = 1.0  # Arbitrarily-chosen value
+_CAMERA_COLOUR_GAIN_BLUE_DIGIT_COUNT: Final[int] = 2
 
 # _PICAMERA2_FRAME_RATE_KEY: Final[str] = "FrameRate"  # For consistency, use FrameDurationLimits instead
 _PICAMERA2_FRAME_DURATION_LIMITS_KEY: Final[str] = "FrameDurationLimits"
@@ -73,12 +83,14 @@ _PICAMERA2_EXPOSURE_KEY: Final[str] = "ExposureTime"  # Microseconds
 _PICAMERA2_BRIGHTNESS_KEY: Final[str] = "Brightness"
 _PICAMERA2_CONTRAST_KEY: Final[str] = "Contrast"
 _PICAMERA2_SHARPNESS_KEY: Final[str] = "Sharpness"
+_PICAMERA2_AUTO_WHITE_BALANCE_KEY: Final[str] = "AwbEnable"
+_PICAMERA2_COLOUR_GAINS_KEY: Final[str] = "ColourGains"
 
 
 class Picamera2Camera(AbstractCamera):
 
     _camera: Picamera2
-    _camera_configuration: Picamera2Configuration
+    _camera_configuration: dict
 
     _image: numpy.ndarray | None
     _image_timestamp_utc: datetime.datetime
@@ -94,7 +106,8 @@ class Picamera2Camera(AbstractCamera):
         self._image = None
         self._image_timestamp_utc = datetime.datetime.min
         self._camera = Picamera2()
-        self._camera_configuration = self._camera.create_video_configuration()
+        self._camera_configuration = self._camera.create_video_configuration(
+            main={"format": "XRGB8888", "size": (1280, 720)})
         self.set_status(CameraStatus.STOPPED)
 
     def get_changed_timestamp(self) -> datetime.datetime:
@@ -165,6 +178,24 @@ class Picamera2Camera(AbstractCamera):
             range_maximum=_CAMERA_SHARPNESS_MAXIMUM,
             digit_count=_CAMERA_SHARPNESS_DIGIT_COUNT))
 
+        return_value.append(KeyValueMetaBool(
+            key=_CAMERA_AUTO_WHITE_BALANCE_KEY,
+            value=current_controls[_PICAMERA2_AUTO_WHITE_BALANCE_KEY]))
+
+        colour_gain_red, colour_gain_blue = current_controls[_PICAMERA2_COLOUR_GAINS_KEY]
+        return_value.append(KeyValueMetaFloat(
+            key=_CAMERA_COLOUR_GAIN_RED_KEY,
+            value=colour_gain_red,
+            range_minimum=_CAMERA_COLOUR_GAIN_RED_MINIMUM,
+            range_maximum=_CAMERA_COLOUR_GAIN_RED_MAXIMUM,
+            digit_count=_CAMERA_COLOUR_GAIN_RED_DIGIT_COUNT))
+        return_value.append(KeyValueMetaFloat(
+            key=_CAMERA_COLOUR_GAIN_BLUE_KEY,
+            value=colour_gain_blue,
+            range_minimum=_CAMERA_COLOUR_GAIN_BLUE_MINIMUM,
+            range_maximum=_CAMERA_COLOUR_GAIN_BLUE_MAXIMUM,
+            digit_count=_CAMERA_COLOUR_GAIN_BLUE_DIGIT_COUNT))
+
         return return_value
 
     def get_resolution(self) -> ImageResolution:
@@ -219,6 +250,27 @@ class Picamera2Camera(AbstractCamera):
                     mismatched_keys.append(key_value.key)
                     continue
                 self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_SHARPNESS_KEY] = key_value.value
+            elif key_value.key == _CAMERA_AUTO_WHITE_BALANCE_KEY:
+                if not isinstance(key_value, KeyValueSimpleBool):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_AUTO_WHITE_BALANCE_KEY] = key_value.value
+            elif key_value.key == _CAMERA_COLOUR_GAIN_RED_KEY:
+                _, colour_gain_blue = \
+                    self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_COLOUR_GAINS_KEY]
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_COLOUR_GAINS_KEY] = \
+                    (key_value.value, colour_gain_blue)
+            elif key_value.key == _CAMERA_COLOUR_GAIN_BLUE_KEY:
+                colour_gain_red, _ = \
+                    self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_COLOUR_GAINS_KEY]
+                if not isinstance(key_value, KeyValueSimpleFloat):
+                    mismatched_keys.append(key_value.key)
+                    continue
+                self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_COLOUR_GAINS_KEY] = \
+                    (colour_gain_red, key_value.value)
             else:
                 mismatched_keys.append(key_value.key)
 
@@ -256,6 +308,13 @@ class Picamera2Camera(AbstractCamera):
 
         if _PICAMERA2_SHARPNESS_KEY not in self._camera_configuration:
             self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_SHARPNESS_KEY] = _CAMERA_SHARPNESS_DEFAULT
+
+        if _PICAMERA2_AUTO_WHITE_BALANCE_KEY not in self._camera_configuration:
+            self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_AUTO_WHITE_BALANCE_KEY] = False
+
+        if _PICAMERA2_COLOUR_GAINS_KEY not in self._camera_configuration:
+            self._camera_configuration[_CAMERA_CONTROLS_KEY][_PICAMERA2_COLOUR_GAINS_KEY] = \
+                (_CAMERA_COLOUR_GAIN_RED_DEFAULT, _CAMERA_COLOUR_GAIN_BLUE_DEFAULT)
 
         self._camera.configure(self._camera_configuration)
         self._camera.start()
