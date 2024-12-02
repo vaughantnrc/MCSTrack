@@ -12,6 +12,7 @@ from src.common import \
     EmptyResponse, \
     ImageCoding, \
     ImageUtils, \
+    MCTRequest, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
@@ -34,10 +35,19 @@ from src.detector.api import \
     CameraParametersGetResponse, \
     CameraParametersSetRequest, \
     CameraParametersSetResponse, \
+    ImageRecorderClearRequest, \
+    ImageRecorderGetStateRequest, \
+    ImageRecorderGetStateResponse, \
+    ImageRecorderRetrieveRequest, \
+    ImageRecorderRetrieveResponse, \
+    ImageRecorderStartRequest, \
+    ImageRecorderStopRequest, \
     MarkerParametersGetRequest, \
     MarkerParametersGetResponse, \
     MarkerParametersSetRequest
+import base64
 import cv2
+import datetime
 from io import BytesIO
 import logging
 import numpy
@@ -78,6 +88,9 @@ class DetectorPanel(BasePanel):
     _live_markers_detected: list[MarkerSnapshot]
     _live_markers_rejected: list[MarkerSnapshot]
     _live_resolution: ImageResolution | None
+    _live_image_recording_maximum_time_seconds: float  # set when we press the start record button
+    _live_image_recording_remaining_time_seconds: float
+    _live_image_recording_frame_count: int
 
     _detector_selector: ParameterSelector
     _preview_scale_factor: ParameterSpinboxFloat
@@ -96,6 +109,12 @@ class DetectorPanel(BasePanel):
     _marker_parameter_uis: list[ParameterBase]
 
     _calibration_capture_button: wx.Button
+
+    _image_recording_clear_button: wx.Button
+    _image_recording_retrieve_button: wx.Button
+    _image_recording_length_spinbox: ParameterSpinboxFloat
+    _image_recording_start_button: wx.Button
+    _image_recording_stop_button: wx.Button
 
     _image_panel: ImagePanel
 
@@ -119,6 +138,9 @@ class DetectorPanel(BasePanel):
         self._live_markers_detected = list()
         self._live_markers_rejected = list()
         self._live_resolution = None
+        self._live_image_recording_maximum_time_seconds = 0.0
+        self._live_image_recording_remaining_time_seconds = 0.0
+        self._live_image_recording_frame_count = 0
 
         self._camera_parameter_uis = list()
         self._marker_parameter_uis = list()
@@ -233,6 +255,40 @@ class DetectorPanel(BasePanel):
             sizer=control_sizer,
             label="Send Detection Parameters")
 
+        self.add_horizontal_line_to_spacer(
+            parent=control_panel,
+            sizer=control_sizer)
+
+        self._image_recording_clear_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Clear Video Recording")
+
+        self._image_recording_retrieve_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Retrieve Video Recording")
+
+        self._image_recording_length_spinbox = self.add_control_spinbox_float(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Video Recording Length",
+            minimum_value=0.0,
+            maximum_value=300.0,
+            initial_value=30.0,
+            step_value=1.0,
+            digit_count=2)
+
+        self._image_recording_start_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Start Video Recording")
+
+        self._image_recording_stop_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Stop Video Recording")
+
         control_spacer_sizer: wx.BoxSizer = wx.BoxSizer(orient=wx.HORIZONTAL)
         control_sizer.Add(
             sizer=control_spacer_sizer,
@@ -276,6 +332,18 @@ class DetectorPanel(BasePanel):
         self._calibration_capture_button.Bind(
             event=wx.EVT_BUTTON,
             handler=self.on_calibration_capture_pressed)
+        self._image_recording_clear_button.Bind(
+            event=wx.EVT_BUTTON,
+            handler=self.on_image_record_clear_pressed)
+        self._image_recording_retrieve_button.Bind(
+            event=wx.EVT_BUTTON,
+            handler=self.on_image_record_retrieve_pressed)
+        self._image_recording_start_button.Bind(
+            event=wx.EVT_BUTTON,
+            handler=self.on_image_record_start_pressed)
+        self._image_recording_stop_button.Bind(
+            event=wx.EVT_BUTTON,
+            handler=self.on_image_record_stop_pressed)
 
         self._update_ui_controls()
 
@@ -287,16 +355,6 @@ class DetectorPanel(BasePanel):
             request_series=request_series)
         self._update_ui_controls()
 
-    def begin_capture_snapshot(self, requested_resolution: ImageResolution | None = None):
-        selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
-        request_series: MCTRequestSeries = MCTRequestSeries(
-            series=[CameraImageGetRequest(
-                format=_CAPTURE_FORMAT,
-                requested_resolution=requested_resolution)])
-        self._live_preview_request_id = self._controller.request_series_push(
-            connection_label=selected_detector_label,
-            request_series=request_series)
-
     def begin_get_detector_parameters(self):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         request_series: MCTRequestSeries = MCTRequestSeries(
@@ -307,6 +365,69 @@ class DetectorPanel(BasePanel):
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
+
+    def begin_image_recording_clear(self):
+        selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
+        request_series: MCTRequestSeries = MCTRequestSeries(
+            series=[
+                ImageRecorderClearRequest(),
+                ImageRecorderGetStateRequest()])
+        self._control_blocking_request_id = self._controller.request_series_push(
+            connection_label=selected_detector_label,
+            request_series=request_series)
+        self._update_ui_controls()
+
+    def begin_image_recording_retrieve(self):
+        selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
+        request_series: MCTRequestSeries = MCTRequestSeries(
+            series=[
+                ImageRecorderRetrieveRequest(),
+                ImageRecorderGetStateRequest()])
+        self._control_blocking_request_id = self._controller.request_series_push(
+            connection_label=selected_detector_label,
+            request_series=request_series)
+        self._update_ui_controls()
+
+    def begin_image_recording_start(self):
+        selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
+        recording_duration_seconds: float = self._image_recording_length_spinbox.get_value()
+        self._live_image_recording_maximum_time_seconds = recording_duration_seconds
+        request_series: MCTRequestSeries = MCTRequestSeries(
+            series=[
+                ImageRecorderStartRequest(
+                    duration_seconds=recording_duration_seconds),
+                ImageRecorderGetStateRequest()])
+        self._control_blocking_request_id = self._controller.request_series_push(
+            connection_label=selected_detector_label,
+            request_series=request_series)
+        self._update_ui_controls()
+
+    def begin_image_recording_stop(self):
+        selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
+        self._image_recording_length_spinbox.set_value(self._live_image_recording_maximum_time_seconds)
+        request_series: MCTRequestSeries = MCTRequestSeries(
+            series=[
+                ImageRecorderStopRequest(),
+                ImageRecorderGetStateRequest()])
+        self._control_blocking_request_id = self._controller.request_series_push(
+            connection_label=selected_detector_label,
+            request_series=request_series)
+        self._update_ui_controls()
+
+    def begin_live_data(self, requested_resolution: ImageResolution | None = None):
+        selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
+        requests: list[MCTRequest] = list()
+        if self._preview_image_checkbox.checkbox.GetValue():
+            requests.append(CameraImageGetRequest(
+                format=_CAPTURE_FORMAT,
+                requested_resolution=requested_resolution))
+        requests.append(ImageRecorderGetStateRequest())
+        if len(requests) <= 0:
+            return
+        request_series: MCTRequestSeries = MCTRequestSeries(series=requests)
+        self._live_preview_request_id = self._controller.request_series_push(
+            connection_label=selected_detector_label,
+            request_series=request_series)
 
     def begin_set_capture_parameters(self):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
@@ -347,6 +468,10 @@ class DetectorPanel(BasePanel):
                 self._handle_capture_snapshot_response(response=response)
             elif isinstance(response, CameraParametersGetResponse):
                 self._handle_get_capture_parameters_response(response=response)
+            elif isinstance(response, ImageRecorderGetStateResponse):
+                self._handle_image_recorder_get_state_response(response=response)
+            elif isinstance(response, ImageRecorderRetrieveResponse):
+                self._handle_image_recorder_retrieve_response(response=response)
             elif isinstance(response, MarkerParametersGetResponse):
                 self._handle_get_detection_parameters_response(response=response)
             elif isinstance(response, ErrorResponse):
@@ -401,6 +526,42 @@ class DetectorPanel(BasePanel):
         self._marker_parameter_panel.Thaw()
         self.Layout()
 
+    def _handle_image_recorder_get_state_response(
+        self,
+        response: ImageRecorderGetStateResponse
+    ):
+        if response.remaining_time_seconds > 0.0:
+            self._image_recording_length_spinbox.set_value(value=response.remaining_time_seconds)
+        else:
+            if self._live_image_recording_remaining_time_seconds > 0.0:
+                # We're about to finish a countdown - restore the spinbox to the original value input by the user
+                self._image_recording_length_spinbox.set_value(value=self._live_image_recording_maximum_time_seconds)
+        ui_needs_full_update: bool = False
+        if self._live_image_recording_remaining_time_seconds > 0.0 >= response.remaining_time_seconds:
+            ui_needs_full_update = True
+        if self._live_image_recording_frame_count <= 0 < response.image_count:
+            ui_needs_full_update = True
+        self._live_image_recording_remaining_time_seconds = response.remaining_time_seconds
+        self._live_image_recording_frame_count = response.image_count
+        if ui_needs_full_update:
+            self._update_ui_controls()
+
+    def _handle_image_recorder_retrieve_response(
+        self,
+        response: ImageRecorderRetrieveResponse
+    ):
+        zip_filename: str = datetime.datetime.utcnow().isoformat()\
+            .replace('T', '')\
+            .replace(':', '')\
+            .replace('-', '')\
+            .replace('.', '') + ".zip"
+        zip_bytes: bytes = base64.b64decode(s=response.archive_base64)
+        with open(zip_filename, 'wb') as zip_file:
+            zip_file.write(zip_bytes)
+        self.status_message_source.enqueue_status_message(
+            severity="info",
+            message=f"Saved video as {zip_filename}.")
+
     @staticmethod
     def _marker_snapshot_list_to_opencv_points(
         marker_snapshot_list: list[MarkerSnapshot],
@@ -439,6 +600,18 @@ class DetectorPanel(BasePanel):
     def on_send_detection_parameters_pressed(self, _event: wx.CommandEvent):
         self.begin_set_detection_parameters()
 
+    def on_image_record_clear_pressed(self, _event: wx.CommandEvent):
+        self.begin_image_recording_clear()
+
+    def on_image_record_retrieve_pressed(self, _event: wx.CommandEvent):
+        self.begin_image_recording_retrieve()
+
+    def on_image_record_start_pressed(self, _event: wx.CommandEvent):
+        self.begin_image_recording_start()
+
+    def on_image_record_stop_pressed(self, _event: wx.CommandEvent):
+        self.begin_image_recording_stop()
+
     def _set_display_controls_enabled(
         self,
         enable: bool
@@ -463,17 +636,17 @@ class DetectorPanel(BasePanel):
         super().update_loop()
 
         response_series: MCTResponseSeries | None
+        if self._live_preview_request_id is not None:
+            self._live_preview_request_id, response_series = self._controller.response_series_pop(
+                request_series_id=self._live_preview_request_id)
+            if response_series is not None:
+                self.handle_response_series(response_series)
         if self._control_blocking_request_id is not None:
             self._control_blocking_request_id, response_series = self._controller.response_series_pop(
                 request_series_id=self._control_blocking_request_id)
             if response_series is not None:  # self._control_blocking_request_id will be None
                 self.handle_response_series(response_series)
                 self._update_ui_controls()
-        elif self._live_preview_request_id is not None:
-            self._live_preview_request_id, response_series = self._controller.response_series_pop(
-                request_series_id=self._live_preview_request_id)
-            if response_series is not None:
-                self.handle_response_series(response_series)
 
         detector_label: str = self._detector_selector.selector.GetStringSelection()
         if detector_label is not None and len(detector_label) > 0:
@@ -483,14 +656,14 @@ class DetectorPanel(BasePanel):
                 self._live_markers_detected = detector_frame.detected_marker_snapshots
                 self._live_markers_rejected = detector_frame.rejected_marker_snapshots
                 self._live_resolution = detector_frame.image_resolution
-            if self._preview_image_checkbox.checkbox.GetValue() and self._live_preview_request_id is None:
+            if self._live_preview_request_id is None:
                 if self._live_resolution is not None:
                     preview_resolution: ImageResolution = ImageResolution(
                         x_px=int(round(self._live_resolution.x_px * self._preview_scale_factor.get_value())),
                         y_px=int(round(self._live_resolution.y_px * self._preview_scale_factor.get_value())))
-                    self.begin_capture_snapshot(requested_resolution=preview_resolution)
+                    self.begin_live_data(requested_resolution=preview_resolution)
                 else:
-                    self.begin_capture_snapshot()
+                    self.begin_live_data()
 
         if self._preview_image_checkbox.checkbox.GetValue() or \
            self._annotate_detected_checkbox.checkbox.GetValue() or \
@@ -502,6 +675,11 @@ class DetectorPanel(BasePanel):
         self._set_display_controls_enabled(enable=False)
         self._set_parameter_controls_enabled(enable=False)
         self._calibration_capture_button.Enable(enable=False)
+        self._image_recording_clear_button.Enable(enable=False)
+        self._image_recording_retrieve_button.Enable(enable=False)
+        self._image_recording_length_spinbox.Enable(enable=False)
+        self._image_recording_start_button.Enable(enable=False)
+        self._image_recording_stop_button.Enable(enable=False)
         if not self._controller.is_running():
             return
         self._detector_selector.set_enabled(enable=True)
@@ -513,6 +691,14 @@ class DetectorPanel(BasePanel):
         self._set_display_controls_enabled(enable=True)
         self._set_parameter_controls_enabled(enable=True)
         self._calibration_capture_button.Enable(enable=True)
+        if self._live_image_recording_remaining_time_seconds > 0.0:
+            self._image_recording_stop_button.Enable(enable=True)
+        else:
+            self._image_recording_length_spinbox.Enable(enable=True)
+            self._image_recording_start_button.Enable(enable=True)
+        if self._live_image_recording_frame_count > 0 and self._live_image_recording_remaining_time_seconds <= 0.0:
+            self._image_recording_clear_button.Enable(enable=True)
+            self._image_recording_retrieve_button.Enable(enable=True)
 
     def _update_ui_image(self):
         display_image: numpy.ndarray

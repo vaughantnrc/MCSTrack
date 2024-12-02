@@ -40,3 +40,6 @@ class ParameterSpinboxFloat(ParameterBase):
     ) -> None:
         super().set_enabled(enable=enable)
         self.spinbox.Enable(enable=enable)
+
+    def set_value(self, value: float) -> None:
+        self.spinbox.SetValue(value)

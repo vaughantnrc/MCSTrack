@@ -1,10 +1,13 @@
 {
   "calibrator_configuration": {
-    "data_path": "./example_data_path/"
+    "data_path": "./data/calibration/"
   },
   "camera_configuration": {
     "driver": "picamera2",
     "capture_device": "0"
+  },
+  "image_recorder_configuration": {
+    "image_path": "./data/image_recording/"
   },
   "marker_configuration": {
     "method": "aruco_opencv"

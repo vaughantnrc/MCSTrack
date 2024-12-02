@@ -17,6 +17,8 @@ from src.detector.api import \
     CameraResolutionGetResponse, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse, \
+    ImageRecorderGetStateResponse, \
+    ImageRecorderRetrieveResponse, \
     MarkerParametersGetResponse, \
     MarkerParametersSetRequest
 from src.detector.interfaces import \
@@ -141,6 +143,26 @@ def create_app() -> FastAPI:
     @detector_app.get("/camera/get_resolution")
     async def camera_get_resolution() -> CameraResolutionGetResponse:
         return detector.camera_resolution_get()
+
+    @detector_app.post("/image_recorder/clear")
+    async def image_recorder_start() -> EmptyResponse:
+        return detector.image_recorder_clear()
+
+    @detector_app.post("/image_recorder/get_state")
+    async def image_recorder_start() -> ImageRecorderGetStateResponse:
+        return detector.image_recorder_get_state()
+
+    @detector_app.post("/image_recorder/retrieve")
+    async def image_recorder_start() -> ImageRecorderRetrieveResponse:
+        return detector.image_recorder_retrieve()
+
+    @detector_app.post("/image_recorder/start")
+    async def image_recorder_start() -> EmptyResponse:
+        return detector.image_recorder_start()
+
+    @detector_app.post("/image_recorder/stop")
+    async def image_recorder_start() -> EmptyResponse:
+        return detector.image_recorder_stop()
 
     @detector_app.get("/marker/get_parameters")
     async def marker_get_parameters() -> MarkerParametersGetResponse | ErrorResponse:

@@ -9,5 +9,6 @@ from .calibration_result_state import CalibrationResultState
 from .camera_configuration import CameraConfiguration
 from .camera_status import CameraStatus
 from .detector_configuration import DetectorConfiguration
+from .image_recorder_configuration import ImageRecorderConfiguration
 from .marker_status import MarkerStatus
 from .marker_configuration import MarkerConfiguration

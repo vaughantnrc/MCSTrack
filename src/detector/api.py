@@ -412,6 +412,90 @@ class DetectorStopRequest(MCTRequest):
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
 
+class ImageRecorderClearRequest(MCTRequest):
+    _TYPE_IDENTIFIER: Final[str] = "detector_image_recorder_clear"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return ImageRecorderClearRequest._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+
+class ImageRecorderGetStateRequest(MCTRequest):
+    _TYPE_IDENTIFIER: Final[str] = "detector_image_recorder_get_state"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return ImageRecorderGetStateRequest._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+
+class ImageRecorderGetStateResponse(MCTResponse):
+    _TYPE_IDENTIFIER: Final[str] = "detector_image_recorder_get_state"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return ImageRecorderGetStateResponse._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+    remaining_time_seconds: float = Field()
+    image_count: int = Field()
+
+
+class ImageRecorderRetrieveRequest(MCTRequest):
+    _TYPE_IDENTIFIER: Final[str] = "detector_image_recorder_retrieve"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return ImageRecorderRetrieveRequest._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+
+class ImageRecorderRetrieveResponse(MCTResponse):
+    _TYPE_IDENTIFIER: Final[str] = "detector_image_recorder_retrieve"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return ImageRecorderRetrieveResponse._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+    archive_base64: str = Field()
+
+
+class ImageRecorderStartRequest(MCTRequest):
+    _TYPE_IDENTIFIER: Final[str] = "detector_image_recorder_start"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return ImageRecorderStartRequest._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+    duration_seconds: float = Field(default=30.0)
+
+
+class ImageRecorderStopRequest(MCTRequest):
+    _TYPE_IDENTIFIER: Final[str] = "detector_image_recorder_stop"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return ImageRecorderStopRequest._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+
 class MarkerParametersGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_get"
 

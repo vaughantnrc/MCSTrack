@@ -30,12 +30,21 @@ from .api import \
     DetectorFrameGetResponse, \
     DetectorStartRequest, \
     DetectorStopRequest, \
+    ImageRecorderClearRequest, \
+    ImageRecorderGetStateRequest, \
+    ImageRecorderGetStateResponse, \
+    ImageRecorderRetrieveRequest, \
+    ImageRecorderRetrieveResponse, \
+    ImageRecorderStartRequest, \
+    ImageRecorderStopRequest, \
     MarkerParametersGetRequest, \
     MarkerParametersGetResponse, \
     MarkerParametersSetRequest
 from .calibrator import Calibrator
 from .exceptions import \
     MCTDetectorRuntimeError
+from .image_recorder import \
+    ImageRecorder
 from .interfaces import \
     AbstractMarker, \
     AbstractCamera
@@ -73,6 +82,7 @@ class Detector(MCTComponent):
 
     _calibrator: Calibrator
     _camera: AbstractCamera
+    _image_recorder: ImageRecorder
     _marker: AbstractMarker
 
     _frame_count: int
@@ -96,6 +106,9 @@ class Detector(MCTComponent):
             status_message_source=self.get_status_message_source())
         self._marker = marker_type(
             configuration=detector_configuration.marker_configuration,
+            status_message_source=self.get_status_message_source())
+        self._image_recorder = ImageRecorder(
+            configuration=detector_configuration.image_recorder_configuration,
             status_message_source=self.get_status_message_source())
         self._frame_count = 0
 
@@ -310,6 +323,51 @@ class Detector(MCTComponent):
             return ErrorResponse(message=e.message)
         return EmptyResponse()
 
+    def image_recorder_clear(self, **_kwargs) -> EmptyResponse | ErrorResponse:
+        try:
+            self._image_recorder.clear()
+        except MCTDetectorRuntimeError as e:
+            return ErrorResponse(message=e.message)
+        return EmptyResponse()
+
+    def image_recorder_get_state(self, **_kwargs) -> ImageRecorderGetStateResponse | ErrorResponse:
+        remaining_time_seconds: float
+        image_count: int
+        try:
+            remaining_time_seconds = self._image_recorder.get_remaining_time_seconds()
+            image_count = self._image_recorder.get_image_count()
+        except MCTDetectorRuntimeError as e:
+            return ErrorResponse(message=e.message)
+        return ImageRecorderGetStateResponse(
+            remaining_time_seconds=remaining_time_seconds,
+            image_count=image_count)
+
+    def image_recorder_retrieve(self, **_kwargs) -> ImageRecorderRetrieveResponse | ErrorResponse:
+        zip_base64: str
+        try:
+            zip_base64 = self._image_recorder.retrieve_zip_base64()
+        except MCTDetectorRuntimeError as e:
+            return ErrorResponse(message=e.message)
+        return ImageRecorderRetrieveResponse(archive_base64=zip_base64)
+
+    def image_recorder_start(self, **kwargs) -> EmptyResponse | ErrorResponse:
+        request: ImageRecorderStartRequest = get_kwarg(
+            kwargs=kwargs,
+            key="request",
+            arg_type=ImageRecorderStartRequest)
+        try:
+            self._image_recorder.start(recording_duration_seconds=request.duration_seconds)
+        except MCTDetectorRuntimeError as e:
+            return ErrorResponse(message=e.message)
+        return EmptyResponse()
+
+    def image_recorder_stop(self, **_kwargs) -> EmptyResponse | ErrorResponse:
+        try:
+            self._image_recorder.stop()
+        except MCTDetectorRuntimeError as e:
+            return ErrorResponse(message=e.message)
+        return EmptyResponse()
+
     def marker_parameters_get(self, **_kwargs) -> MarkerParametersGetResponse | ErrorResponse:
         try:
             parameters = self._marker.get_parameters()
@@ -349,6 +407,11 @@ class Detector(MCTComponent):
             CameraParametersGetRequest: self.camera_parameters_get,
             CameraParametersSetRequest: self.camera_parameters_set,
             CameraResolutionGetRequest: self.camera_resolution_get,
+            ImageRecorderClearRequest: self.image_recorder_clear,
+            ImageRecorderGetStateRequest: self.image_recorder_get_state,
+            ImageRecorderRetrieveRequest: self.image_recorder_retrieve,
+            ImageRecorderStartRequest: self.image_recorder_start,
+            ImageRecorderStopRequest: self.image_recorder_stop,
             MarkerParametersGetRequest: self.marker_parameters_get,
             MarkerParametersSetRequest: self.marker_parameters_set})
         return return_value
@@ -365,6 +428,10 @@ class Detector(MCTComponent):
         if self._marker.get_status() == MarkerStatus.RUNNING and \
            self._camera.get_changed_timestamp() > self._marker.get_changed_timestamp():
             self._marker.update(self._camera.get_image())
+        if self._image_recorder.get_status() == ImageRecorder.Status.RUNNING:
+            self._image_recorder.update(
+                image_data=self._camera.get_image(),
+                image_timestamp=self._camera.get_changed_timestamp())
         self._frame_count += 1
         if self._frame_count % 1000 == 0:
             print(f"Update count: {self._frame_count}")

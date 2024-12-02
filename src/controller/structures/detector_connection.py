@@ -29,6 +29,8 @@ from src.detector.api import \
     DetectorFrameGetResponse, \
     DetectorStartRequest, \
     DetectorStopRequest, \
+    ImageRecorderRetrieveResponse, \
+    ImageRecorderGetStateResponse, \
     MarkerParametersGetResponse, \
     MarkerParametersSetRequest
 import uuid
@@ -119,4 +121,6 @@ class DetectorConnection(Connection):
             CameraParametersSetResponse,
             CameraResolutionGetResponse,
             DetectorFrameGetResponse,
+            ImageRecorderGetStateResponse,
+            ImageRecorderRetrieveResponse,
             MarkerParametersGetResponse]
