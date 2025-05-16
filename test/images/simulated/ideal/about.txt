@@ -1,0 +1,13 @@
+This folder contains a set of simulated images in order to help test code.
+Each file is named as follows:
+C<CAMERA>_F<FRAME>.png
+
+Each camera is 1 meter away from a central pivot point at the origin.
+Each camera has its y axis aligned with the world's up direction (+z-axis in Blender).
+Cameras 01 through 05 are all oriented 30 degrees relative to the table surface, each rotated 45 degrees around the world origin.
+Cameras 06 through 10 are all oriented 45 degrees relative to the table surface, each rotated 45 degrees around the world origin
+All cameras use the same viewing angle and image resolutions.
+
+Frames from the A and B sets will have the ChArUco board visible.
+Frames from the C and D sets will have the ChArUco board at least partially visible to most cameras but not all.
+Frames from the E set are designed to be visible only to specific cameras.
