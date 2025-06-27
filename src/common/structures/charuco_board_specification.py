@@ -28,12 +28,11 @@ class CharucoBoardSpecification(BaseModel):
         return board_size_x_mm, board_size_y_mm
 
     def create_board(self) -> Any:  # type cv2.aruco.CharucoBoard
-        charuco_board = cv2.aruco.CharucoBoard_create(
-            self.square_count_x,
-            self.square_count_y,
-            self.square_size_px,
-            self.marker_size_px,
-            self.aruco_dictionary())
+        charuco_board = cv2.aruco.CharucoBoard(
+            size=(self.square_count_x, self.square_count_y),
+            squareLength=self.square_size_px,
+            markerLength=self.marker_size_px,
+            dictionary=self.aruco_dictionary())
         return charuco_board
 
     def get_marker_center_points(self) -> list[list[float]]:

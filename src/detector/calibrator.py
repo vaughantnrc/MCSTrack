@@ -112,7 +112,7 @@ class Calibrator:
             raise MCTDetectorRuntimeError(
                 message=f"No images for given resolution {str(image_resolution)} found.")
 
-        aruco_detector_parameters: ... = cv2.aruco.DetectorParameters_create()
+        aruco_detector_parameters: ... = cv2.aruco.DetectorParameters()
         mismatched_keys: list[str] = assign_key_value_list_to_aruco_detection_parameters(
             detection_parameters=aruco_detector_parameters,
             key_value_list=marker_parameters)
@@ -165,7 +165,7 @@ class Calibrator:
                 board=charuco_board,
             )
             # Algorithm requires a minimum of 4 markers
-            if len(frame_charuco_corners) >= 4:
+            if frame_charuco_corners is not None and len(frame_charuco_corners) >= 4:
                 all_charuco_corners.append(frame_charuco_corners)
                 all_charuco_ids.append(frame_charuco_ids)
 
