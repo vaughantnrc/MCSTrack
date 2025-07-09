@@ -4,6 +4,7 @@ from .structures import \
     DetectorRecord, \
     DetectorFrameRecord, \
     PoseSolverParameters
+from src.common import MathUtils
 from src.common.structures import \
     DetectorFrame, \
     IntrinsicParameters, \
@@ -12,7 +13,6 @@ from src.common.structures import \
     Pose, \
     Ray, \
     TargetBase
-from src.common.util import MathUtils
 import cv2
 import cv2.aruco
 import datetime

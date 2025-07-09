@@ -1,6 +1,4 @@
-from .get_kwarg import get_kwarg
-from .status_message_source import StatusMessageSource
-from src.common.api import \
+from .api import \
     DequeueStatusMessagesRequest, \
     DequeueStatusMessagesResponse, \
     EmptyResponse, \
@@ -13,16 +11,20 @@ from src.common.api import \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
-from src.common.exceptions import MCTParsingError
-from src.common.structures import \
-    MCTParsable, \
+from .exceptions import MCTParsingError
+from .status_messages import \
     SeverityLabel, \
-    StatusMessage
+    StatusMessage, \
+    StatusMessageSource
+from .structures import MCTParsable
+from .util import \
+    PythonUtils
 import abc
 import datetime
 from fastapi import WebSocket, WebSocketDisconnect
 import logging
 from typing import Callable, Optional, TypeVar
+
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +85,7 @@ class MCTComponent(abc.ABC):
         """
         :key client_identifier: str
         """
-        client_identifier: str = get_kwarg(
+        client_identifier: str = PythonUtils.get_kwarg(
             kwargs=kwargs,
             key="client_identifier",
             arg_type=str)
@@ -111,7 +113,7 @@ class MCTComponent(abc.ABC):
                 TimeSyncStopRequest: self.time_sync_stop}
     
     def timestamp_get(self, **kwargs) -> TimestampGetResponse:
-        request: TimestampGetRequest = get_kwarg(
+        request: TimestampGetRequest = PythonUtils.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=TimestampGetRequest)

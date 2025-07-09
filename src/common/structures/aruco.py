@@ -1,6 +1,30 @@
-from pydantic import BaseModel, Field
-from typing import Any, Tuple
+import base64
+import cv2
 import cv2.aruco
+import numpy
+from pydantic import BaseModel, Field
+from typing import Any, Final, Literal, Tuple
+
+
+CornerRefinementMethod = Literal["NONE", "SUBPIX", "CONTOUR", "APRILTAG"]
+CORNER_REFINEMENT_METHOD_NONE: Final[str] = 'NONE'
+CORNER_REFINEMENT_METHOD_SUBPIX: Final[str] = 'SUBPIX'
+CORNER_REFINEMENT_METHOD_CONTOUR: Final[str] = 'CONTOUR'
+CORNER_REFINEMENT_METHOD_APRILTAG: Final[str] = 'APRILTAG'
+
+
+CORNER_REFINEMENT_METHOD_DICTIONARY_TEXT_TO_INT: dict[CornerRefinementMethod, int] = {
+    "NONE": cv2.aruco.CORNER_REFINE_NONE,
+    "SUBPIX": cv2.aruco.CORNER_REFINE_SUBPIX,
+    "CONTOUR": cv2.aruco.CORNER_REFINE_CONTOUR,
+    "APRILTAG": cv2.aruco.CORNER_REFINE_APRILTAG}
+
+
+CORNER_REFINEMENT_METHOD_DICTIONARY_INT_TO_TEXT: dict[int, CornerRefinementMethod] = {
+    cv2.aruco.CORNER_REFINE_NONE: "NONE",
+    cv2.aruco.CORNER_REFINE_SUBPIX: "SUBPIX",
+    cv2.aruco.CORNER_REFINE_CONTOUR: "CONTOUR",
+    cv2.aruco.CORNER_REFINE_APRILTAG: "APRILTAG"}
 
 
 class CharucoBoardSpecification(BaseModel):
@@ -83,3 +107,30 @@ class CharucoBoardSpecification(BaseModel):
     def get_marker_ids(self) -> list[int]:
         num_markers = self.square_count_x * self.square_count_y // 2
         return list(range(num_markers))
+
+
+class MarkerDefinition(BaseModel):
+    # TODO: This is unused at the time of writing 2025-07-09, deletion should be assessed
+
+    label: str = Field()
+    representation_single_base64: str = Field()  # representation from a single rotation only
+
+    def representation_all_base64(self):
+        """
+        OpenCV ArUco expects to receive all possible rotations of a marker. We generate these programmatically.
+        """
+        representation_single_bytes: bytes = base64.b64decode(self.representation_single_base64)
+        representation_single_list: list[bool] = list(representation_single_bytes)
+        representation_single_matrix: numpy.ndarray = numpy.asarray(
+            a=representation_single_list,
+            dtype=bool)
+        marker_side_length_bits: int = int(numpy.sqrt(len(representation_single_list)))
+        representation_single_matrix = numpy.reshape(
+            a=representation_single_matrix,
+            newshape=(marker_side_length_bits, marker_side_length_bits))
+        representation_all_list: list[bool] = list(representation_single_matrix.flatten())
+        for i in range(3):
+            representation_single_matrix = numpy.rot90(representation_single_matrix)
+            representation_all_list += list(representation_single_matrix.flatten())
+        representation_all_bytes: bytes = bytes(representation_all_list)
+        return base64.b64encode(representation_all_bytes)

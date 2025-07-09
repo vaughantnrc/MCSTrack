@@ -1,6 +1,10 @@
+from .linear_algebra import Pose
 import abc
+import datetime
+from enum import IntEnum
 import numpy
 from pydantic import BaseModel, Field, PrivateAttr
+from typing import Final
 
 
 class Marker(BaseModel):
@@ -88,3 +92,30 @@ class TargetBoard(TargetBase):
         if marker_id not in self._marker_dict:
             raise IndexError(f"marker_id {marker_id} is not in target {self.target_id}")
         return self._marker_dict[marker_id].points
+
+
+class PoseSolverStatus:
+
+    class Solve(IntEnum):
+        STOPPED: Final[int] = 0
+        RUNNING: Final[int] = 1
+        FAILURE: Final[int] = 2
+
+    solve_status: Solve
+    solve_errors: list[str]
+
+    def __init__(self):
+        self.solve_status = PoseSolverStatus.Solve.STOPPED
+        self.solve_errors = list()
+
+    def in_runnable_state(self):
+        return self.solve_status == PoseSolverStatus.Solve.RUNNING
+
+
+class PoseSolverFrame(BaseModel):
+    detector_poses: list[Pose] | None = Field()
+    target_poses: list[Pose] | None = Field()
+    timestamp_utc_iso8601: str = Field()
+
+    def timestamp_utc(self):
+        return datetime.datetime.fromisoformat(self.timestamp_utc_iso8601)

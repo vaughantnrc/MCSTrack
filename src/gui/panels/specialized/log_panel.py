@@ -1,4 +1,4 @@
-from src.common.structures import StatusMessage
+from src.common import StatusMessage
 import wx
 import wx.grid
 

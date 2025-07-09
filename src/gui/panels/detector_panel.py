@@ -10,12 +10,10 @@ from .parameters import \
 from src.common import \
     ErrorResponse, \
     EmptyResponse, \
-    ImageCoding, \
     ImageUtils, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
-    StandardResolutions, \
     StatusMessageSource
 from src.common.structures import \
     CaptureFormat, \
@@ -50,9 +48,9 @@ logger = logging.getLogger(__name__)
 
 _UPDATE_INTERVAL_MILLISECONDS: Final[int] = 16
 _SUPPORTED_RESOLUTIONS: Final[list[ImageResolution]] = [
-    StandardResolutions.RES_640X480,
-    StandardResolutions.RES_1280X720,
-    StandardResolutions.RES_1920X1080]
+    ImageUtils.StandardResolutions.RES_640X480,
+    ImageUtils.StandardResolutions.RES_1280X720,
+    ImageUtils.StandardResolutions.RES_1920X1080]
 _SUPPORTED_FPS: Final[list[str]] = [
     "15",
     "30",
@@ -521,7 +519,7 @@ class DetectorPanel(BasePanel):
         else:
             scale: float | None
             if self._live_preview_image_base64 is not None:
-                opencv_image: numpy.ndarray = ImageCoding.base64_to_image(input_base64=self._live_preview_image_base64)
+                opencv_image: numpy.ndarray = ImageUtils.base64_to_image(input_base64=self._live_preview_image_base64)
                 display_image: numpy.ndarray = ImageUtils.image_resize_to_fit(
                     opencv_image=opencv_image,
                     available_size=self._image_panel.GetSize())
@@ -556,7 +554,7 @@ class DetectorPanel(BasePanel):
                         color=[127, 191, 255],  # orange
                         thickness=2)
 
-        image_buffer: bytes = ImageCoding.image_to_bytes(image_data=display_image, image_format=".jpg")
+        image_buffer: bytes = ImageUtils.image_to_bytes(image_data=display_image, image_format=".jpg")
         image_buffer_io: BytesIO = BytesIO(image_buffer)
         wx_image: wx.Image = wx.Image(image_buffer_io)
         wx_bitmap: wx.Bitmap = wx_image.ConvertToBitmap()

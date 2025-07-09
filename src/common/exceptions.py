@@ -1,4 +1,6 @@
-from .mct_error import MCTError
+class MCTError(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
 
 
 class MCTParsingError(MCTError):

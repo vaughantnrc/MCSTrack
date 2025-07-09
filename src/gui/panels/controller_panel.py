@@ -4,9 +4,8 @@ from .specialized import \
     LogPanel
 from src.common import \
     DequeueStatusMessagesResponse, \
+    StatusMessage, \
     StatusMessageSource
-from src.common.structures import \
-    StatusMessage
 from src.controller import \
     MCTController, \
     ConnectionReport

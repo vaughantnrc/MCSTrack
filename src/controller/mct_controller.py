@@ -290,9 +290,8 @@ class MCTController(MCTComponent):
         None provided to `role` or `active` is treated as a wildcard (i.e. not filtered on that criteria).
         """
         if role is not None:
-            valid_roles: list[str] = list(get_args(ComponentRoleLabel))
-            if role not in valid_roles:
-                raise ValueError(f"role must be among the valid values {str(valid_roles)}")
+            if role not in ComponentRoleLabel:
+                raise ValueError(f"role must be among the valid values for ComponentRoleLabel")
         return_value: list[str] = list()
         for connection_label, connection in self._connections.items():
             if role is not None and connection.get_role() != role:

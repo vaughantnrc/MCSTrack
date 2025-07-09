@@ -11,7 +11,6 @@ from .specialized import \
 from src.common import \
     ErrorResponse, \
     EmptyResponse, \
-    ImageCoding, \
     ImageUtils, \
     MCTRequestSeries, \
     MCTResponse, \
@@ -344,11 +343,11 @@ class CalibratorPanel(BasePanel):
         self,
         response: CalibrationImageGetResponse
     ) -> None:
-        opencv_image = ImageCoding.base64_to_image(input_base64=response.image_base64)
+        opencv_image = ImageUtils.base64_to_image(input_base64=response.image_base64)
         opencv_image = ImageUtils.image_resize_to_fit(
             opencv_image=opencv_image,
             available_size=self._image_panel.GetSize())
-        image_buffer: bytes = ImageCoding.image_to_bytes(image_data=opencv_image, image_format=".jpg")
+        image_buffer: bytes = ImageUtils.image_to_bytes(image_data=opencv_image, image_format=".jpg")
         image_buffer_io: BytesIO = BytesIO(image_buffer)
         wx_image: wx.Image = wx.Image(image_buffer_io)
         wx_bitmap: wx.Bitmap = wx_image.ConvertToBitmap()

@@ -1,7 +1,7 @@
 from src.common import \
-    client_identifier_from_connection, \
     EmptyResponse, \
     ErrorResponse, \
+    NetworkUtils, \
     TimestampGetRequest, \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
@@ -83,14 +83,14 @@ def create_app() -> FastAPI:
     async def detector_start(
         http_request: Request
     ) -> None:
-        client_identifier: str = client_identifier_from_connection(connection=http_request)
+        client_identifier: str = NetworkUtils.client_identifier_from_connection(connection=http_request)
         detector.detector_start(client_identifier=client_identifier)
 
     @detector_app.head("/detector/stop")
     async def detector_stop(
         http_request: Request
     ) -> None:
-        client_identifier: str = client_identifier_from_connection(connection=http_request)
+        client_identifier: str = NetworkUtils.client_identifier_from_connection(connection=http_request)
         detector.detector_stop(client_identifier=client_identifier)
 
     @detector_app.post("/detector/start_time_sync")

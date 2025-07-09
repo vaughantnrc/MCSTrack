@@ -1,13 +1,14 @@
 from ..structures import \
     CameraConfiguration, \
     CameraStatus
-from src.common import StatusMessageSource
+from src.common import \
+    SeverityLabel, \
+    StatusMessageSource
 from src.common.structures import \
     CaptureFormat, \
     ImageResolution, \
     KeyValueSimpleAny, \
-    KeyValueMetaAbstract, \
-    SeverityLabel
+    KeyValueMetaAbstract
 import abc
 import base64
 import cv2

@@ -1,4 +1,4 @@
-from src.common.util import MathUtils
+from src.common import MathUtils
 from src.common.structures import \
     IterativeClosestPointParameters, \
     Ray

@@ -2,6 +2,7 @@ from src.board_builder.structures import \
     MarkerRaySet, \
     PoseData, \
     PoseLocation
+from src.common import MathUtils
 from src.common.structures import \
     CharucoBoardSpecification, \
     IntrinsicParameters, \
@@ -12,7 +13,6 @@ from src.common.structures import \
     Ray, \
     TargetBase, \
     TargetMarker
-from src.common.util import MathUtils
 from src.pose_solver.structures import PoseSolverParameters
 import cv2
 import cv2.aruco

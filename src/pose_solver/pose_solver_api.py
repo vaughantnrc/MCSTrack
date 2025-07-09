@@ -16,10 +16,10 @@ from .structures import \
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
-    get_kwarg, \
     MCTComponent, \
     MCTRequest, \
-    MCTResponse
+    MCTResponse, \
+    PythonUtils
 from src.common.structures import \
     Pose, \
     PoseSolverStatus
@@ -49,7 +49,7 @@ class PoseSolverAPI(MCTComponent):
         self._status = PoseSolverStatus()
 
     def add_detector_frame(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverAddDetectorFrameRequest = get_kwarg(
+        request: PoseSolverAddDetectorFrameRequest = PythonUtils.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=PoseSolverAddDetectorFrameRequest)
@@ -62,7 +62,7 @@ class PoseSolverAPI(MCTComponent):
         return EmptyResponse()
 
     def add_target(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverAddTargetMarkerRequest = get_kwarg(
+        request: PoseSolverAddTargetMarkerRequest = PythonUtils.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=PoseSolverAddTargetMarkerRequest)
@@ -84,7 +84,7 @@ class PoseSolverAPI(MCTComponent):
             target_poses=target_poses)
 
     def set_extrinsic_matrix(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverSetExtrinsicRequest = get_kwarg(
+        request: PoseSolverSetExtrinsicRequest = PythonUtils.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=PoseSolverSetExtrinsicRequest)
@@ -97,7 +97,7 @@ class PoseSolverAPI(MCTComponent):
         return EmptyResponse()
 
     def set_intrinsic_parameters(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverSetIntrinsicRequest = get_kwarg(
+        request: PoseSolverSetIntrinsicRequest = PythonUtils.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=PoseSolverSetIntrinsicRequest)
@@ -110,7 +110,7 @@ class PoseSolverAPI(MCTComponent):
         return EmptyResponse()
 
     def set_reference_marker(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverSetReferenceRequest = get_kwarg(
+        request: PoseSolverSetReferenceRequest = PythonUtils.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=PoseSolverSetReferenceRequest)
@@ -121,7 +121,7 @@ class PoseSolverAPI(MCTComponent):
         return EmptyResponse()
 
     def set_targets(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverSetTargetsRequest = get_kwarg(
+        request: PoseSolverSetTargetsRequest = PythonUtils.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=PoseSolverSetTargetsRequest)

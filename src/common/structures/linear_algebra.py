@@ -118,3 +118,13 @@ class Ray:
             raise ValueError("Direction cannot be zero.")
         self.source_point = source_point
         self.direction = direction
+
+
+class Vec3(BaseModel):
+    """
+    Simply a container for x, y, and z coordinates.
+    TODO: This has limited usage, it may be best to delete it
+    """
+    x: float = Field()
+    y: float = Field()
+    z: float = Field()

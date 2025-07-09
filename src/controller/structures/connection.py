@@ -7,11 +7,10 @@ from src.common import \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
-    TimestampGetResponse
-from src.common.structures import \
-    MCTParsable, \
     SeverityLabel, \
-    StatusMessage
+    StatusMessage, \
+    TimestampGetResponse
+from src.common.structures import MCTParsable
 import abc
 import datetime
 from enum import StrEnum

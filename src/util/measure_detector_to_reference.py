@@ -11,7 +11,7 @@ from timeit import main
 from scipy.spatial.transform import Rotation as R
 
 from src.board_builder.board_builder import BoardBuilder
-from src.common.structures.component_role_label import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
+from src.common.structures.mct_component import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
 from src.controller.mct_controller import MCTController
 from src.controller.structures.mct_component_address import MCTComponentAddress
 from src.pose_solver.util import average_quaternion, average_vector

@@ -1,21 +1,19 @@
-import os
-
-import numpy as np
-import importlib
-import json
-
-from structures import AccuracyTestParameters
 from src.board_builder.board_builder import BoardBuilder
-from src.common.util import MathUtils
+from src.common import MathUtils
 from src.common.structures import \
     MarkerCornerImagePoint, \
     MarkerSnapshot, \
     TargetBoard, \
     Marker
-from utils import \
+from .structures import AccuracyTestParameters
+from .utils import \
     generate_virtual_snapshots, \
     generate_data, \
     graph_renderer
+import json
+import numpy as np
+import importlib
+import os
 
 
 class AccuracyTest:

@@ -1,45 +1,46 @@
-from io import BytesIO
-import platform
-import uuid
-import cv2
-import logging
-from typing import Final
-import numpy
-import wx
-import wx.grid
-import datetime
-import os
-
-from src.common.api.empty_response import EmptyResponse
-from src.common.api.error_response import ErrorResponse
-from src.common.api.mct_request_series import MCTRequestSeries
-from src.common.api.mct_response import MCTResponse
-from src.common.api.mct_response_series import MCTResponseSeries
-from src.common.image_coding import ImageCoding
-from src.common.image_utils import ImageUtils
-from src.common.standard_resolutions import StandardResolutions
-from src.common.structures.detector_frame import DetectorFrame
-from src.common.structures.image_resolution import ImageResolution
-from src.common.structures.marker_snapshot import MarkerSnapshot
-from src.detector.api import \
-    CameraImageGetRequest, \
-    CalibrationResultGetActiveResponse
-from src.detector.api import CameraImageGetResponse
-from src.gui.panels.detector_panel import _CAPTURE_FORMAT
-
 from .base_panel import BasePanel
 from .feedback import ImagePanel
-from .parameters import ParameterSpinboxFloat, ParameterCheckbox, ParameterText
-
-from src.board_builder import BoardBuilder
-from src.common.structures import PoseSolverFrame, Pose, Matrix4x4
-from src.controller import MCTController
-from src.common import (
-    StatusMessageSource
-)
+from .parameters import \
+    ParameterSpinboxFloat, \
+    ParameterCheckbox, \
+    ParameterText
 from .pose_solver_panel import POSE_REPRESENTATIVE_MODEL
-from .specialized import \
-    GraphicsRenderer
+from .specialized import GraphicsRenderer
+from src.board_builder import BoardBuilder
+from src.common.api import \
+    EmptyResponse, \
+    ErrorResponse, \
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries
+from src.common import \
+    ImageUtils, \
+    StatusMessageSource
+from src.common.structures import \
+    DetectorFrame, \
+    ImageResolution, \
+    MarkerSnapshot, \
+    Matrix4x4, \
+    PoseSolverFrame, \
+    Pose
+from src.controller import MCTController
+from src.detector.api import \
+    CameraImageGetRequest, \
+    CameraImageGetResponse, \
+    CalibrationResultGetActiveResponse
+from src.gui.panels.detector_panel import _CAPTURE_FORMAT
+import cv2
+import datetime
+from io import BytesIO
+import logging
+import numpy
+import os
+import platform
+from typing import Final
+import uuid
+import wx
+import wx.grid
+
 
 logger = logging.getLogger(__name__)
 
@@ -540,13 +541,13 @@ class BoardBuilderPanel(BasePanel):
 
     def _process_frame(self, preview: LiveDetectorPreview):
         # TODO: The Detector should tell us the resolution of the image it operated on.
-        resolution_str: str = str(StandardResolutions.RES_1280X720)
+        resolution_str: str = str(ImageUtils.StandardResolutions.RES_1280X720)
         image_panel = preview.image_panel
         display_image: numpy.ndarray
         scale: float | None
 
         if self._preview_image_checkbox.checkbox.GetValue() and preview.image is not None:
-            opencv_image: numpy.ndarray = ImageCoding.base64_to_image(input_base64=preview.image)
+            opencv_image: numpy.ndarray = ImageUtils.base64_to_image(input_base64=preview.image)
             display_image: numpy.ndarray = ImageUtils.image_resize_to_fit(
                 opencv_image=opencv_image,
                 available_size=image_panel.GetSize())
@@ -571,7 +572,7 @@ class BoardBuilderPanel(BasePanel):
             if self._annotate_rejected_checkbox.checkbox.GetValue():
                 self._draw_all_corners(preview.detector_frame.rejected_marker_snapshots, scale, display_image, [127, 191, 255])
 
-        image_buffer: bytes = ImageCoding.image_to_bytes(image_data=display_image, image_format=".jpg")
+        image_buffer: bytes = ImageUtils.image_to_bytes(image_data=display_image, image_format=".jpg")
         image_buffer_io: BytesIO = BytesIO(image_buffer)
         wx_image: wx.Image = wx.Image(image_buffer_io)
         wx_bitmap: wx.Bitmap = wx_image.ConvertToBitmap()

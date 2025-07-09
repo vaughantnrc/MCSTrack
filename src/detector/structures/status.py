@@ -9,3 +9,9 @@ class CameraStatus(StrEnum):
 
     def in_runnable_state(self):
         return self == CameraStatus.RUNNING
+
+
+class MarkerStatus(StrEnum):
+    STOPPED: Final[int] = "STOPPED"
+    RUNNING: Final[int] = "RUNNING"
+    FAILURE: Final[int] = "FAILURE"

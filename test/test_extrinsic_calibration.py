@@ -2,7 +2,7 @@ import cv2
 import numpy
 import os
 import re
-from src.common import ImageCoding, StatusMessageSource
+from src.common import ImageUtils, StatusMessageSource
 from src.common.structures import \
     CORNER_REFINEMENT_METHOD_SUBPIX, \
     ImageResolution, \
@@ -10,7 +10,7 @@ from src.common.structures import \
     KeyValueSimpleAny, \
     KeyValueSimpleString, \
     MarkerSnapshot
-from src.detector import Calibrator
+from src.detector import IntrinsicCalibrator
 from src.detector.implementations.marker_aruco_opencv import ArucoOpenCVMarker
 from src.detector.structures import CalibratorConfiguration
 from src.detector.util import KEY_CORNER_REFINEMENT_METHOD
@@ -68,7 +68,7 @@ class TestPoseSolver(unittest.TestCase):
         # We'll use all images from the A# and B# sets of frames.
         calibration_result: IntrinsicCalibration | None = None
         with TemporaryDirectory() as temppath:
-            calibrator: Calibrator = Calibrator(
+            calibrator: IntrinsicCalibrator = IntrinsicCalibrator(
                 configuration=CalibratorConfiguration(data_path=temppath),
                 status_message_source=status_message_source)
             for camera_id, image_filepaths_by_frame_id in image_filepaths.items():
@@ -76,7 +76,7 @@ class TestPoseSolver(unittest.TestCase):
                     if not frame_id.startswith("A") and not frame_id.startswith("B"):
                         continue
                     image: numpy.ndarray = cv2.imread(image_filepath)
-                    image_base64: str = ImageCoding.image_to_base64(image)
+                    image_base64: str = ImageUtils.image_to_base64(image)
                     calibrator.add_image(image_base64)
             _, calibration_result = calibrator.calculate(
                 image_resolution=IMAGE_RESOLUTION,

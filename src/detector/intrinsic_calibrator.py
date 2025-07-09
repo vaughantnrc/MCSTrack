@@ -10,7 +10,8 @@ from .structures import \
     CalibrationResultState
 from .util import assign_key_value_list_to_aruco_detection_parameters
 from src.common import \
-    ImageCoding, \
+    ImageUtils, \
+    IOUtils, \
     StatusMessageSource
 from src.common.structures import \
     CharucoBoardSpecification, \
@@ -20,8 +21,6 @@ from src.common.structures import \
     IntrinsicParameters, \
     KeyValueSimpleAny, \
     Vec3
-from src.common.util import \
-    IOUtils
 import cv2
 import cv2.aruco
 import datetime
@@ -38,7 +37,7 @@ import uuid
 logger = logging.getLogger(__name__)
 
 
-class Calibrator:
+class IntrinsicCalibrator:
 
     _configuration: CalibratorConfiguration
     _calibration_map: dict[ImageResolution, CalibrationMapValue]
@@ -75,7 +74,7 @@ class Calibrator:
         self,
         image_base64: str
     ) -> str:  # id of image
-        image_data: numpy.ndarray = ImageCoding.base64_to_image(input_base64=image_base64, color_mode="color")
+        image_data: numpy.ndarray = ImageUtils.base64_to_image(input_base64=image_base64, color_mode="color")
         map_key: ImageResolution = ImageResolution(x_px=image_data.shape[1], y_px=image_data.shape[0])
         # Before making any changes to the calibration map, make sure folders exist,
         # and that this file does not somehow already exist (highly unlikely)
@@ -95,7 +94,7 @@ class Calibrator:
         self._calibration_map[map_key].image_metadata_list.append(
             CalibrationImageMetadata(identifier=image_identifier))
         # noinspection PyTypeChecker
-        image_bytes = ImageCoding.image_to_bytes(image_data=image_data, image_format=Calibrator.IMAGE_FORMAT)
+        image_bytes = ImageUtils.image_to_bytes(image_data=image_data, image_format=IntrinsicCalibrator.IMAGE_FORMAT)
         with (open(image_filepath, 'wb') as in_file):
             in_file.write(image_bytes)
         self.save()
@@ -349,7 +348,7 @@ class Calibrator:
             raise MCTDetectorRuntimeError(
                 message=f"Failed to open image {image_identifier} for "
                         f"given resolution {str(matching_image_resolution)}.")
-        image_base64 = ImageCoding.bytes_to_base64(image_bytes=image_bytes)
+        image_base64 = ImageUtils.bytes_to_base64(image_bytes=image_bytes)
         return image_base64
 
     # noinspection DuplicatedCode
@@ -465,7 +464,7 @@ class Calibrator:
         key_path: str = self._path_for_map_key(map_key=map_key)
         return os.path.join(
             key_path,
-            image_identifier + Calibrator.IMAGE_FORMAT)
+            image_identifier + IntrinsicCalibrator.IMAGE_FORMAT)
 
     def list_resolutions(self) -> list[ImageResolution]:
         resolutions: list[ImageResolution] = list(self._calibration_map.keys())
@@ -534,7 +533,7 @@ class Calibrator:
         return True
 
     def _map_filepath(self) -> str:
-        return os.path.join(self._configuration.data_path, Calibrator.CALIBRATION_MAP_FILENAME)
+        return os.path.join(self._configuration.data_path, IntrinsicCalibrator.CALIBRATION_MAP_FILENAME)
 
     def _path_for_map_key(
         self,
@@ -550,7 +549,7 @@ class Calibrator:
         key_path: str = self._path_for_map_key(map_key=map_key)
         return os.path.join(
             key_path,
-            result_identifier + Calibrator.RESULT_FORMAT)
+            result_identifier + IntrinsicCalibrator.RESULT_FORMAT)
 
     def save(self) -> None:
         IOUtils.json_write(

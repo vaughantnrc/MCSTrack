@@ -1,7 +1,8 @@
+from src.common import MathUtils
 import json
 import os
 import numpy as np
-from src.common.util import MathUtils
+
 
 def transform_point(point, matrix):
     """Applies a 4x4 transformation matrix to a 3D point."""

@@ -1,4 +1,4 @@
-from src.common.structures.pose_solver_frame import PoseSolverFrame
+from src.common.structures.pose_solver import PoseSolverFrame
 from .mct_component_address import MCTComponentAddress
 from .connection import Connection
 from src.common.api import \

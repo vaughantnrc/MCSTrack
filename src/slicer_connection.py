@@ -7,8 +7,8 @@ import time as t
 import logging
 
 from src.common.api.mct_request_series import MCTRequestSeries
-from src.common.structures.component_role_label import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
-from src.common.structures.target import TargetBase
+from src.common.structures.mct_component import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
+from src.common.structures import TargetBase
 from src.controller.mct_controller import MCTController
 from src.controller.structures.mct_component_address import MCTComponentAddress
 from ipaddress import IPv4Address

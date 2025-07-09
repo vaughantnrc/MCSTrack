@@ -1,18 +1,15 @@
-import datetime
-
-import numpy as np
-from numpy._typing import NDArray
-from typing import Any
-from scipy.spatial.transform import Rotation as R
-from src.common.util.average_quaternion import average_quaternion
+from src.common.util import MathUtils
 from src.common.structures import Matrix4x4, Pose
+import datetime
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 
 class PoseLocation:
 
     _id: str
     _timestamp: str
-    _TMatrix: NDArray[Any]
+    _TMatrix: np.ndarray
     _RMAT_list: list
     _TVEC_list: list
 
@@ -36,7 +33,7 @@ class PoseLocation:
 
         quaternions = [R.from_matrix(rot).as_quat(canonical=True) for rot in self._RMAT_list]
         quaternions = [[float(quaternion[i]) for i in range(0, 4)] for quaternion in quaternions]
-        avg_quat = average_quaternion(quaternions)
+        avg_quat = MathUtils.average_quaternion(quaternions)
         avg_rotation = R.from_quat(avg_quat).as_matrix()
 
         self._TMatrix[:3, :3] = avg_rotation

@@ -4,7 +4,7 @@ from ..structures import \
     CameraConfiguration, \
     CameraStatus
 from src.common import \
-    StandardResolutions, \
+    ImageUtils, \
     StatusMessageSource
 from src.common.structures import \
     ImageResolution, \
@@ -35,7 +35,8 @@ _CAMERA_RESOLUTION_DEFAULT: Final[str] = "640x480"
 # This list is by no means exhaustive, but it should probably
 # capture a reasonable cross-section of commonly-used camera image resolutions.
 # Ideally we can query the camera/driver for supported resolutions and use that instead of this list.
-_CAMERA_RESOLUTION_ALLOWABLE: Final[list[str]] = [str(resolution) for resolution in StandardResolutions.as_list()]
+_CAMERA_RESOLUTION_ALLOWABLE: Final[list[str]] = [
+    str(resolution) for resolution in ImageUtils.StandardResolutions.as_list()]
 _CAMERA_FPS_KEY: Final[str] = "FramesPerSecond"
 _CAMERA_FPS_DEFAULT: Final[float] = 30.0
 _CAMERA_FPS_RANGE_MINIMUM: Final[float] = 1.0

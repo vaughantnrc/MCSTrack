@@ -1,13 +1,45 @@
-from src.common.structures import \
-    SeverityLabel, \
-    StatusMessage
 import datetime
+from enum import StrEnum
 import logging
+from pydantic import BaseModel, Field
+from typing import Final
+
 
 logger = logging.getLogger(__name__)
 
 
+SEVERITY_LABEL_DEBUG: Final[str] = "debug"
+SEVERITY_LABEL_INFO: Final[str] = "info"
+SEVERITY_LABEL_WARNING: Final[str] = "warning"
+SEVERITY_LABEL_ERROR: Final[str] = "error"
+SEVERITY_LABEL_CRITICAL: Final[str] = "critical"
+class SeverityLabel(StrEnum):
+    DEBUG: Final[str] = SEVERITY_LABEL_DEBUG
+    INFO: Final[str] = SEVERITY_LABEL_INFO
+    WARNING: Final[str] = SEVERITY_LABEL_WARNING
+    ERROR: Final[str] = SEVERITY_LABEL_ERROR
+    CRITICAL: Final[str] = SEVERITY_LABEL_CRITICAL
+
+
+SEVERITY_LABEL_TO_INT: Final[dict[SeverityLabel, int]] = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+    "critical": logging.CRITICAL}
+
+
+class StatusMessage(BaseModel):
+    source_label: str = Field()
+    severity: SeverityLabel = Field()
+    message: str
+    timestamp_utc_iso8601: str
+
+
 class StatusMessageSource:
+    """
+    Class to facilitate the management of status messages sent between components
+    """
 
     _source_label: str
 

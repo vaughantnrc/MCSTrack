@@ -1,10 +1,11 @@
 from ..structures import \
     MarkerConfiguration, \
     MarkerStatus
-from src.common import StatusMessageSource
+from src.common import \
+    SeverityLabel, \
+    StatusMessageSource
 from src.common.structures import \
     MarkerSnapshot, \
-    SeverityLabel, \
     KeyValueMetaAny, \
     KeyValueSimpleAny
 import abc
