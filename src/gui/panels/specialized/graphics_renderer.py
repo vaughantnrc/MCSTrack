@@ -129,8 +129,8 @@ class GraphicsRenderer(GLCanvas, wx.Window):
             handler=self._on_resize)
 
         self._context = GLContext(win=self)
-        self._last_render_datetime_utc = datetime.datetime.utcnow()
-        self._last_update_datetime_utc = datetime.datetime.utcnow()
+        self._last_render_datetime_utc = datetime.datetime.now(tz=datetime.timezone.utc)
+        self._last_update_datetime_utc = datetime.datetime.now(tz=datetime.timezone.utc)
         self._shaders = set()
         self._model_dictionary = dict()
         self._scene_objects = list()
@@ -243,10 +243,10 @@ class GraphicsRenderer(GLCanvas, wx.Window):
             scene_object.model.draw(translation=translation, rotation_quaternion=list(rotation_quaternion))
 
         self.SwapBuffers()
-        self._last_render_datetime_utc = datetime.datetime.utcnow()
+        self._last_render_datetime_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def _compute_seconds_since_last_update(self) -> float:
-        return (datetime.datetime.utcnow() - self._last_update_datetime_utc).total_seconds()
+        return (datetime.datetime.now(tz=datetime.timezone.utc) - self._last_update_datetime_utc).total_seconds()
 
     @staticmethod
     def _compute_mouse_deltas(
@@ -337,7 +337,7 @@ class GraphicsRenderer(GLCanvas, wx.Window):
                 numpy.array(self._perspective_target) + delta_y_millimeters * translation_y_vector)
             self._update_world_to_view()
 
-        self._last_update_datetime_utc = datetime.datetime.utcnow()
+        self._last_update_datetime_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def _on_mouse_wheel(self, event: wx.MouseEvent):
         delta_time_seconds: float = self._compute_seconds_since_last_update()
@@ -358,7 +358,7 @@ class GraphicsRenderer(GLCanvas, wx.Window):
             numpy.array(self._perspective_target) - delta_z_millimeters * translation_z_vector)
         self._update_world_to_view()
 
-        self._last_update_datetime_utc = datetime.datetime.utcnow()
+        self._last_update_datetime_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def _on_resize(self, _evt: wx.SizeEvent):
         self._update_viewport()

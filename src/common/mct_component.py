@@ -115,7 +115,7 @@ class MCTComponent(abc.ABC):
             kwargs=kwargs,
             key="request",
             arg_type=TimestampGetRequest)
-        timestamp_utc_iso8601 : str = datetime.datetime.utcnow().isoformat()
+        timestamp_utc_iso8601 : str = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         return TimestampGetResponse(
             requester_timestamp_utc_iso8601=request.requester_timestamp_utc_iso8601,
             responder_timestamp_utc_iso8601=timestamp_utc_iso8601)
@@ -143,12 +143,12 @@ class MCTComponent(abc.ABC):
                         supported_types=list(self.supported_request_types().keys()))
                 except MCTParsingError as e:
                     logger.exception(str(e))
-                    await websocket.send_json(MCTResponseSeries(requests_parsed=False).dict())
+                    await websocket.send_json(MCTResponseSeries().model_dump())
                     continue
                 response_series: MCTResponseSeries = self.websocket_handle_requests(
                     client_identifier=client_identifier,
                     request_series=MCTRequestSeries(series=request_series_list))
-                await websocket.send_json(response_series.dict())
+                await websocket.send_json(response_series.model_dump())
         except WebSocketDisconnect as e:
             print(f"DISCONNECTED: {str(e)}")
             logger.info(str(e))
@@ -180,5 +180,4 @@ class MCTComponent(abc.ABC):
                 self.add_status_message(severity="error", message=message)
                 response_series.append(ErrorResponse(message=message))
         return MCTResponseSeries(
-            requests_parsed=True,
             series=response_series)

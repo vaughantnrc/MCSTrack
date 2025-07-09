@@ -146,7 +146,7 @@ class BoardBuilder:
 
     def _solve_pose(self, detector_data: dict[str, list[MarkerSnapshot]], timestamp: datetime.datetime):
         """ Given marker ids and its corner locations, find its pose """
-        timestamp = datetime.datetime.utcnow()
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         for detector_name in detector_data:
             for marker_snapshot in detector_data[detector_name]:
                 if marker_snapshot.label not in list(self._index_to_marker_id.values()):
@@ -202,7 +202,7 @@ class BoardBuilder:
     @staticmethod
     def _write_detector_data_to_recording_file(detector_data: dict[str, list[MarkerSnapshot]], data_description: str):
         formatted_data = {}
-        timestamp = datetime.datetime.utcnow().isoformat()
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         for detector_name, snapshots in detector_data.items():
             formatted_data[detector_name] = []
             for snapshot in snapshots:
@@ -246,7 +246,7 @@ class BoardBuilder:
         if all(isinstance(v, list) and len(v) == 0 for v in detector_data.values()):
             return
         self.detector_poses = []
-        timestamp = datetime.datetime.utcnow()
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         for detector_name in detector_data:
             for marker_snapshot in detector_data[detector_name]:
                 corners_list: list[list[float]] = []
@@ -281,7 +281,7 @@ class BoardBuilder:
         detector_data = self._filter_markers_appearing_in_multiple_detectors(detector_data)
         if all(isinstance(v, list) and len(v) == 0 for v in detector_data.values()):
             return
-        timestamp = datetime.datetime.utcnow()
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         corners_dict = {}
         self.target_poses = []
         self._solve_pose(detector_data, timestamp)
@@ -349,7 +349,7 @@ class BoardBuilder:
                 pose = Pose(
                     target_id=marker_id,
                     object_to_reference_matrix=Matrix4x4.from_numpy_array(np.array(T)),
-                    solver_timestamp_utc_iso8601=str(datetime.datetime.utcnow()))
+                    solver_timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
                 self.target_poses.append(pose)
                 corners = self._calculate_corners_location(T, self.local_corners)
             predicted_corners[marker_id] = corners

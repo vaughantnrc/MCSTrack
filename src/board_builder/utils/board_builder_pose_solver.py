@@ -5,22 +5,15 @@ from src.board_builder.structures import \
 from src.common.structures import \
     CharucoBoardSpecification, \
     IntrinsicParameters, \
+    IterativeClosestPointParameters, \
     MarkerCorners, \
     Matrix4x4, \
     Pose, \
+    Ray, \
     TargetBase, \
     TargetMarker
 from src.common.util import MathUtils
-from src.common.util import register_corresponding_points
-from src.pose_solver.structures import \
-    Ray, \
-    PoseSolverParameters
-from src.pose_solver.util import \
-    average_quaternion, \
-    convex_quadrilateral_area, \
-    closest_intersection_between_n_lines, \
-    IterativeClosestPointParameters, \
-    iterative_closest_point_for_points_and_rays
+from src.pose_solver.structures import PoseSolverParameters
 import cv2
 import cv2.aruco
 import datetime
@@ -233,7 +226,7 @@ class BoardBuilderPoseSolver:
             Pose(
                 target_id=detector_label,
                 object_to_reference_matrix=pose,
-                solver_timestamp_utc_iso8601=str(datetime.datetime.utcnow().isoformat()))
+                solver_timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
             for detector_label, pose in self._poses_by_detector_label.items()]
         return detector_poses
 
@@ -535,7 +528,7 @@ class BoardBuilderPoseSolver:
         # After a certain number of intersections,
         # there may be little point in processing additional (lower precision) ray sets.
         for marker_id, ray_set_list in ray_sets_by_marker_id.items():
-            ray_set_list.sort(key=lambda x: convex_quadrilateral_area(x.image_points), reverse=True)
+            ray_set_list.sort(key=lambda x: MathUtils.convex_quadrilateral_area(x.image_points), reverse=True)
             ray_sets_by_marker_id[marker_id] = ray_set_list[0:self._parameters.MAXIMUM_RAY_COUNT_FOR_INTERSECTION]
 
         marker_count_by_marker_id: dict[str, int] = dict()
@@ -567,7 +560,7 @@ class BoardBuilderPoseSolver:
                     rays.append(Ray(
                         source_point=ray_set.ray_origin_reference,
                         direction=ray_set.ray_directions_reference[corner_index]))
-                intersection_result = closest_intersection_between_n_lines(
+                intersection_result = MathUtils.closest_intersection_between_n_lines(
                     rays=rays,
                     maximum_distance=self._parameters.INTERSECTION_MAXIMUM_DISTANCE)
                 if intersection_result.centroids.shape[0] == 0:
@@ -657,7 +650,7 @@ class BoardBuilderPoseSolver:
                     object_points_for_intersections = self._corresponding_point_list_in_target(target_id=target_id)
                     object_known_points += object_points_for_intersections
                     reference_known_points += reference_points_for_intersections
-                    initial_object_to_reference_matrix = register_corresponding_points(
+                    initial_object_to_reference_matrix = MathUtils.register_corresponding_points(
                         point_set_from=object_points_for_intersections,
                         point_set_to=reference_points_for_intersections)
                     initial_object_to_reference_estimated = True
@@ -687,17 +680,17 @@ class BoardBuilderPoseSolver:
                         mean_position += position
                     mean_position /= len(estimated_positions)
                     initial_object_to_reference_matrix[0:3, 3] = mean_position
-                    mean_orientation = average_quaternion(estimated_orientations)
+                    mean_orientation = MathUtils.average_quaternion(estimated_orientations)
                     initial_object_to_reference_matrix[0:3, 0:3] = Rotation.from_quat(mean_orientation).as_matrix()
 
-                icp_output = iterative_closest_point_for_points_and_rays(
+                icp_output = MathUtils.iterative_closest_point_for_points_and_rays(
                     source_known_points=object_known_points,
                     target_known_points=reference_known_points,
                     source_ray_points=object_ray_points,
                     target_rays=reference_rays,
                     initial_transformation_matrix=initial_object_to_reference_matrix,
                     parameters=iterative_closest_point_parameters)
-                object_to_reference_matrix = icp_output.source_to_target_matrix
+                object_to_reference_matrix = icp_output.source_to_target_matrix.as_numpy_array()
 
             # Compute a depth from each detector,
             # find newest ray_set for each detector
@@ -753,7 +746,7 @@ class BoardBuilderPoseSolver:
             self._poses_by_target_id[target_id] = pose
 
     def _update(self):
-        now_timestamp = datetime.datetime.utcnow()
+        now_timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         self._now_timestamp = now_timestamp
         poses_need_update: bool = self._clear_old_values(now_timestamp)
         poses_need_update |= len(self._marker_corners_since_update) > 0

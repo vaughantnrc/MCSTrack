@@ -259,7 +259,7 @@ class OpenCVCaptureDeviceCamera(AbstractCamera):
         # NOTE: The USB3 cameras bought for this project appear to require some basic parameters to be set,
         #       otherwise frame grab results in error
         default_resolution: ImageResolution = ImageResolution.from_str(_CAMERA_RESOLUTION_DEFAULT)
-        self._capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
+        self._capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc('M', 'J', 'P', 'G'))
         self._capture.set(cv2.CAP_PROP_FRAME_WIDTH, float(default_resolution.x_px))
         self._capture.set(cv2.CAP_PROP_FRAME_HEIGHT, float(default_resolution.y_px))
         self._capture.set(cv2.CAP_PROP_FPS, float(_CAMERA_FPS_DEFAULT))
@@ -300,4 +300,4 @@ class OpenCVCaptureDeviceCamera(AbstractCamera):
             self.set_status(CameraStatus.FAILURE)
             raise MCTDetectorRuntimeError(message=message)
 
-        self._image_timestamp_utc = datetime.datetime.utcnow()
+        self._image_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

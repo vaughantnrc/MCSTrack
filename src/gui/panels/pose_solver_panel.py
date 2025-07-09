@@ -180,7 +180,7 @@ class PoseSolverPanel(BasePanel):
         selected_index: int | None = self._tracking_table.get_selected_row_index()
         if selected_index is not None:
             if 0 <= selected_index < len(self._tracked_target_poses):
-                display_text: str = self._tracked_target_poses[selected_index].json(indent=4)
+                display_text: str = self._tracked_target_poses[selected_index].model_dump_json(indent=4)
                 self._tracking_display_textbox.SetValue(display_text)
             else:
                 self.status_message_source.enqueue_status_message(

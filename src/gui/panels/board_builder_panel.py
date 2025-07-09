@@ -7,9 +7,7 @@ from typing import Final
 import numpy
 import wx
 import wx.grid
-from cv2 import aruco
 import datetime
-import json
 import os
 
 from src.common.api.empty_response import EmptyResponse
@@ -23,7 +21,8 @@ from src.common.standard_resolutions import StandardResolutions
 from src.common.structures.detector_frame import DetectorFrame
 from src.common.structures.image_resolution import ImageResolution
 from src.common.structures.marker_snapshot import MarkerSnapshot
-from src.detector.api import CameraImageGetRequest, CalibrationResultGetActiveRequest, \
+from src.detector.api import \
+    CameraImageGetRequest, \
     CalibrationResultGetActiveResponse
 from src.detector.api import CameraImageGetResponse
 from src.gui.panels.detector_panel import _CAPTURE_FORMAT
@@ -56,9 +55,9 @@ class BoardBuilderPanel(BasePanel):
         image: str
 
         def __init__(
-                self,
-                detector_label: str,
-                image_panel: ImagePanel
+            self,
+            detector_label: str,
+            image_panel: ImagePanel
         ):
             self.detector_label = detector_label
             self.image_panel = image_panel
@@ -583,7 +582,7 @@ class BoardBuilderPanel(BasePanel):
         pose_solver_frame = PoseSolverFrame(
             detector_poses=detector_poses,
             target_poses=target_poses,
-            timestamp_utc_iso8601=datetime.datetime.utcnow().isoformat()
+            timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         )
 
         ### RENDERER ###

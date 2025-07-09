@@ -32,13 +32,16 @@ from .key_value_structures import \
     KeyValueMetaFloat, \
     KeyValueMetaInt, \
     key_value_meta_to_simple
+from .linear_algebra import \
+    IterativeClosestPointParameters, \
+    Matrix4x4, \
+    Pose, \
+    Ray
 from .marker_corner_image_point import MarkerCornerImagePoint
 from .marker_corners import MarkerCorners
 from .marker_definition import MarkerDefinition
 from .marker_snapshot import MarkerSnapshot
-from .matrix4x4 import Matrix4x4
 from .mct_parsable import MCTParsable
-from .pose import Pose
 from .pose_solver_frame import PoseSolverFrame
 from .pose_solver_status import PoseSolverStatus
 from .status_message import \

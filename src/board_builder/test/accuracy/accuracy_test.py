@@ -6,7 +6,7 @@ import json
 
 from structures import AccuracyTestParameters
 from src.board_builder.board_builder import BoardBuilder
-from src.common.util import register_corresponding_points
+from src.common.util import MathUtils
 from src.common.structures import \
     MarkerCornerImagePoint, \
     MarkerSnapshot, \
@@ -72,7 +72,7 @@ class AccuracyTest:
         simulated_points: list[list[float]] = simulated_board.get_points()
 
         # Get the transformation matrix
-        transformation_matrix = register_corresponding_points(
+        transformation_matrix = MathUtils.register_corresponding_points(
             point_set_from=target_points,
             point_set_to=simulated_points,
             use_oomori_mirror_fix=False)

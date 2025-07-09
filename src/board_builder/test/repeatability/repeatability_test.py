@@ -1,7 +1,7 @@
 import json
 import os
 import numpy as np
-from src.common.util import register_corresponding_points
+from src.common.util import MathUtils
 
 def transform_point(point, matrix):
     """Applies a 4x4 transformation matrix to a 3D point."""
@@ -39,7 +39,8 @@ def register_all_runs(data):
         # Check if the lengths of the point sets differ
         if len(current_corners) == len(reference_corners):
             # Register the entire set of points in the current run to the reference run
-            transformation_matrix = register_corresponding_points(current_corners.tolist(), reference_corners.tolist())
+            transformation_matrix = MathUtils.register_corresponding_points(
+                current_corners.tolist(), reference_corners.tolist())
 
             # Apply the transformation to the current run
             registered_run = {}

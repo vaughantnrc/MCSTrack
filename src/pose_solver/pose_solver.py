@@ -3,23 +3,16 @@ from .exceptions import \
 from .structures import \
     DetectorRecord, \
     DetectorFrameRecord, \
-    Ray, \
     PoseSolverParameters
-from .util import \
-    average_quaternion, \
-    average_vector, \
-    closest_intersection_between_n_lines, \
-    IterativeClosestPointParameters, \
-    iterative_closest_point_for_points_and_rays
 from src.common.structures import \
     DetectorFrame, \
     IntrinsicParameters, \
+    IterativeClosestPointParameters, \
     Matrix4x4, \
     Pose, \
+    Ray, \
     TargetBase
-from src.common.util import \
-    MathUtils, \
-    register_corresponding_points
+from src.common.util import MathUtils
 import cv2
 import cv2.aruco
 import datetime
@@ -65,8 +58,8 @@ class PoseSolver:
     def __init__(
         self
     ):
-        self._last_change_timestamp_utc = datetime.datetime.min
-        self._last_updated_timestamp_utc = datetime.datetime.min
+        self._last_change_timestamp_utc = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+        self._last_updated_timestamp_utc = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
         self._parameters = PoseSolverParameters()
         self._intrinsics_by_detector_label = dict()
@@ -97,7 +90,7 @@ class PoseSolver:
             self._detector_records_by_detector_label[detector_label] = DetectorRecord()
         self._detector_records_by_detector_label[detector_label].clear_frame_records()
         self._detector_records_by_detector_label[detector_label].add_frame_record(detector_frame_record)
-        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+        self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def add_target(
         self,
@@ -118,20 +111,20 @@ class PoseSolver:
         self._targets.append(target)
         for marker_id in marker_ids:
             self._marker_target_map[marker_id] = self._targets[target_index]
-        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+        self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def clear_extrinsic_matrices(self):
         self._extrinsics_by_detector_label.clear()
-        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+        self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def clear_intrinsic_parameters(self):
         self._intrinsics_by_detector_label.clear()
-        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+        self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def clear_targets(self):
         self._targets.clear()
         self._marker_target_map.clear()
-        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+        self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def get_poses(
         self
@@ -162,7 +155,7 @@ class PoseSolver:
         transform_to_reference: Matrix4x4
     ) -> None:
         self._extrinsics_by_detector_label[detector_label] = transform_to_reference
-        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+        self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def set_intrinsic_parameters(
         self,
@@ -170,7 +163,7 @@ class PoseSolver:
         intrinsic_parameters: IntrinsicParameters
     ) -> None:
         self._intrinsics_by_detector_label[detector_label] = intrinsic_parameters
-        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+        self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def set_reference_target(
         self,
@@ -180,7 +173,7 @@ class PoseSolver:
         for target_index, target in enumerate(self._targets):
             if target.target_id == target_id:
                 self._targets[0], self._targets[target_index] = self._targets[target_index], self._targets[0]
-                self._last_change_timestamp_utc = datetime.datetime.utcnow()
+                self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
                 found = True
                 break
         if not found:
@@ -193,7 +186,7 @@ class PoseSolver:
         self._targets = targets
         self._poses_by_target_id.clear()
         self._poses_by_detector_label.clear()
-        self._last_change_timestamp_utc = datetime.datetime.utcnow()
+        self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def _calculate_reprojection_error_for_pose(
         self,
@@ -309,8 +302,8 @@ class PoseSolver:
                         for pose in poses_to_average]
         orientations = [list(Rotation.from_matrix(pose.object_to_reference_matrix[0:3, 0:3]).as_quat(canonical=True))
                         for pose in poses_to_average]
-        filtered_translation = average_vector(translations)
-        filtered_orientation = average_quaternion(orientations)
+        filtered_translation = MathUtils.average_vector(translations)
+        filtered_orientation = MathUtils.average_quaternion(orientations)
         filtered_object_to_reference_matrix = numpy.identity(4, dtype="float32")
         filtered_object_to_reference_matrix[0:3, 0:3] = Rotation.from_quat(filtered_orientation).as_matrix()
         filtered_object_to_reference_matrix[0:3, 3] = filtered_translation
@@ -326,7 +319,7 @@ class PoseSolver:
         if len(self._targets) == 0:
             return
 
-        self._last_updated_timestamp_utc = datetime.datetime.utcnow()
+        self._last_updated_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
         self._poses_by_detector_label.clear()
         self._poses_by_target_id.clear()
 
@@ -393,7 +386,7 @@ class PoseSolver:
             intersections_appear_valid: bool = True  # If something looks off, set this to False
             corners_reference_by_corner_index: list[list[float]] = list()
             for corner_index in range(0, _CORNER_COUNT):
-                intersection_result = closest_intersection_between_n_lines(
+                intersection_result = MathUtils.closest_intersection_between_n_lines(
                     rays=ray_list_by_corner_index[corner_index],
                     maximum_distance=self._parameters.INTERSECTION_MAXIMUM_DISTANCE)
                 if intersection_result.centroids.shape[0] == 0:
@@ -464,11 +457,11 @@ class PoseSolver:
                     termination_mean_point_distance=self._parameters.icp_termination_mean_point_distance,
                     termination_rms_point_distance=self._parameters.icp_termination_rms_point_distance)
                 if len(marker_ids_with_intersections) >= 1:
-                    initial_detected_to_reference_matrix = register_corresponding_points(
+                    initial_detected_to_reference_matrix = MathUtils.register_corresponding_points(
                         point_set_from=detected_known_points,
                         point_set_to=reference_known_points,
                         collinearity_do_check=False)
-                    icp_output = iterative_closest_point_for_points_and_rays(
+                    icp_output = MathUtils.iterative_closest_point_for_points_and_rays(
                         source_known_points=detected_known_points,
                         target_known_points=reference_known_points,
                         source_ray_points=detected_ray_points,
@@ -476,11 +469,10 @@ class PoseSolver:
                         initial_transformation_matrix=initial_detected_to_reference_matrix,
                         parameters=iterative_closest_point_parameters)
                 else:
-                    icp_output = iterative_closest_point_for_points_and_rays(
+                    icp_output = MathUtils.iterative_closest_point_for_points_and_rays(
                         source_known_points=detected_known_points,
                         target_known_points=reference_known_points,
                         source_ray_points=detected_ray_points,
                         target_rays=reference_rays,
                         parameters=iterative_closest_point_parameters)
-                detected_to_reference = icp_output.source_to_target_matrix
-                self._poses_by_target_id[target.target_id] = Matrix4x4.from_numpy_array(detected_to_reference)
+                self._poses_by_target_id[target.target_id] = icp_output.source_to_target_matrix

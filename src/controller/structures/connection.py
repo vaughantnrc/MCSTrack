@@ -174,7 +174,7 @@ class Connection(abc.ABC):
                 source_label=self._component_address.label,
                 severity=severity,
                 message=message,
-                timestamp_utc_iso8601=datetime.datetime.utcnow().isoformat()))
+                timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat()))
 
     def get_current_state(self) -> str:
         return self._state
@@ -312,7 +312,7 @@ class Connection(abc.ABC):
                 f"Current state: {self._state}")
         self._state = Connection.State.CONNECTING
         self._attempt_count = 0
-        self._next_attempt_timestamp_utc = datetime.datetime.utcnow()
+        self._next_attempt_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     @abc.abstractmethod
     def supported_response_types(self) -> list[type[MCTResponse]]:
@@ -404,7 +404,7 @@ class Connection(abc.ABC):
         return Connection.InitializationResult.IN_PROGRESS
 
     def _update_in_connecting_state(self) -> None:
-        now_utc = datetime.datetime.utcnow()
+        now_utc = datetime.datetime.now(tz=datetime.timezone.utc)
         if now_utc >= self._next_attempt_timestamp_utc:
             self._attempt_count += 1
             connection_result: Connection.ConnectionResult = self._try_connect()
@@ -461,7 +461,7 @@ class Connection(abc.ABC):
         self._state = Connection.State.INACTIVE
 
     def _update_in_reconnecting_state(self) -> None:
-        now_utc = datetime.datetime.utcnow()
+        now_utc = datetime.datetime.now(tz=datetime.timezone.utc)
         if now_utc >= self._next_attempt_timestamp_utc:
             connection_result: Connection.ConnectionResult = self._try_connect()
             if connection_result.success:

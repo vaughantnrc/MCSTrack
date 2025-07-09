@@ -6,8 +6,7 @@ from src.common.structures import \
     MarkerCornerImagePoint, \
     MarkerSnapshot, \
     Matrix4x4, \
-    Pose
-from src.common.structures import \
+    Pose, \
     TargetMarker
 import datetime
 from typing import Final
@@ -101,8 +100,10 @@ class TestPoseSolver(unittest.TestCase):
 
     def test_single_camera_viewing_target_marker(self):
         # Note that single-marker tests are particularly susceptible to reference pose ambiguity
-        now_utc = datetime.datetime.utcnow()
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
         pose_solver: PoseSolver = PoseSolver()
+        # TODO: The following line shall be replaced upon implementation of an appropriate alternative
+        pose_solver._parameters.minimum_detector_count = 1
         pose_solver.set_intrinsic_parameters(
             detector_label=DETECTOR_RED_NAME,
             intrinsic_parameters=DETECTOR_RED_INTRINSICS)
@@ -164,7 +165,7 @@ class TestPoseSolver(unittest.TestCase):
 
     def test_four_cameras_viewing_target_marker(self):
         # Note that single-marker tests are particularly susceptible to reference pose ambiguity
-        now_utc = datetime.datetime.utcnow()
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
         pose_solver: PoseSolver = PoseSolver()
         pose_solver.set_intrinsic_parameters(
             detector_label=DETECTOR_RED_NAME,

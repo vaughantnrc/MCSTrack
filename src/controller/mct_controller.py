@@ -196,7 +196,7 @@ class MCTController(MCTComponent):
                 message="TIME_SYNC complete")
             component_labels: list[str] = self.get_component_labels(active=True)
             request_series: MCTRequestSeries = MCTRequestSeries(series=[
-                TimestampGetRequest(requester_timestamp_utc_iso8601=datetime.datetime.utcnow().isoformat())])
+                TimestampGetRequest(requester_timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat())])
             for component_label in component_labels:
                 self._pending_request_ids.append(
                     self.request_series_push(
@@ -455,7 +455,7 @@ class MCTController(MCTComponent):
         pose_solver_connection.detector_poses = response.detector_poses
         pose_solver_connection.target_poses = response.target_poses
         pose_solver_connection.poses_timestamp = (
-            datetime.datetime.utcnow() -  # TODO: This should come from the pose solver
+            datetime.datetime.now(tz=datetime.timezone.utc) -  # TODO: This should come from the pose solver
             datetime.timedelta(seconds=pose_solver_connection.controller_offset_seconds))
 
     def handle_response_timestamp_get(
@@ -466,7 +466,7 @@ class MCTController(MCTComponent):
         connection: Connection = self._get_connection(
             connection_label=component_label,
             connection_type=Connection)
-        utc_now: datetime.datetime = datetime.datetime.utcnow()
+        utc_now: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)
         requester_timestamp: datetime.datetime
         requester_timestamp = datetime.datetime.fromisoformat(response.requester_timestamp_utc_iso8601)
         round_trip_seconds: float = (utc_now - requester_timestamp).total_seconds()

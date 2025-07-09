@@ -1,4 +1,4 @@
-from .pose import Pose
+from .linear_algebra import Pose
 import datetime
 from pydantic import BaseModel, Field
 

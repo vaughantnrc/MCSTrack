@@ -4,7 +4,7 @@ import numpy as np
 from numpy._typing import NDArray
 from typing import Any
 from scipy.spatial.transform import Rotation as R
-from src.pose_solver.util.average_quaternion import average_quaternion
+from src.common.util.average_quaternion import average_quaternion
 from src.common.structures import Matrix4x4, Pose
 
 

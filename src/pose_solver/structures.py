@@ -1,14 +1,8 @@
 from src.common.structures import \
-    DetectorFrame, \
-    Matrix4x4
+    DetectorFrame
 import cv2.aruco
 import datetime
-import numpy
 from pydantic import BaseModel, Field
-from typing import Final
-
-
-EPSILON: Final[float] = 0.0001
 
 
 class DetectorFrameRecord:
@@ -151,19 +145,3 @@ class PoseSolverParameters(BaseModel):
     # SOLVEPNP_P3P appears to return nan's on rare occasion
     # SOLVEPNP_SQPNP appears to return nan's on rare occasion
     # SOLVEPNP_IPPE_SQUARE does not seem to work very well at all, translation is much smaller than expected
-
-
-class Ray:
-    source_point: list[float]
-    direction: list[float]
-
-    def __init__(
-        self,
-        source_point: list[float],
-        direction: list[float]
-    ):
-        direction_norm = numpy.linalg.norm(direction)
-        if direction_norm < EPSILON:
-            raise ValueError("Direction cannot be zero.")
-        self.source_point = source_point
-        self.direction = direction

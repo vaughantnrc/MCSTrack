@@ -1,6 +1,8 @@
 from ..structures import \
+    IterativeClosestPointParameters, \
     IntrinsicParameters, \
     Matrix4x4, \
+    Ray, \
     TargetBase
 import cv2
 import numpy
@@ -9,6 +11,7 @@ from typing import TypeVar
 
 
 XPointKey = TypeVar("XPointKey")
+_DEFAULT_EPSILON: float = 0.0001
 
 
 class MathUtils:
@@ -18,6 +21,179 @@ class MathUtils:
 
     def __init__(self):
         raise RuntimeError("This class is not meant to be initialized.")
+
+    @staticmethod
+    def average_quaternion(
+        quaternions: list[list[float]]
+    ) -> list[float]:
+        """
+        Solution based on this link: https://stackoverflow.com/a/27410865
+        based on Markley et al. "Averaging quaternions." Journal of Guidance, Control, and Dynamics 30.4 (2007): 1193-1197.
+        """
+        quaternion_matrix = numpy.array(quaternions, dtype="float32").transpose()  # quaternions into columns
+        quaternion_matrix /= len(quaternions)
+        eigenvalues, eigenvectors = numpy.linalg.eig(numpy.matmul(quaternion_matrix, quaternion_matrix.transpose()))
+        maximum_eigenvalue_index = numpy.argmax(eigenvalues)
+        quaternion = eigenvectors[:, maximum_eigenvalue_index]
+        if quaternion[3] < 0:
+            quaternion *= -1
+        return quaternion.tolist()
+
+    @staticmethod
+    def average_vector(
+        translations: list[list[float]]
+    ) -> list[float]:
+        """
+        This is a very simple function for averaging translations
+        when it is not desired to use numpy (for whatever reason)
+        """
+        sum_translations: list[float] = [0.0, 0.0, 0.0]
+        for translation in translations:
+            for i in range(0, 3):
+                sum_translations[i] += translation[i]
+        translation_count = len(translations)
+        return [
+            sum_translations[0] / translation_count,
+            sum_translations[1] / translation_count,
+            sum_translations[2] / translation_count]
+
+    class RayIntersection2Output:
+        parallel: bool  # special case, mark it as such
+        closest_point_1: numpy.ndarray
+        closest_point_2: numpy.ndarray
+
+        def __init__(
+            self,
+            parallel: bool,
+            closest_point_1: numpy.ndarray,
+            closest_point_2: numpy.ndarray
+        ):
+            self.parallel = parallel
+            self.closest_point_1 = closest_point_1
+            self.closest_point_2 = closest_point_2
+
+        def centroid(self) -> numpy.ndarray:
+            return (self.closest_point_1 + self.closest_point_2) / 2
+
+        def distance(self) -> float:
+            return numpy.linalg.norm(self.closest_point_2 - self.closest_point_1)
+
+    @staticmethod
+    def closest_intersection_between_two_lines(
+        ray_1: Ray,
+        ray_2: Ray,
+        epsilon: float = _DEFAULT_EPSILON
+    ) -> RayIntersection2Output:  # Returns data on intersection
+        ray_1_direction_normalized = ray_1.direction / numpy.linalg.norm(ray_1.direction)
+        ray_2_direction_normalized = ray_2.direction / numpy.linalg.norm(ray_2.direction)
+
+        # ray 3 will be perpendicular to both rays 1 and 2,
+        # and will intersect with both rays at the nearest point(s)
+
+        ray_3_direction = numpy.cross(ray_2_direction_normalized, ray_1_direction_normalized)
+        ray_3_direction_norm = numpy.linalg.norm(ray_3_direction)
+        if ray_3_direction_norm < epsilon:
+            return MathUtils.RayIntersection2Output(
+                parallel=True,
+                closest_point_1=ray_1.source_point,
+                closest_point_2=ray_2.source_point)
+
+        # system of equations Ax = b
+        b = numpy.subtract(ray_2.source_point, ray_1.source_point)
+        a = numpy.asarray(
+            [ray_1_direction_normalized, -ray_2_direction_normalized, ray_3_direction], dtype="float32").transpose()
+        x = numpy.linalg.solve(a, b)
+
+        param_ray_1 = float(x[0])
+        intersection_point_1 = ray_1.source_point + param_ray_1 * ray_1_direction_normalized
+
+        param_ray_2 = float(x[1])
+        intersection_point_2 = ray_2.source_point + param_ray_2 * ray_2_direction_normalized
+
+        return MathUtils.RayIntersection2Output(
+            parallel=False,
+            closest_point_1=intersection_point_1,
+            closest_point_2=intersection_point_2)
+
+    class RayIntersectionNOutput:
+        centroids: numpy.ndarray
+
+        # How many rays were used.
+        # Note that centroids might not use all possible intersections (e.g. parallel rays)
+        ray_count: int
+
+        def __init__(
+            self,
+            centroids: numpy.ndarray,
+            ray_count: int
+        ):
+            self.centroids = centroids
+            self.ray_count = ray_count
+
+        def centroid(self) -> numpy.ndarray:
+            sum_centroids = numpy.asarray([0, 0, 0], dtype="float32")
+            for centroid in self.centroids:
+                sum_centroids += centroid
+            return sum_centroids / self.centroids.shape[0]
+
+        def intersection_count(self) -> int:
+            return int((self.ray_count * (self.ray_count - 1)) / 2)
+
+    @staticmethod
+    def closest_intersection_between_n_lines(
+        rays: list[Ray],
+        maximum_distance: float
+    ) -> RayIntersectionNOutput:
+        ray_count = len(rays)
+        intersections: list[MathUtils.RayIntersection2Output] = list()
+        for ray_1_index in range(0, ray_count):
+            for ray_2_index in range(ray_1_index + 1, ray_count):
+                intersections.append(MathUtils.closest_intersection_between_two_lines(
+                    ray_1=rays[ray_1_index],
+                    ray_2=rays[ray_2_index]))
+        centroids: list[numpy.ndarray] = list()
+        for intersection in intersections:
+            if intersection.parallel:
+                continue
+            if intersection.distance() > maximum_distance:
+                continue
+            centroids.append(intersection.centroid())
+        return MathUtils.RayIntersectionNOutput(
+            centroids=numpy.asarray(centroids, dtype="float32"),
+            ray_count=ray_count)
+
+    @staticmethod
+    def closest_point_on_ray(
+        ray_source: list[float],
+        ray_direction: list[float],
+        query_point: list[float],
+        forward_only: bool
+    ):
+        """
+        Find the closest point on a ray in 3D.
+        """
+        # Let ray_point be the closest point between query_point and the ray.
+        # (ray_point - query_point) will be perpendicular to ray_direction.
+        # Let ray_distance be the distance along the ray where the closest point is.
+        # So we have two equations:
+        #     (1)    (ray_point - query_point) * ray_direction = 0
+        #     (2)    ray_point = ray_source + ray_distance * ray_direction
+        # If we substitute eq (2) into (1) and solve for ray_distance, we get:
+        ray_distance: float = (
+                (query_point[0] * ray_direction[0] + query_point[1] * ray_direction[1] + query_point[2] * ray_direction[
+                    2]
+                 - ray_source[0] * ray_direction[0] - ray_source[1] * ray_direction[1] - ray_source[2] * ray_direction[
+                     2])
+                /
+                ((ray_direction[0] ** 2) + (ray_direction[1] ** 2) + (ray_direction[2] ** 2)))
+
+        if ray_distance < 0 and forward_only:
+            return ray_source  # point is behind the source, so the closest point is just the source
+
+        ray_point = [0.0] * 3  # temporary values
+        for i in range(0, 3):
+            ray_point[i] = ray_source[i] + ray_distance * ray_direction[i]
+        return ray_point
 
     @staticmethod
     def convert_detector_points_to_vectors(
@@ -72,9 +248,59 @@ class MathUtils:
         return ray_vectors_by_marker_id
 
     @staticmethod
+    def convex_quadrilateral_area(
+        points: list[list[float]],  # 2D points in clockwise order
+        epsilon: float = _DEFAULT_EPSILON
+    ) -> float:
+        """
+        Compute the area of a quadrilateral, given 2D points in clockwise order.
+        """
+
+        # General approach:
+        # Given points a, b, c, and d shown below,
+        # and calculating points e and f shown below,
+        # add areas defined by right triangles bea, ceb, dfc, and afd
+        # b..................c
+        # . ..              ...
+        #  .  ...        ...  .
+        #  .     ..   .f.      .
+        #   .      .e.  ...    .
+        #   .   ...        ..   .
+        #    ...             ... .
+        #    a...................d
+
+        point_a = numpy.array(points[0], dtype="float32")
+        point_b = numpy.array(points[1], dtype="float32")
+        point_c = numpy.array(points[2], dtype="float32")
+        point_d = numpy.array(points[3], dtype="float32")
+
+        vector_ac = point_c - point_a
+        vector_ac_norm = numpy.linalg.norm(vector_ac)
+        vector_bd = point_d - point_b
+        vector_bd_norm = numpy.linalg.norm(vector_bd)
+        if vector_ac_norm <= epsilon or vector_bd_norm <= epsilon:
+            return 0.0
+        width_vector = vector_ac / numpy.linalg.norm(vector_ac)
+        height_vector = numpy.array([width_vector[1], -width_vector[0]], dtype="float32")  # rotated 90 degrees
+
+        sum_of_areas: float = 0.0
+        point_pairs: list[tuple[numpy.ndarray, numpy.ndarray]] = [
+            (point_a, point_b),
+            (point_b, point_c),
+            (point_c, point_d),
+            (point_d, point_a)]
+        for point_pair in point_pairs:
+            line_vector = point_pair[1] - point_pair[0]
+            width = numpy.dot(line_vector, width_vector)
+            height = numpy.dot(line_vector, height_vector)
+            sum_of_areas += numpy.abs(width * height / 2.0)
+
+        return sum_of_areas
+
+    @staticmethod
     def estimate_matrix_transform_to_detector(
         target: TargetBase,
-        corners_by_marker_id: dict[str, list[list[float]]],  # [marker_id][point_index][x/y/z]
+        corners_by_marker_id: dict[str, list[list[float]]],  # [marker_id][point_index][x/y]
         detector_intrinsics: IntrinsicParameters
     ) -> Matrix4x4:
         target_points: list[list[float]] = list()    # ordered points [point_index][x/y/z]
@@ -97,6 +323,148 @@ class MathUtils:
         object_to_camera_matrix[0:3, 3] = translation_vector[0:3]
         object_to_detector_matrix = MathUtils.image_to_opengl_transformation_matrix(object_to_camera_matrix)
         return Matrix4x4.from_numpy_array(object_to_detector_matrix)
+
+    class IterativeClosestPointOutput:
+        source_to_target_matrix: Matrix4x4
+        iteration_count: int
+        mean_point_distance: float
+        rms_point_distance: float
+
+        def __init__(
+            self,
+            source_to_target_matrix: Matrix4x4,
+            iteration_count: int,
+            mean_point_distance: float,
+            rms_point_distance: float
+        ):
+            self.source_to_target_matrix = source_to_target_matrix
+            self.iteration_count = iteration_count
+            self.mean_point_distance = mean_point_distance
+            self.rms_point_distance = rms_point_distance
+
+    @staticmethod
+    def iterative_closest_point_for_points_and_rays(
+        source_known_points: list[list[float]],
+        target_known_points: list[list[float]],
+        source_ray_points: list[list[float]],
+        target_rays: list[Ray],
+        parameters: IterativeClosestPointParameters = None,
+        initial_transformation_matrix: numpy.ndarray = None
+    ) -> IterativeClosestPointOutput:
+        """
+        Algorithm is based on ICP: Besl and McKay. Method for registration of 3-D shapes. 1992.
+        This is customized, adapted to the problem of registering a set of points to
+        a set of points and rays where the correspondence is known.
+        :param source_known_points: points with known corresponding positions in both source and target coordinate frames
+        :param target_known_points: points with known corresponding positions in both source and target coordinate frames
+        :param source_ray_points: points with known position in the source coordinate frame, but NOT in target
+        :param target_rays: rays along which the remaining target points lie (1:1 correspondence with source_ray_points)
+        :param parameters:
+        :param initial_transformation_matrix:
+        """
+
+        def _transform_points(
+            original_points: list[list[float]],
+            transformation: numpy.ndarray
+        ):
+            transformed_points: list[list[float]] = list()
+            for point in original_points:
+                transformed_point = list(numpy.matmul(
+                    transformation,
+                    numpy.array([point[0], point[1], point[2], 1])))
+                transformed_points.append([transformed_point[0], transformed_point[1], transformed_point[2]])
+            return transformed_points
+
+        if len(source_known_points) != len(target_known_points):
+            raise ValueError(
+                "source_known_points and target_known_points must be of equal length (1:1 correspondence).")
+
+        if len(source_known_points) != len(target_known_points):
+            raise ValueError("source_ray_points and target_rays must be of equal length (1:1 correspondence).")
+
+        # Initial transformation
+        source_to_transformed_matrix: numpy.ndarray
+        if initial_transformation_matrix is not None:
+            source_to_transformed_matrix = numpy.array(initial_transformation_matrix, dtype="float32")
+        else:
+            source_to_transformed_matrix = numpy.identity(4, dtype="float32")
+
+        if parameters is None:
+            parameters = IterativeClosestPointParameters(
+                termination_iteration_count=50,
+                termination_delta_translation=0.1,
+                termination_delta_rotation_radians=0.001,
+                termination_mean_point_distance=0.1,
+                termination_rms_point_distance=0.1)
+
+        transformed_known_points: list[list[float]] = _transform_points(
+            original_points=source_known_points,
+            transformation=source_to_transformed_matrix)
+        transformed_ray_points: list[list[float]] = _transform_points(
+            original_points=source_ray_points,
+            transformation=source_to_transformed_matrix)
+
+        iteration_count: int = 0
+        mean_point_distance: float
+        rms_point_distance: float
+        while True:
+            target_ray_points: list[list[float]] = list()
+            for i, transformed_ray_point in enumerate(transformed_ray_points):
+                target_ray_points.append(MathUtils.closest_point_on_ray(
+                    ray_source=target_rays[i].source_point,
+                    ray_direction=target_rays[i].direction,
+                    query_point=transformed_ray_point,
+                    forward_only=True))
+
+            transformed_all_points = transformed_known_points + transformed_ray_points
+            target_points = target_known_points + target_ray_points
+            transformed_to_target_matrix = MathUtils.register_corresponding_points(
+                point_set_from=transformed_all_points,
+                point_set_to=target_points,
+                collinearity_do_check=False)
+
+            # update transformation & transformed points
+            source_to_transformed_matrix = numpy.matmul(transformed_to_target_matrix, source_to_transformed_matrix)
+            transformed_known_points: list[list[float]] = _transform_points(
+                original_points=source_known_points,
+                transformation=source_to_transformed_matrix)
+            transformed_ray_points: list[list[float]] = _transform_points(
+                original_points=source_ray_points,
+                transformation=source_to_transformed_matrix)
+
+            iteration_count += 1
+
+            transformed_all_points = transformed_known_points + transformed_ray_points
+            point_offsets = numpy.subtract(target_points, transformed_all_points).tolist()
+            sum_point_distances = 0.0
+            sum_square_point_distances = 0.0
+            for delta_point_offset in point_offsets:
+                delta_point_distance: float = numpy.linalg.norm(delta_point_offset)
+                sum_point_distances += delta_point_distance
+                sum_square_point_distances += numpy.square(delta_point_distance)
+            mean_point_distance = sum_point_distances / len(point_offsets)
+            rms_point_distance = numpy.sqrt(sum_square_point_distances / len(point_offsets))
+
+            # Check if termination criteria are met
+            # Note that transformed_to_target_matrix describes the change since last iteration, so we often operate on it
+            delta_translation = numpy.linalg.norm(transformed_to_target_matrix[0:3, 3])
+            delta_rotation_radians = \
+                numpy.linalg.norm(Rotation.from_matrix(transformed_to_target_matrix[0:3, 0:3]).as_rotvec())
+            if delta_translation < parameters.termination_delta_translation and \
+                    delta_rotation_radians < parameters.termination_delta_rotation_radians:
+                break
+            if mean_point_distance < parameters.termination_mean_point_distance:
+                break
+            if rms_point_distance < parameters.termination_rms_point_distance:
+                break
+            if iteration_count >= parameters.termination_iteration_count:
+                break
+
+        return MathUtils.IterativeClosestPointOutput(
+            source_to_target_matrix=Matrix4x4.from_numpy_array(source_to_transformed_matrix),
+            iteration_count=iteration_count,
+            mean_point_distance=mean_point_distance,
+            rms_point_distance=rms_point_distance)
 
     @staticmethod
     def image_to_opengl_transformation_matrix(
@@ -123,3 +491,73 @@ class MathUtils:
         # transformation_matrix_180[1, 1] *= -1
         # transformation_matrix_180[2, 2] *= -1
         # return numpy.matmul(transformation_matrix_180, vector_image)
+
+    @staticmethod
+    def register_corresponding_points(
+        point_set_from: list[list[float]],
+        point_set_to: list[list[float]],
+        collinearity_do_check: bool = True,
+        collinearity_zero_threshold: float = 0.0001,
+        use_oomori_mirror_fix: bool = True
+    ) -> numpy.array:  # 4x4 transformation matrix, indexed by [row,col]
+        """
+        Solution based on: Arun et al. Least square fitting of two 3D point sets (1987)
+        https://stackoverflow.com/questions/66923224/rigid-registration-of-two-point-clouds-with-known-correspondence
+        Use mirroring solution proposed by Oomori et al.
+        Oomori et al. Point cloud matching using singular value decomposition. (2016)
+        :param point_set_from:
+        :param point_set_to:
+        :param collinearity_do_check: Do a (naive) collinearity check. May be computationally expensive.
+        :param collinearity_zero_threshold: Threshold considered zero for cross product and norm comparisons
+        :param use_oomori_mirror_fix: Use the mirroring solution proposed in Oomori et al 2016.
+        """
+        if len(point_set_from) != len(point_set_to):
+            raise ValueError("Input point sets must be of identical length.")
+        if len(point_set_from) < 3:
+            raise ValueError("Input point sets must be of length 3 or higher.")
+        if collinearity_do_check:
+            for point_set in (point_set_from, point_set_to):
+                collinear = True  # assume true until shown otherwise
+                p1: numpy.ndarray = numpy.asarray(point_set[0])
+                vec1: numpy.ndarray
+                i: int = 1
+                for i in range(i, len(point_set)):
+                    p2: numpy.ndarray = numpy.asarray(point_set[1])
+                    vec1 = p2 - p1
+                    vec1_length: float = numpy.linalg.norm(vec1)
+                    if vec1_length > collinearity_zero_threshold:
+                        break  # points are distinct, move to next phase
+                for i in range(i, len(point_set)):
+                    p3: numpy.ndarray = numpy.asarray(point_set[2])
+                    vec2: numpy.ndarray = p3 - p1
+                    cross_product_norm: float = numpy.linalg.norm(numpy.cross(vec1, vec2))
+                    if cross_product_norm > collinearity_zero_threshold:
+                        collinear = False
+                        break
+                if collinear:
+                    raise ValueError("Input points appear to be collinear - please check the input.")
+
+        # for consistency, points are in rows
+        point_count = len(point_set_from)
+        sums_from = numpy.array([0, 0, 0], dtype="float32")
+        sums_to = numpy.array([0, 0, 0], dtype="float32")
+        for point_index in range(0, point_count):
+            sums_from += numpy.array(point_set_from[point_index])
+            sums_to += numpy.array(point_set_to[point_index])
+        centroid_from = (sums_from / point_count)
+        centroid_to = (sums_to / point_count)
+        points_from = numpy.array(point_set_from)
+        points_to = numpy.array(point_set_to)
+        centered_points_from = points_from - numpy.hstack(centroid_from)
+        centered_points_to = points_to - numpy.hstack(centroid_to)
+        covariance = numpy.matmul(centered_points_from.T, centered_points_to)
+        u, _, vh = numpy.linalg.svd(covariance)
+        s = numpy.identity(3, dtype="float32")  # s will be the Oomori mirror fix
+        if use_oomori_mirror_fix:
+            s[2, 2] = numpy.linalg.det(numpy.matmul(u, vh))
+        rotation = numpy.matmul(u, numpy.matmul(s, vh)).transpose()
+        translation = centroid_to - numpy.matmul(rotation, centroid_from)
+        matrix = numpy.identity(4, dtype="float32")
+        matrix[0:3, 0:3] = rotation
+        matrix[0:3, 3] = translation[0:3].reshape(3)
+        return matrix

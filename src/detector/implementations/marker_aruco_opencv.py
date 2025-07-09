@@ -45,7 +45,7 @@ class ArucoOpenCVMarker(AbstractMarker):
             status_message_source=status_message_source)
 
         self._marker_dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
-        self._marker_parameters = cv2.aruco.DetectorParameters_create()
+        self._marker_parameters = cv2.aruco.DetectorParameters()
         self._marker_label_reverse_dictionary = dict()
         self._marker_detected_snapshots = list()  # Markers that are determined to be valid, and are identified
         self._marker_rejected_snapshots = list()  # Things that looked at first like markers but got later filtered out
@@ -147,4 +147,4 @@ class ArucoOpenCVMarker(AbstractMarker):
                     label=f"unknown",
                     corner_image_points=corner_image_points))
 
-        self._marker_timestamp_utc = datetime.datetime.utcnow()
+        self._marker_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

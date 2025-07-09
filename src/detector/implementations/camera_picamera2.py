@@ -277,4 +277,4 @@ class Picamera2Camera(AbstractCamera):
             self.set_status(CameraStatus.FAILURE)
             raise MCTDetectorRuntimeError(message=message)
 
-        self._image_timestamp_utc = datetime.datetime.utcnow()
+        self._image_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

@@ -56,7 +56,7 @@ class StatusMessageSource:
         if not source_label:
             source_label = self._source_label
         if not timestamp_utc_iso8601:
-            timestamp_utc_iso8601 = datetime.datetime.utcnow().isoformat()
+            timestamp_utc_iso8601 = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         elif isinstance(timestamp_utc_iso8601, datetime.datetime):
             timestamp_utc_iso8601 = timestamp_utc_iso8601.isoformat()
         message: StatusMessage = StatusMessage(

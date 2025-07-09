@@ -64,7 +64,7 @@ class TestPoseSolver(unittest.TestCase):
 
         # All cameras have the same imaging parameters.
         # To simplify our lives and ensure a reasonable result,
-        # we'll calibrate all of the cameras with the same set of input images.
+        # we'll calibrate all cameras with the same set of input images.
         # We'll use all images from the A# and B# sets of frames.
         calibration_result: IntrinsicCalibration | None = None
         with TemporaryDirectory() as temppath:
@@ -81,9 +81,6 @@ class TestPoseSolver(unittest.TestCase):
             _, calibration_result = calibrator.calculate(
                 image_resolution=IMAGE_RESOLUTION,
                 marker_parameters=MARKER_DETECTION_PARAMETERS)
-
-        print(calibration_result.model_dump())
-        return
 
         marker: ArucoOpenCVMarker = ArucoOpenCVMarker(
             configuration={"method": "aruco_opencv"},
@@ -103,3 +100,17 @@ class TestPoseSolver(unittest.TestCase):
         message = f"{detection_count} detections."
         status_message_source.enqueue_status_message(severity="info", message=message)
         print(message)
+
+        # Constraint: Reference board must be visible to all cameras for first frame_id (frame_0)
+        # - Estimate camera position relative to frame_0
+        #   MathUtils.estimate_matrix_transform_to_detector()
+        # - Convert points to rays for all (camera_id, frame_id) using frame_0 as basis
+        #   MathUtils.convert_detector_corners_to_vectors()
+        # - For each (frame_id, point_id), intersect N rays to get 3D points. All 3D Points = working_points.
+        #   MathUtils.closest_intersection_between_n_lines()
+        # - Refine camera positions based on working_points via PnP
+        #   MathUtils.estimate_matrix_transform_to_detector()
+        # Iterate max times or until convergence:
+        #  - Convert points to rays for all (camera_id, frame_id), using working_points as basis
+        #  - For each (frame_id, point_id), intersect N rays to get 3D points. All 3D Points = working_points.
+        #  - Refine camera positions based on working_points via PnP

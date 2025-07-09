@@ -336,7 +336,7 @@ class CalibratorPanel(BasePanel):
         self._calibrate_status_textbox.SetValue(
             f"Calibration {response.result_identifier} complete - values: "
             f"{str(response.intrinsic_calibration.calibrated_values.as_array())}")
-        self._result_display_textbox.SetValue(response.intrinsic_calibration.json(indent=4))
+        self._result_display_textbox.SetValue(response.intrinsic_calibration.model_dump_json(indent=4))
         self._calibration_in_progress = False
         self._force_last_result_selected = True
 
@@ -359,7 +359,7 @@ class CalibratorPanel(BasePanel):
         self,
         response: CalibrationResultGetResponse
     ) -> None:
-        self._result_display_textbox.SetValue(str(response.intrinsic_calibration.json(indent=4)))
+        self._result_display_textbox.SetValue(str(response.intrinsic_calibration.model_dump_json(indent=4)))
 
     def _handle_response_list_calibration_detector_resolutions(
         self,

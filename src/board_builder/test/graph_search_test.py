@@ -50,7 +50,7 @@ t5 = Matrix4x4(values=[
 ]).as_numpy_array()
 
 
-timestamp = str(datetime.datetime.utcnow())
+timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
 
 poseLocation_01 = PoseLocation("01")
 poseLocation_01.frame_count += 60

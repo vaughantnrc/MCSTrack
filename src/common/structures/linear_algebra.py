@@ -1,16 +1,35 @@
 import numpy
 from pydantic import BaseModel, Field
+from typing import Final
 
 
-def _identity_values() -> list[float]:
-    return \
-        [1.0, 0.0, 0.0, 0.0,
-         0.0, 1.0, 0.0, 0.0,
-         0.0, 0.0, 1.0, 0.0,
-         0.0, 0.0, 0.0, 1.0]
+_DEFAULT_EPSILON: Final[float] = 0.0001
+
+
+class IterativeClosestPointParameters(BaseModel):
+    # ICP will stop after this many iterations
+    termination_iteration_count: int = Field()
+
+    # ICP will stop if distance *and* angle difference from one iteration to the next
+    # is smaller than these
+    termination_delta_translation: float = Field()
+    termination_delta_rotation_radians: float = Field()
+
+    # ICP will stop if overall point-to-point distance (between source and target)
+    # mean *or* root-mean-square is less than specified
+    termination_mean_point_distance: float = Field()
+    termination_rms_point_distance: float = Field()  # root-mean-square
 
 
 class Matrix4x4(BaseModel):
+
+    @staticmethod
+    def _identity_values() -> list[float]:
+        return \
+            [1.0, 0.0, 0.0, 0.0,
+             0.0, 1.0, 0.0, 0.0,
+             0.0, 0.0, 1.0, 0.0,
+             0.0, 0.0, 0.0, 1.0]
     values: list[float] = Field(default_factory=_identity_values)
 
     def as_numpy_array(self):
@@ -75,3 +94,27 @@ class Matrix4x4(BaseModel):
             if len(value_array[i]) != 4:
                 raise ValueError(f"Expected input row {i} to have 4 col. Got {len(value_array[i])}.")
         return Matrix4x4(values=list(value_array.flatten()))
+
+
+class Pose(BaseModel):
+    target_id: str = Field()
+    object_to_reference_matrix: Matrix4x4 = Field()
+    solver_timestamp_utc_iso8601: str = Field()
+
+
+# TODO: Turn this into a pydantic class
+class Ray:
+    source_point: list[float]
+    direction: list[float]
+
+    def __init__(
+        self,
+        source_point: list[float],
+        direction: list[float],
+        epsilon: float = _DEFAULT_EPSILON
+    ):
+        direction_norm = numpy.linalg.norm(direction)
+        if direction_norm < epsilon:
+            raise ValueError("Direction cannot be zero.")
+        self.source_point = source_point
+        self.direction = direction

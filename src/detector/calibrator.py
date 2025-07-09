@@ -106,6 +106,9 @@ class Calibrator:
         image_resolution: ImageResolution,
         marker_parameters: list[KeyValueSimpleAny]
     ) -> tuple[str, IntrinsicCalibration]:
+        """
+        :returns: a tuple containing a result identifier (GUID as string) and the IntrinsicCalibration structure
+        """
 
         calibration_key: ImageResolution = image_resolution
         if calibration_key not in self._calibration_map:
@@ -197,7 +200,7 @@ class Calibrator:
         #  Note too that there is an unchecked expectation that radial distortion be monotonic.
 
         intrinsic_calibration: IntrinsicCalibration = IntrinsicCalibration(
-            timestamp_utc=str(datetime.datetime.utcnow()),
+            timestamp_utc=datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
             image_resolution=image_resolution,
             reprojection_error=charuco_overall_reprojection_error,
             calibrated_values=IntrinsicParameters(
@@ -242,7 +245,7 @@ class Calibrator:
             result_identifier=result_identifier)
         IOUtils.json_write(
             filepath=result_filepath,
-            json_dict=intrinsic_calibration.dict(),
+            json_dict=intrinsic_calibration.model_dump(),
             on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
                 severity="error",
                 message=msg),
@@ -552,7 +555,7 @@ class Calibrator:
     def save(self) -> None:
         IOUtils.json_write(
             filepath=self._map_filepath(),
-            json_dict=CalibrationMap.from_dict(self._calibration_map).dict(),
+            json_dict=CalibrationMap.from_dict(self._calibration_map).model_dump(),
             on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
                 severity="error",
                 message=msg),
