@@ -1,4 +1,5 @@
 from src.board_builder.structures import \
+    MarkerCorners, \
     MarkerRaySet, \
     PoseData, \
     PoseLocation
@@ -7,7 +8,6 @@ from src.common.structures import \
     CharucoBoardSpecification, \
     IntrinsicParameters, \
     IterativeClosestPointParameters, \
-    MarkerCorners, \
     Matrix4x4, \
     Pose, \
     Ray, \

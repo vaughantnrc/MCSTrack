@@ -108,9 +108,6 @@ class PoseSolverStatus:
         self.solve_status = PoseSolverStatus.Solve.STOPPED
         self.solve_errors = list()
 
-    def in_runnable_state(self):
-        return self.solve_status == PoseSolverStatus.Solve.RUNNING
-
 
 class PoseSolverFrame(BaseModel):
     detector_poses: list[Pose] | None = Field()

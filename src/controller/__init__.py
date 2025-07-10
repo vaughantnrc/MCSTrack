@@ -1,5 +1,10 @@
-from .mct_controller import MCTController
-from .structures import \
-    MCTComponentAddress, \
+from .connection import \
     Connection, \
-    ConnectionReport
+    DetectorConnection, \
+    PoseSolverConnection
+from .configuration import \
+    MCTComponentConfig, \
+    MCTConfiguration, \
+    StartupMode
+from .exceptions import ResponseSeriesNotExpected
+from .mct_controller import MCTController

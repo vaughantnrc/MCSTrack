@@ -1,13 +1,12 @@
 from .exceptions import ResponseSeriesNotExpected
-from .structures import \
-    ConnectionReport, \
-    Connection, \
-    DetectorConnection, \
-    MCTComponentAddress, \
+from .configuration import \
     MCTComponentConfig, \
     MCTConfiguration, \
-    PoseSolverConnection, \
     StartupMode
+from .connection import \
+    Connection, \
+    DetectorConnection, \
+    PoseSolverConnection
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -128,7 +127,7 @@ class MCTController(MCTComponent):
         for detector in configuration.detectors:
             if not is_valid_ip_address(detector):
                 continue
-            component_address: MCTComponentAddress = MCTComponentAddress(
+            component_address: Connection.ComponentAddress = Connection.ComponentAddress(
                 label=detector.label,
                 role="detector",
                 ip_address=detector.ip_address,
@@ -143,7 +142,7 @@ class MCTController(MCTComponent):
         for pose_solver in configuration.pose_solvers:
             if not is_valid_ip_address(pose_solver):
                 continue
-            component_address: MCTComponentAddress = MCTComponentAddress(
+            component_address: Connection.ComponentAddress = Connection.ComponentAddress(
                 label=pose_solver.label,
                 role="pose_solver",
                 ip_address=pose_solver.ip_address,
@@ -156,7 +155,7 @@ class MCTController(MCTComponent):
 
     def add_connection(
         self,
-        component_address: MCTComponentAddress
+        component_address: Connection.ComponentAddress
     ) -> DetectorConnection | PoseSolverConnection:
         label = component_address.label
         if label in self._connections:
@@ -301,8 +300,8 @@ class MCTController(MCTComponent):
             return_value.append(connection_label)
         return return_value
 
-    def get_connection_reports(self) -> list[ConnectionReport]:
-        return_value: list[ConnectionReport] = list()
+    def get_connection_reports(self) -> list[Connection.Report]:
+        return_value: list[Connection.Report] = list()
         for connection in self._connections.values():
             return_value.append(connection.get_report())
         return return_value

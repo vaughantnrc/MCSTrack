@@ -1,11 +1,16 @@
-from .startup_mode import StartupMode
 from src.common.structures import \
     KeyValueSimpleAny, \
     Matrix4x4, \
     TargetBoard, \
     TargetMarker
+from enum import StrEnum
 from pydantic import BaseModel, Field, SerializeAsAny
-from typing import Union
+from typing import Final, Union
+
+
+class StartupMode(StrEnum):
+    DETECTING_ONLY: Final[str] = "detecting_only"
+    DETECTING_AND_SOLVING: Final[str] = "detecting_and_solving"
 
 
 class MCTComponentConfig(BaseModel):

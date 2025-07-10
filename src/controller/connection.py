@@ -1,19 +1,53 @@
-from .mct_component_address import MCTComponentAddress
-from .connection_report import ConnectionReport
 from src.common import \
     DequeueStatusMessagesResponse, \
     EmptyResponse, \
     ErrorResponse, \
+    MCTRequest, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
     SeverityLabel, \
     StatusMessage, \
     TimestampGetResponse
-from src.common.structures import MCTParsable
+from src.common.structures import \
+    ComponentRoleLabel, \
+    DetectorFrame, \
+    ImageResolution, \
+    IntrinsicParameters, \
+    KeyValueSimpleAny, \
+    Matrix4x4, \
+    MCTParsable, \
+    Pose, \
+    PoseSolverFrame, \
+    TargetBase
+from src.detector.api import \
+    CalibrationCalculateResponse, \
+    CalibrationImageAddResponse, \
+    CalibrationImageGetResponse, \
+    CalibrationImageMetadataListResponse, \
+    CalibrationResolutionListResponse, \
+    CalibrationResultGetResponse, \
+    CalibrationResultGetActiveResponse, \
+    CalibrationResultMetadataListResponse, \
+    CameraImageGetResponse, \
+    CameraParametersGetResponse, \
+    CameraParametersSetRequest, \
+    CameraParametersSetResponse, \
+    CameraResolutionGetResponse, \
+    DetectorFrameGetResponse, \
+    DetectorStartRequest, \
+    DetectorStopRequest, \
+    MarkerParametersGetResponse, \
+    MarkerParametersSetRequest
+from src.pose_solver.api import \
+    PoseSolverGetPosesResponse, \
+    PoseSolverSetTargetsRequest, \
+    PoseSolverStartRequest, \
+    PoseSolverStopRequest
 import abc
 import datetime
 from enum import StrEnum
+from ipaddress import IPv4Address
 import json
 from typing import Final
 import uuid
@@ -45,6 +79,24 @@ class Connection(abc.ABC):
         FAILURE: Final[str] = "Failure"
         FAILURE_DISCONNECTING: Final[str] = "Failure - Disconnecting"
         FAILURE_DEINITIALIZING: Final[str] = "Failure - Deinitializing"
+
+    class ComponentAddress:
+        """
+        Information used to establish a connection,
+        there is nothing that should change here without a user's explicit input.
+        """
+
+        def __init__(
+            self,
+            label: str,
+            role: ComponentRoleLabel,
+            ip_address: IPv4Address,
+            port: int
+        ):
+            self.label = label
+            self.role = role
+            self.ip_address = ip_address
+            self.port = port
 
     class ConnectionResult:
         success: bool
@@ -89,8 +141,42 @@ class Connection(abc.ABC):
             self.status = status
             self.response_series = response_series
 
+    class Report:
+        """
+        Human-readable information that shall be shown to a user about a connection.
+        """
+        label: str
+        role: ComponentRoleLabel
+        ip_address: str
+        port: int
+        status: str
+
+        def __init__(
+            self,
+            label: str,
+            role: ComponentRoleLabel,
+            ip_address: str,
+            port: int,
+            status: str
+        ):
+            self.label = label
+            self.role = role
+            self.ip_address = ip_address
+            self.port = port
+            self.status = status
+
+        def __eq__(self, other):
+            if not isinstance(other, Connection.Report):
+                return False
+            return (
+                    self.label == other.label and
+                    self.role == other.role and
+                    self.ip_address == other.ip_address and
+                    self.port == other.port and
+                    self.status == other.status)
+
     # treat as immutable
-    _component_address: MCTComponentAddress
+    _component_address: ComponentAddress
 
     _state: State
 
@@ -115,7 +201,7 @@ class Connection(abc.ABC):
 
     def __init__(
         self,
-        component_address: MCTComponentAddress
+        component_address: ComponentAddress
     ):
         self._component_address = component_address
 
@@ -181,8 +267,8 @@ class Connection(abc.ABC):
     def get_label(self) -> str:
         return self._component_address.label
 
-    def get_report(self) -> ConnectionReport:
-        return ConnectionReport(
+    def get_report(self) -> Report:
+        return Connection.Report(
             label=self._component_address.label,
             role=self._component_address.role,
             ip_address=str(self._component_address.ip_address),
@@ -477,3 +563,165 @@ class Connection(abc.ABC):
 
     def _update_in_running_state(self) -> None:
         self._send_recv()
+
+
+class DetectorConnection(Connection):
+
+    configured_transform_to_reference: Matrix4x4 | None
+    configured_camera_parameters: list[KeyValueSimpleAny] | None
+    configured_marker_parameters: list[KeyValueSimpleAny] | None
+
+    # These are variables used directly by the MCTController for storing data
+    request_id: uuid.UUID | None
+    current_resolution: ImageResolution | None
+    current_intrinsic_parameters: IntrinsicParameters | None
+    latest_frame: DetectorFrame | None
+    recording: list[DetectorFrame] | None
+
+    def __init__(
+        self,
+        component_address: Connection.ComponentAddress
+    ):
+        super().__init__(component_address=component_address)
+
+        self.configured_transform_to_reference = None
+        self.configured_camera_parameters = None
+        self.configured_marker_parameters = None
+
+        self.request_id = None
+        self.current_resolution = None
+        self.current_intrinsic_parameters = None
+        self.latest_frame = None
+        self.recording = []
+
+    def create_deinitialization_request_series(self) -> MCTRequestSeries:
+        return MCTRequestSeries(series=[DetectorStopRequest()])
+
+    def create_initialization_request_series(self) -> MCTRequestSeries:
+        series: list[MCTRequest] = [DetectorStartRequest()]
+        if self.configured_camera_parameters is not None:
+            series.append(CameraParametersSetRequest(parameters=self.configured_camera_parameters))
+        if self.configured_marker_parameters is not None:
+            series.append(MarkerParametersSetRequest(parameters=self.configured_marker_parameters))
+        return MCTRequestSeries(series=series)
+
+    def handle_deinitialization_response_series(
+        self,
+        response_series: MCTResponseSeries
+    ) -> Connection.DeinitializationResult:
+        response_count: int = len(response_series.series)
+        if response_count != 1:
+            self.enqueue_status_message(
+                severity="warning",
+                message=f"Expected exactly one response to deinitialization requests. Got {response_count}.")
+        elif not isinstance(response_series.series[0], (EmptyResponse, CameraParametersSetResponse)):
+            self.enqueue_status_message(
+                severity="warning",
+                message=f"The deinitialization response was not of the expected type EmptyResponse.")
+        return Connection.DeinitializationResult.SUCCESS
+
+    def handle_initialization_response_series(
+        self,
+        response_series: MCTResponseSeries
+    ) -> Connection.InitializationResult:
+        response_count: int = len(response_series.series)
+        if response_count != 1:
+            self.enqueue_status_message(
+                severity="warning",
+                message=f"Expected exactly one response to initialization requests. Got {response_count}.")
+        elif not isinstance(response_series.series[0], EmptyResponse):
+            self.enqueue_status_message(
+                severity="warning",
+                message=f"The initialization response was not of the expected type EmptyResponse.")
+        return Connection.InitializationResult.SUCCESS
+
+    def supported_response_types(self) -> list[type[MCTResponse]]:
+        return super().supported_response_types() + [
+            CalibrationCalculateResponse,
+            CalibrationImageAddResponse,
+            CalibrationImageGetResponse,
+            CalibrationImageMetadataListResponse,
+            CalibrationResolutionListResponse,
+            CalibrationResultGetResponse,
+            CalibrationResultGetActiveResponse,
+            CalibrationResultMetadataListResponse,
+            CameraImageGetResponse,
+            CameraParametersGetResponse,
+            CameraParametersSetResponse,
+            CameraResolutionGetResponse,
+            DetectorFrameGetResponse,
+            MarkerParametersGetResponse]
+
+
+class PoseSolverConnection(Connection):
+
+    # These are variables used directly by the MCTController for storing data
+
+    configured_solver_parameters: list[KeyValueSimpleAny] | None
+    configured_targets: list[TargetBase] | None
+
+    request_id: uuid.UUID | None
+    detector_poses: list[Pose]
+    target_poses: list[Pose]
+    detector_timestamps: dict[str, datetime.datetime]  # access by detector_label
+    poses_timestamp: datetime.datetime
+    recording: list[PoseSolverFrame] | None
+
+    def __init__(
+        self,
+        component_address: Connection.ComponentAddress
+    ):
+        super().__init__(component_address=component_address)
+
+        self.configured_solver_parameters = None
+        self.configured_targets = None
+
+        self.request_id = None
+        self.detector_poses = list()
+        self.target_poses = list()
+        self.detector_timestamps = dict()
+        self.poses_timestamp = datetime.datetime.min
+        self.recording = []
+
+    def create_deinitialization_request_series(self) -> MCTRequestSeries:
+        return MCTRequestSeries(series=[PoseSolverStopRequest()])
+
+    def create_initialization_request_series(self) -> MCTRequestSeries:
+        series: list[MCTRequest] = [PoseSolverStartRequest()]
+        if self.configured_targets is not None:
+            series.append(PoseSolverSetTargetsRequest(targets=self.configured_targets))
+        return MCTRequestSeries(series=series)
+
+    def handle_deinitialization_response_series(
+        self,
+        response_series: MCTResponseSeries
+    ) -> Connection.DeinitializationResult:
+        response_count: int = len(response_series.series)
+        if response_count != 1:
+            self.enqueue_status_message(
+                severity="warning",
+                message=f"Expected exactly one response to deinitialization requests. Got {response_count}.")
+        elif not isinstance(response_series.series[0], EmptyResponse):
+            self.enqueue_status_message(
+                severity="warning",
+                message=f"The deinitialization response was not of the expected type EmptyResponse.")
+        return Connection.DeinitializationResult.SUCCESS
+
+    def handle_initialization_response_series(
+        self,
+        response_series: MCTResponseSeries
+    ) -> Connection.InitializationResult:
+        response_count: int = len(response_series.series)
+        if response_count != 1:
+            self.enqueue_status_message(
+                severity="warning",
+                message=f"Expected exactly one response to initialization requests. Got {response_count}.")
+        elif not isinstance(response_series.series[0], EmptyResponse):
+            self.enqueue_status_message(
+                severity="warning",
+                message=f"The initialization response was not of the expected type EmptyResponse.")
+        return Connection.InitializationResult.SUCCESS
+
+    def supported_response_types(self) -> list[type[MCTResponse]]:
+        return super().supported_response_types() + [
+            PoseSolverGetPosesResponse]

@@ -12,9 +12,8 @@ from scipy.spatial.transform import Rotation as R
 
 from src.board_builder.board_builder import BoardBuilder
 from src.common.structures.mct_component import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
-from src.controller.mct_controller import MCTController
-from src.controller.structures.mct_component_address import MCTComponentAddress
-from src.pose_solver.util import average_quaternion, average_vector
+from src.controller import Connection, MCTController
+from src.common import MathUtils
 
 # input_filepath = "/home/adminpi5/Documents/MCSTrack/data/measure_detector_to_reference_config.json"
 if len(sys.argv) < 2:
@@ -41,12 +40,11 @@ async def main():
     ITERATIONS = 20
 
     for detector in detectors:
-        controller.add_connection(MCTComponentAddress(
-                label=detector['label'],
-                role=COMPONENT_ROLE_LABEL_DETECTOR,
-                ip_address=detector['ip_address'],
-                port=detector['port']
-            ))
+        controller.add_connection(Connection.ComponentAddress(
+            label=detector['label'],
+            role=COMPONENT_ROLE_LABEL_DETECTOR,
+            ip_address=detector['ip_address'],
+            port=detector['port']))
         all_measured_transforms_by_detector[detector['label']] = []
 
     controller.start_up()
@@ -92,8 +90,8 @@ async def main():
             quaternions.append(quaternion)
             translations.append(translation)
 
-        avg_quaternion = average_quaternion(quaternions)
-        avg_translation = average_vector(translations)
+        avg_quaternion = MathUtils.average_quaternion(quaternions)
+        avg_translation = MathUtils.average_vector(translations)
 
         avg_rotation_matrix = R.from_quat(avg_quaternion).as_matrix()
 

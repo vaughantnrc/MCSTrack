@@ -7,8 +7,8 @@ from src.common import \
     StatusMessage, \
     StatusMessageSource
 from src.controller import \
-    MCTController, \
-    ConnectionReport
+    Connection, \
+    MCTController
 from typing import Final
 import wx
 import wx.grid
@@ -27,7 +27,7 @@ class ControllerPanel(BasePanel):
     _log_panel: LogPanel
 
     _controller_status: str  # last status reported by MCTController
-    _connection_reports: list[ConnectionReport]
+    _connection_reports: list[Connection.Report]
     _is_updating: bool  # Some things should only trigger during explicit user events
 
     def __init__(
@@ -174,7 +174,7 @@ class ControllerPanel(BasePanel):
 
     def update_connection_table_display(self) -> None:
         # Return if there is no change
-        connection_reports: list[ConnectionReport] = self._controller.get_connection_reports()
+        connection_reports: list[Connection.Report] = self._controller.get_connection_reports()
         if len(connection_reports) == len(self._connection_reports):
             identical: bool = True
             for connection_report in connection_reports:

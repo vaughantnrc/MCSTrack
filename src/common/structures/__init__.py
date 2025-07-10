@@ -11,7 +11,6 @@ from .aruco import \
 from .detector import \
     CaptureFormat, \
     DetectorFrame, \
-    MarkerCorners, \
     MarkerCornerImagePoint, \
     MarkerSnapshot
 from .image import \

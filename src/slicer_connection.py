@@ -6,18 +6,17 @@ import pyigtl
 import time as t
 import logging
 
-from src.common.api.mct_request_series import MCTRequestSeries
+from src.common.api import MCTRequestSeries
 from src.common.structures.mct_component import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
 from src.common.structures import TargetBase
 from src.controller.mct_controller import MCTController
-from src.controller.structures.mct_component_address import MCTComponentAddress
 from ipaddress import IPv4Address
 
 from src.pose_solver.api import PoseSolverAddTargetMarkerRequest
 from src.pose_solver.api import TargetMarker
 from src.pose_solver.api import PoseSolverSetReferenceRequest
 
-from src.controller.structures.connection import Connection
+from src.controller import Connection
 
 # Input filepath is specified by command line arguments
 if len(sys.argv) < 2:
