@@ -17,7 +17,7 @@ class MarkerCornerImagePoint(BaseModel):
 
 
 class MarkerSnapshot(BaseModel):
-    label: str = Field()
+    label: str = Field()  # Empty indicates that something was detected but not identified
     corner_image_points: list[MarkerCornerImagePoint] = Field()
 
 

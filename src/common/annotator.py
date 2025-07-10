@@ -1,30 +1,53 @@
-from ..structures import \
-    MarkerConfiguration, \
-    MarkerStatus
-from src.common import \
+from .exceptions import \
+    MCTError
+from .status_messages import \
     SeverityLabel, \
     StatusMessageSource
-from src.common.structures import \
+from .structures import \
     MarkerSnapshot, \
     KeyValueMetaAny, \
     KeyValueSimpleAny
 import abc
 import datetime
+from enum import StrEnum
 import numpy
+from pydantic import BaseModel, Field
+from typing import Final
 
 
-class AbstractMarker(abc.ABC):
+class _Configuration(BaseModel):
+    method: str = Field()
+
+
+class _Status(StrEnum):
+    STOPPED: Final[int] = "STOPPED"
+    RUNNING: Final[int] = "RUNNING"
+    FAILURE: Final[int] = "FAILURE"
+
+
+class MCTAnnotatorRuntimeError(MCTError):
+    message: str
+
+    def __init__(self, message: str, *args):
+        super().__init__(args)
+        self.message = message
+
+
+class Annotator(abc.ABC):
     """
-    Functions may raise MCTDetectorRuntimeError
+    Functions may raise MCTMarkerRuntimeError
     """
 
-    _configuration: MarkerConfiguration
-    _status: MarkerStatus
+    Configuration: type[_Configuration] = _Configuration
+    Status: type[_Status] = _Status
+
+    _configuration: Configuration
+    _status: Status
     _status_message_source: StatusMessageSource
 
     def __init__(
         self,
-        configuration: MarkerConfiguration,
+        configuration: Configuration,
         status_message_source: StatusMessageSource
     ):
         self._configuration = configuration
@@ -37,10 +60,10 @@ class AbstractMarker(abc.ABC):
     ) -> None:
         self._status_message_source.enqueue_status_message(severity=severity, message=message)
 
-    def get_status(self) -> MarkerStatus:
+    def get_status(self) -> Status:
         return self._status
 
-    def set_status(self, status: MarkerStatus) -> None:
+    def set_status(self, status: Status) -> None:
         self._status = status
 
     @abc.abstractmethod

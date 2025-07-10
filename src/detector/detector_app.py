@@ -1,15 +1,4 @@
-from src.common import \
-    EmptyResponse, \
-    ErrorResponse, \
-    NetworkUtils, \
-    TimestampGetRequest, \
-    TimestampGetResponse, \
-    TimeSyncStartRequest, \
-    TimeSyncStopRequest
-from src.detector import \
-    Detector, \
-    DetectorConfiguration
-from src.detector.api import \
+from .api import \
     CalibrationResultGetActiveResponse, \
     CameraImageGetRequest, \
     CameraImageGetResponse, \
@@ -17,11 +6,21 @@ from src.detector.api import \
     CameraResolutionGetResponse, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse, \
-    MarkerParametersGetResponse, \
-    MarkerParametersSetRequest
-from src.detector.interfaces import \
-    AbstractCamera, \
-    AbstractMarker
+    AnnotatorParametersGetResponse, \
+    AnnotatorParametersSetRequest
+from .detector import \
+    Detector, \
+    DetectorConfiguration
+from src.common import \
+    Camera, \
+    Annotator, \
+    EmptyResponse, \
+    ErrorResponse, \
+    NetworkUtils, \
+    TimestampGetRequest, \
+    TimestampGetResponse, \
+    TimeSyncStartRequest, \
+    TimeSyncStopRequest
 import asyncio
 import base64
 from fastapi import FastAPI, Request
@@ -47,20 +46,20 @@ def create_app() -> FastAPI:
     # Eventually it would be preferable to put the initialization logic/mapping below into an abstract factory,
     # and allow end-users to register custom classes that are not necessarily shipped within this library.
 
-    camera_type: type[AbstractCamera]
+    camera_type: type[Camera]
     if detector_configuration.camera_configuration.driver == "opencv_capture_device":
-        from src.detector.implementations.camera_opencv_capture_device import OpenCVCaptureDeviceCamera
+        from src.implementations.camera_opencv_capture_device import OpenCVCaptureDeviceCamera
         camera_type = OpenCVCaptureDeviceCamera
     elif detector_configuration.camera_configuration.driver == "picamera2":
-        from src.detector.implementations.camera_picamera2 import Picamera2Camera
+        from src.implementations.camera_picamera2 import Picamera2Camera
         camera_type = Picamera2Camera
     else:
         raise RuntimeError(f"Unsupported camera driver {detector_configuration.camera_configuration.driver}.")
 
-    marker_type: type[AbstractMarker]
+    marker_type: type[Annotator]
     if detector_configuration.marker_configuration.method == "aruco_opencv":
-        from src.detector.implementations.marker_aruco_opencv import ArucoOpenCVMarker
-        marker_type = ArucoOpenCVMarker
+        from src.implementations.annotator_aruco_opencv import ArucoOpenCVAnnotator
+        marker_type = ArucoOpenCVAnnotator
     else:
         raise RuntimeError(f"Unsupported marker method {detector_configuration.marker_configuration.method}.")
 
@@ -143,12 +142,12 @@ def create_app() -> FastAPI:
         return detector.camera_resolution_get()
 
     @detector_app.get("/marker/get_parameters")
-    async def marker_get_parameters() -> MarkerParametersGetResponse | ErrorResponse:
+    async def marker_get_parameters() -> AnnotatorParametersGetResponse | ErrorResponse:
         return detector.marker_parameters_get()
 
     @detector_app.post("/marker/set_parameters")
     async def marker_set_parameters(
-        request: MarkerParametersSetRequest
+        request: AnnotatorParametersSetRequest
     ) -> EmptyResponse | ErrorResponse:
         return detector.marker_parameters_set(
             request=request)

@@ -8,13 +8,46 @@ from src.common.structures import \
     ImageResolution, \
     KeyValueMetaAny, \
     KeyValueSimpleAny
-from .structures import \
-    CalibrationImageMetadata, \
-    CalibrationImageState, \
-    CalibrationResultMetadata, \
-    CalibrationResultState
+from .intrinsic_calibrator import IntrinsicCalibrator
 from pydantic import Field, SerializeAsAny
 from typing import Final, Literal
+
+
+class AnnotatorParametersGetRequest(MCTRequest):
+    _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_get"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return AnnotatorParametersGetRequest._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+
+class AnnotatorParametersGetResponse(MCTResponse):
+    _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_get"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return AnnotatorParametersGetResponse._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+    parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
+
+
+class AnnotatorParametersSetRequest(MCTRequest):
+    _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_set"
+
+    @staticmethod
+    def parsable_type_identifier() -> str:
+        return AnnotatorParametersSetRequest._TYPE_IDENTIFIER
+
+    # noinspection PyTypeHints
+    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+
+    parameters: list[SerializeAsAny[KeyValueSimpleAny]] = Field()
 
 
 class CalibrationCalculateRequest(MCTRequest):
@@ -128,7 +161,7 @@ class CalibrationImageMetadataListResponse(MCTResponse):
     # noinspection PyTypeHints
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
-    metadata_list: list[CalibrationImageMetadata] = Field(default_factory=list)
+    metadata_list: list[IntrinsicCalibrator.ImageMetadata] = Field(default_factory=list)
 
 
 class CalibrationImageMetadataUpdateRequest(MCTRequest):
@@ -142,7 +175,7 @@ class CalibrationImageMetadataUpdateRequest(MCTRequest):
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
     image_identifier: str = Field()
-    image_state: CalibrationImageState = Field()
+    image_state: IntrinsicCalibrator.ImageState = Field()
     image_label: str | None = Field(default=None)
 
 
@@ -243,7 +276,7 @@ class CalibrationResultMetadataListResponse(MCTResponse):
     # noinspection PyTypeHints
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
-    metadata_list: list[CalibrationResultMetadata] = Field(default_factory=list)
+    metadata_list: list[IntrinsicCalibrator.ResultMetadata] = Field(default_factory=list)
 
 
 class CalibrationResultMetadataUpdateRequest(MCTRequest):
@@ -257,7 +290,7 @@ class CalibrationResultMetadataUpdateRequest(MCTRequest):
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
     result_identifier: str = Field()
-    result_state: CalibrationResultState = Field()
+    result_state: IntrinsicCalibrator.ResultState = Field()
     result_label: str | None = Field(default=None)
 
 
@@ -410,40 +443,3 @@ class DetectorStopRequest(MCTRequest):
 
     # noinspection PyTypeHints
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
-
-
-class MarkerParametersGetRequest(MCTRequest):
-    _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_get"
-
-    @staticmethod
-    def parsable_type_identifier() -> str:
-        return MarkerParametersGetRequest._TYPE_IDENTIFIER
-
-    # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
-
-
-class MarkerParametersGetResponse(MCTResponse):
-    _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_get"
-
-    @staticmethod
-    def parsable_type_identifier() -> str:
-        return MarkerParametersGetResponse._TYPE_IDENTIFIER
-
-    # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
-
-    parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
-
-
-class MarkerParametersSetRequest(MCTRequest):
-    _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_set"
-
-    @staticmethod
-    def parsable_type_identifier() -> str:
-        return MarkerParametersSetRequest._TYPE_IDENTIFIER
-
-    # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
-
-    parameters: list[SerializeAsAny[KeyValueSimpleAny]] = Field()

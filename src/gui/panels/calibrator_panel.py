@@ -20,7 +20,7 @@ from src.common.structures import \
     ImageResolution
 from src.controller import \
     MCTController
-from src.detector.api import \
+from src.detector import \
     CalibrationCalculateRequest, \
     CalibrationCalculateResponse, \
     CalibrationDeleteStagedRequest, \
@@ -35,12 +35,8 @@ from src.detector.api import \
     CalibrationResultGetResponse, \
     CalibrationResultMetadataListRequest, \
     CalibrationResultMetadataListResponse, \
-    CalibrationResultMetadataUpdateRequest
-from src.detector.structures import \
-    CalibrationImageMetadata, \
-    CalibrationImageState, \
-    CalibrationResultMetadata, \
-    CalibrationResultState
+    CalibrationResultMetadataUpdateRequest, \
+    IntrinsicCalibrator
 from io import BytesIO
 import logging
 from typing import Optional
@@ -77,8 +73,8 @@ class CalibratorPanel(BasePanel):
     _calibration_in_progress: bool
     _force_last_result_selected: bool
     _detector_resolutions: list[ImageResolution]
-    _image_metadata_list: list[CalibrationImageMetadata]
-    _result_metadata_list: list[CalibrationResultMetadata]
+    _image_metadata_list: list[IntrinsicCalibrator.ImageMetadata]
+    _result_metadata_list: list[IntrinsicCalibrator.ResultMetadata]
 
     def __init__(
         self,
@@ -155,7 +151,7 @@ class CalibratorPanel(BasePanel):
             parent=control_panel,
             sizer=control_sizer,
             label="Image State",
-            selectable_values=[state.name for state in CalibrationImageState])
+            selectable_values=[state.name for state in IntrinsicCalibrator.ImageState])
 
         self._image_update_button: wx.Button = self.add_control_button(
             parent=control_panel,
@@ -208,7 +204,7 @@ class CalibratorPanel(BasePanel):
             parent=control_panel,
             sizer=control_sizer,
             label="Result State",
-            selectable_values=[state.name for state in CalibrationResultState])
+            selectable_values=[state.name for state in IntrinsicCalibrator.ResultState])
 
         self._result_update_button: wx.Button = self.add_control_button(
             parent=control_panel,
@@ -470,8 +466,8 @@ class CalibratorPanel(BasePanel):
             ImageResolution.from_str(self._detector_resolution_selector.selector.GetStringSelection())
         image_index: int = self._image_table.get_selected_row_index()
         image_identifier: str = self._image_metadata_list[image_index].identifier
-        image_state: CalibrationImageState = \
-            CalibrationImageState[self._image_state_selector.selector.GetStringSelection()]
+        image_state: IntrinsicCalibrator.ImageState = \
+            IntrinsicCalibrator.ImageState[self._image_state_selector.selector.GetStringSelection()]
         image_label: str = self._image_label_textbox.textbox.GetValue()
         request_series: MCTRequestSeries = MCTRequestSeries(series=[
             CalibrationImageMetadataUpdateRequest(
@@ -508,8 +504,8 @@ class CalibratorPanel(BasePanel):
             ImageResolution.from_str(self._detector_resolution_selector.selector.GetStringSelection())
         result_index: int = self._result_table.get_selected_row_index()
         result_identifier: str = self._result_metadata_list[result_index].identifier
-        result_state: CalibrationResultState = \
-            CalibrationResultState[self._result_state_selector.selector.GetStringSelection()]
+        result_state: IntrinsicCalibrator.ResultState = \
+            IntrinsicCalibrator.ResultState[self._result_state_selector.selector.GetStringSelection()]
         result_label: str = self._result_label_textbox.textbox.GetValue()
         request_series: MCTRequestSeries = MCTRequestSeries(series=[
             CalibrationResultMetadataUpdateRequest(
@@ -564,7 +560,7 @@ class CalibratorPanel(BasePanel):
                         message=f"Selected image index {image_index} is out of bounds. Setting to None.")
                     self._image_table.set_selected_row_index(None)
                 else:
-                    image_metadata: CalibrationImageMetadata = self._image_metadata_list[image_index]
+                    image_metadata: IntrinsicCalibrator.ImageMetadata = self._image_metadata_list[image_index]
                     self._image_label_textbox.Enable(True)
                     self._image_label_textbox.textbox.SetValue(image_metadata.label)
                     self._image_state_selector.Enable(True)
@@ -572,7 +568,7 @@ class CalibratorPanel(BasePanel):
                     self._image_update_button.Enable(True)
             calibration_image_count: int = 0
             for image_metadata in self._image_metadata_list:
-                if image_metadata.state == CalibrationImageState.SELECT:
+                if image_metadata.state == IntrinsicCalibrator.ImageState.SELECT:
                     calibration_image_count += 1
             if calibration_image_count > 0:
                 self._calibrate_button.Enable(True)
@@ -592,7 +588,7 @@ class CalibratorPanel(BasePanel):
                         message=f"Selected result index {result_index} is out of bounds. Setting to None.")
                     self._result_table.set_selected_row_index(None)
                 else:
-                    result_metadata: CalibrationResultMetadata = self._result_metadata_list[result_index]
+                    result_metadata: IntrinsicCalibrator.ResultMetadata = self._result_metadata_list[result_index]
                     self._result_display_textbox.Enable(True)
                     self._result_label_textbox.Enable(True)
                     self._result_label_textbox.textbox.SetValue(result_metadata.label)

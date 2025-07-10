@@ -32,9 +32,9 @@ from src.detector.api import \
     CameraParametersGetResponse, \
     CameraParametersSetRequest, \
     CameraParametersSetResponse, \
-    MarkerParametersGetRequest, \
-    MarkerParametersGetResponse, \
-    MarkerParametersSetRequest
+    AnnotatorParametersGetRequest, \
+    AnnotatorParametersGetResponse, \
+    AnnotatorParametersSetRequest
 import cv2
 from io import BytesIO
 import logging
@@ -300,7 +300,7 @@ class DetectorPanel(BasePanel):
         request_series: MCTRequestSeries = MCTRequestSeries(
             series=[
                 CameraParametersGetRequest(),
-                MarkerParametersGetRequest()])
+                AnnotatorParametersGetRequest()])
         self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
@@ -324,8 +324,8 @@ class DetectorPanel(BasePanel):
         key_values: list[KeyValueSimpleAny] = self.populate_key_value_list_from_dynamic_ui(
             parameter_uis=self._marker_parameter_uis)
         request_series: MCTRequestSeries = MCTRequestSeries(series=[
-            MarkerParametersSetRequest(parameters=key_values),
-            MarkerParametersGetRequest()])  # sync
+            AnnotatorParametersSetRequest(parameters=key_values),
+            AnnotatorParametersGetRequest()])  # sync
         self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
@@ -345,7 +345,7 @@ class DetectorPanel(BasePanel):
                 self._handle_capture_snapshot_response(response=response)
             elif isinstance(response, CameraParametersGetResponse):
                 self._handle_get_capture_parameters_response(response=response)
-            elif isinstance(response, MarkerParametersGetResponse):
+            elif isinstance(response, AnnotatorParametersGetResponse):
                 self._handle_get_detection_parameters_response(response=response)
             elif isinstance(response, ErrorResponse):
                 self.handle_error_response(response=response)
@@ -386,7 +386,7 @@ class DetectorPanel(BasePanel):
     # noinspection DuplicatedCode
     def _handle_get_detection_parameters_response(
         self,
-        response: MarkerParametersGetResponse
+        response: AnnotatorParametersGetResponse
     ):
         self._marker_parameter_panel.Freeze()
         self._marker_parameter_sizer.Clear(True)

@@ -1,5 +1,5 @@
 from .row_selection_table import RowSelectionTable
-from src.detector.structures import CalibrationResultMetadata
+from src.detector import IntrinsicCalibrator
 from typing import Final
 import wx
 
@@ -12,7 +12,7 @@ _COL_COUNT: Final[int] = 4
 _COL_LABELS: Final[list[str]] = ["Identifier", "Label", "Timestamp", "Status"]
 
 
-class CalibrationResultTable(RowSelectionTable[CalibrationResultMetadata]):
+class CalibrationResultTable(RowSelectionTable[IntrinsicCalibrator.ResultMetadata]):
     def __init__(
         self,
         parent: wx.Window,
@@ -26,7 +26,7 @@ class CalibrationResultTable(RowSelectionTable[CalibrationResultMetadata]):
     def _set_row_contents(
         self,
         row_index: int,
-        row_content: CalibrationResultMetadata
+        row_content: IntrinsicCalibrator.ResultMetadata
     ):
         self.table.SetCellValue(
             row=row_index,

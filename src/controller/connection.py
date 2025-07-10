@@ -37,8 +37,8 @@ from src.detector.api import \
     DetectorFrameGetResponse, \
     DetectorStartRequest, \
     DetectorStopRequest, \
-    MarkerParametersGetResponse, \
-    MarkerParametersSetRequest
+    AnnotatorParametersGetResponse, \
+    AnnotatorParametersSetRequest
 from src.pose_solver.api import \
     PoseSolverGetPosesResponse, \
     PoseSolverSetTargetsRequest, \
@@ -602,7 +602,7 @@ class DetectorConnection(Connection):
         if self.configured_camera_parameters is not None:
             series.append(CameraParametersSetRequest(parameters=self.configured_camera_parameters))
         if self.configured_marker_parameters is not None:
-            series.append(MarkerParametersSetRequest(parameters=self.configured_marker_parameters))
+            series.append(AnnotatorParametersSetRequest(parameters=self.configured_marker_parameters))
         return MCTRequestSeries(series=series)
 
     def handle_deinitialization_response_series(
@@ -650,7 +650,7 @@ class DetectorConnection(Connection):
             CameraParametersSetResponse,
             CameraResolutionGetResponse,
             DetectorFrameGetResponse,
-            MarkerParametersGetResponse]
+            AnnotatorParametersGetResponse]
 
 
 class PoseSolverConnection(Connection):

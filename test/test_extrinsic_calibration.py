@@ -10,10 +10,11 @@ from src.common.structures import \
     KeyValueSimpleAny, \
     KeyValueSimpleString, \
     MarkerSnapshot
-from src.detector import IntrinsicCalibrator
-from src.detector.implementations.marker_aruco_opencv import ArucoOpenCVMarker
-from src.detector.structures import CalibratorConfiguration
-from src.detector.util import KEY_CORNER_REFINEMENT_METHOD
+from src.detector import \
+    IntrinsicCalibrator
+from src.implementations.annotator_aruco_opencv import \
+    ArucoOpenCVAnnotator, \
+    KEY_CORNER_REFINEMENT_METHOD
 from tempfile import TemporaryDirectory
 from typing import Final
 import unittest
@@ -69,7 +70,7 @@ class TestPoseSolver(unittest.TestCase):
         calibration_result: IntrinsicCalibration | None = None
         with TemporaryDirectory() as temppath:
             calibrator: IntrinsicCalibrator = IntrinsicCalibrator(
-                configuration=CalibratorConfiguration(data_path=temppath),
+                configuration=IntrinsicCalibrator.Configuration(data_path=temppath),
                 status_message_source=status_message_source)
             for camera_id, image_filepaths_by_frame_id in image_filepaths.items():
                 for frame_id, image_filepath in image_filepaths_by_frame_id.items():
@@ -82,7 +83,7 @@ class TestPoseSolver(unittest.TestCase):
                 image_resolution=IMAGE_RESOLUTION,
                 marker_parameters=MARKER_DETECTION_PARAMETERS)
 
-        marker: ArucoOpenCVMarker = ArucoOpenCVMarker(
+        marker: ArucoOpenCVAnnotator = ArucoOpenCVAnnotator(
             configuration={"method": "aruco_opencv"},
             status_message_source=status_message_source)
         marker.set_parameters(parameters=MARKER_DETECTION_PARAMETERS)

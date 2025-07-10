@@ -1,10 +1,9 @@
-from ..exceptions import MCTDetectorRuntimeError
-from ..interfaces import AbstractCamera
-from ..structures import \
-    CameraConfiguration, \
-    CameraStatus
 from src.common import \
+    Camera, \
+    CameraConfiguration, \
+    CameraStatus, \
     ImageUtils, \
+    MCTCameraRuntimeError, \
     StatusMessageSource
 from src.common.structures import \
     ImageResolution, \
@@ -70,7 +69,7 @@ _CAMERA_GAMMA_RANGE_MINIMUM: Final[int] = 80
 _CAMERA_GAMMA_RANGE_MAXIMUM: Final[int] = 300
 
 
-class OpenCVCaptureDeviceCamera(AbstractCamera):
+class OpenCVCaptureDeviceCamera(Camera):
 
     _capture: cv2.VideoCapture | None
     _capture_device_id: str | int
@@ -101,19 +100,19 @@ class OpenCVCaptureDeviceCamera(AbstractCamera):
 
     def get_image(self) -> numpy.ndarray:
         if self._image is None:
-            raise MCTDetectorRuntimeError(message="There is no captured image.")
+            raise MCTCameraRuntimeError(message="There is no captured image.")
         return self._image
 
     def get_resolution(self) -> ImageResolution:
         if self._capture is None:
-            raise MCTDetectorRuntimeError(message="The camera is not active, and resolution cannot be retrieved.")
+            raise MCTCameraRuntimeError(message="The camera is not active, and resolution cannot be retrieved.")
         return ImageResolution(
             x_px=int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
             y_px=int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
     def get_parameters(self) -> list[KeyValueMetaAbstract]:
         if self._capture is None:
-            raise MCTDetectorRuntimeError(message="The camera is not active, and properties cannot be retrieved.")
+            raise MCTCameraRuntimeError(message="The camera is not active, and properties cannot be retrieved.")
 
         return_value: list[KeyValueMetaAbstract] = list()
 
@@ -184,7 +183,7 @@ class OpenCVCaptureDeviceCamera(AbstractCamera):
     def set_parameters(self, parameters: list[KeyValueSimpleAny]) -> None:
 
         if self._capture is None:
-            raise MCTDetectorRuntimeError(message="Capture is None.")
+            raise MCTCameraRuntimeError(message="Capture is None.")
 
         mismatched_keys: list[str] = list()
 
@@ -240,7 +239,7 @@ class OpenCVCaptureDeviceCamera(AbstractCamera):
                 mismatched_keys.append(key_value.key)
 
         if len(mismatched_keys) > 0:
-            raise MCTDetectorRuntimeError(
+            raise MCTCameraRuntimeError(
                 message=f"The following parameters could not be applied due to key mismatch: {str(mismatched_keys)}")
 
     def start(self) -> None:
@@ -254,7 +253,7 @@ class OpenCVCaptureDeviceCamera(AbstractCamera):
         elif os.name == "posix":
             self._capture = cv2.VideoCapture(self._capture_device_id, cv2.CAP_V4L2)
         else:
-            raise MCTDetectorRuntimeError(
+            raise MCTCameraRuntimeError(
                 message=f"The current platform ({os.name}) is not supported.")
 
         # NOTE: The USB3 cameras bought for this project appear to require some basic parameters to be set,
@@ -291,7 +290,7 @@ class OpenCVCaptureDeviceCamera(AbstractCamera):
             message: str = "Failed to grab frame."
             self.add_status_message(severity="error", message=message)
             self.set_status(CameraStatus.FAILURE)
-            raise MCTDetectorRuntimeError(message=message)
+            raise MCTCameraRuntimeError(message=message)
 
         retrieved_frame: bool
         retrieved_frame, self._image = self._capture.retrieve()
@@ -299,6 +298,6 @@ class OpenCVCaptureDeviceCamera(AbstractCamera):
             message: str = "Failed to retrieve frame."
             self.add_status_message(severity="error", message=message)
             self.set_status(CameraStatus.FAILURE)
-            raise MCTDetectorRuntimeError(message=message)
+            raise MCTCameraRuntimeError(message=message)
 
         self._image_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

@@ -1,10 +1,9 @@
-from ..structures import \
-    CameraConfiguration, \
-    CameraStatus
-from src.common import \
+from .exceptions import \
+    MCTError
+from .status_messages import \
     SeverityLabel, \
     StatusMessageSource
-from src.common.structures import \
+from .structures import \
     CaptureFormat, \
     ImageResolution, \
     KeyValueSimpleAny, \
@@ -13,21 +12,46 @@ import abc
 import base64
 import cv2
 import datetime
+from enum import StrEnum
 import numpy
+from pydantic import BaseModel, Field
+from typing import Final, Union
 
 
-class AbstractCamera(abc.ABC):
+class _Configuration(BaseModel):
+    driver: str = Field()
+    capture_device: Union[str, int] = Field()  # Not used by all drivers (notably it IS used by OpenCV)
+
+
+class _Status(StrEnum):
+    STOPPED: Final[int] = "STOPPED"
+    RUNNING: Final[int] = "RUNNING"
+    FAILURE: Final[int] = "FAILURE"
+
+
+class MCTCameraRuntimeError(MCTError):
+    message: str
+
+    def __init__(self, message: str, *args):
+        super().__init__(args)
+        self.message = message
+
+
+class Camera(abc.ABC):
     """
-    Functions may raise MCTDetectorRuntimeError
+    Functions may raise MCTCameraRuntimeError
     """
 
-    _configuration: CameraConfiguration
-    _status: CameraStatus
+    Status: type[_Status] = _Status
+    Configuration: type[_Configuration] = _Configuration
+
+    _configuration: Configuration
+    _status: Status
     _status_message_source: StatusMessageSource
 
     def __init__(
         self,
-        configuration: CameraConfiguration,
+        configuration: Configuration,
         status_message_source: StatusMessageSource
     ):
         self._configuration = configuration
@@ -59,10 +83,10 @@ class AbstractCamera(abc.ABC):
         encoded_image_rgb_base64: str = base64.b64encode(encoded_image_rgb_bytes)
         return encoded_image_rgb_base64
 
-    def get_status(self) -> CameraStatus:
+    def get_status(self) -> Status:
         return self._status
 
-    def set_status(self, status: CameraStatus) -> None:
+    def set_status(self, status: Status) -> None:
         self._status = status
 
     @abc.abstractmethod

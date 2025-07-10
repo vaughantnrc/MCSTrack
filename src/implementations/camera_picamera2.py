@@ -1,9 +1,9 @@
-from ..exceptions import MCTDetectorRuntimeError
-from ..interfaces import AbstractCamera
-from ..structures import \
+from src.common import \
+    Camera, \
     CameraConfiguration, \
-    CameraStatus
-from src.common import StatusMessageSource
+    CameraStatus, \
+    MCTCameraRuntimeError, \
+    StatusMessageSource
 from src.common.structures import \
     ImageResolution, \
     KeyValueSimpleAbstract, \
@@ -75,7 +75,7 @@ _PICAMERA2_CONTRAST_KEY: Final[str] = "Contrast"
 _PICAMERA2_SHARPNESS_KEY: Final[str] = "Sharpness"
 
 
-class Picamera2Camera(AbstractCamera):
+class Picamera2Camera(Camera):
 
     _camera: Picamera2
     _camera_configuration: Picamera2Configuration
@@ -102,12 +102,12 @@ class Picamera2Camera(AbstractCamera):
 
     def get_image(self) -> numpy.ndarray:
         if self._image is None:
-            raise MCTDetectorRuntimeError(message="There is no captured image.")
+            raise MCTCameraRuntimeError(message="There is no captured image.")
         return self._image
 
     def get_parameters(self, **_kwargs) -> list[KeyValueMetaAbstract]:
         if self.get_status() != CameraStatus.RUNNING:
-            raise MCTDetectorRuntimeError(message="The capture is not active, and properties cannot be retrieved.")
+            raise MCTCameraRuntimeError(message="The capture is not active, and properties cannot be retrieved.")
 
         current_controls: dict = {
             # Custom settings shall override default values
@@ -223,7 +223,7 @@ class Picamera2Camera(AbstractCamera):
                 mismatched_keys.append(key_value.key)
 
         if len(mismatched_keys) > 0:
-            raise MCTDetectorRuntimeError(
+            raise MCTCameraRuntimeError(
                 message=f"The following parameters could not be applied due to key mismatch: {str(mismatched_keys)}")
 
         if self.get_status() == CameraStatus.RUNNING:
@@ -275,6 +275,6 @@ class Picamera2Camera(AbstractCamera):
             message: str = "Failed to grab frame."
             self.add_status_message(severity="error", message=message)
             self.set_status(CameraStatus.FAILURE)
-            raise MCTDetectorRuntimeError(message=message)
+            raise MCTCameraRuntimeError(message=message)
 
         self._image_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

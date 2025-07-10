@@ -1,17 +1,7 @@
-from .exceptions import \
-    MCTDetectorRuntimeError
-from .structures import \
-    CalibratorConfiguration, \
-    CalibrationImageMetadata, \
-    CalibrationImageState, \
-    CalibrationMap, \
-    CalibrationMapValue, \
-    CalibrationResultMetadata, \
-    CalibrationResultState
-from .util import assign_key_value_list_to_aruco_detection_parameters
 from src.common import \
     ImageUtils, \
     IOUtils, \
+    MCTError, \
     StatusMessageSource
 from src.common.structures import \
     CharucoBoardSpecification, \
@@ -21,15 +11,20 @@ from src.common.structures import \
     IntrinsicParameters, \
     KeyValueSimpleAny, \
     Vec3
+# TODO:
+#   Intrinsic Calibration could have different implementations.
+#   This one depends on ArUco, and it may make sense to make an abstraction.
+from src.implementations.annotator_aruco_opencv import ArucoOpenCVAnnotator
 import cv2
 import cv2.aruco
 import datetime
+from enum import StrEnum
 import json
 from json import JSONDecodeError
 import logging
 import numpy
 import os
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from typing import Final
 import uuid
 
@@ -37,10 +32,100 @@ import uuid
 logger = logging.getLogger(__name__)
 
 
-class IntrinsicCalibrator:
+class MCTIntrinsicCalibrationError(MCTError):
+    message: str
 
-    _configuration: CalibratorConfiguration
-    _calibration_map: dict[ImageResolution, CalibrationMapValue]
+    def __init__(self, message: str, *args):
+        super().__init__(args)
+        self.message = message
+
+
+class _Configuration(BaseModel):
+    data_path: str = Field()
+
+
+class _ImageState(StrEnum):
+    IGNORE: Final[int] = "ignore"
+    SELECT: Final[int] = "select"
+    DELETE: Final[int] = "delete"  # stage for deletion
+
+
+class _ImageMetadata(BaseModel):
+    identifier: str = Field()
+    label: str = Field(default_factory=str)
+    timestamp_utc: str = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
+    state: _ImageState = Field(default=_ImageState.SELECT)
+
+
+class _ResultState(StrEnum):
+    # indicate to use this calibration (as opposed to simply storing it)
+    # normally there shall only ever be one ACTIVE calibration for a given image resolution
+    ACTIVE: Final[str] = "active"
+
+    # store the calibration, but don't mark it for use
+    RETAIN: Final[str] = "retain"
+
+    # stage for deletion
+    DELETE: Final[str] = "delete"
+
+
+class _ResultMetadata(BaseModel):
+    identifier: str = Field()
+    label: str = Field(default_factory=str)
+    timestamp_utc_iso8601: str = Field(
+        default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
+    image_identifiers: list[str] = Field(default_factory=list)
+    state: _ResultState = Field(default=_ResultState.RETAIN)
+
+    def timestamp_utc(self):
+        return datetime.datetime.fromisoformat(self.timestamp_utc_iso8601)
+
+
+class _DataMapValue(BaseModel):
+    image_metadata_list: list[_ImageMetadata] = Field(default_factory=list)
+    result_metadata_list: list[_ResultMetadata] = Field(default_factory=list)
+
+
+class _DataMapEntry(BaseModel):
+    key: ImageResolution = Field()
+    value: _DataMapValue = Field()
+
+
+class _DataMap(BaseModel):
+    entries: list[_DataMapEntry] = Field(default_factory=list)
+
+    def as_dict(self) -> dict[ImageResolution, _DataMapValue]:
+        return_value: dict[ImageResolution, _DataMapValue] = dict()
+        for entry in self.entries:
+            if entry.key not in return_value:
+                return_value[entry.key] = _DataMapValue()
+            for image_metadata in entry.value.image_metadata_list:
+                return_value[entry.key].image_metadata_list.append(image_metadata)
+            for result_metadata in entry.value.result_metadata_list:
+                return_value[entry.key].result_metadata_list.append(result_metadata)
+        return return_value
+
+    @staticmethod
+    def from_dict(in_dict: dict[ImageResolution, _DataMapValue]):
+        entries: list[_DataMapEntry] = list()
+        for key in in_dict.keys():
+            entries.append(_DataMapEntry(key=key, value=in_dict[key]))
+        return _DataMap(entries=entries)
+
+
+class IntrinsicCalibrator:
+    Configuration: type[_Configuration] = _Configuration
+    ImageState: type[_ImageState] = _ImageState
+    ImageMetadata: type[_ImageMetadata] = _ImageMetadata
+    ResultState: type[_ResultState] = _ResultState
+    ResultMetadata: type[_ResultMetadata] = _ResultMetadata
+    DataMap: type[_DataMap] = _DataMap
+
+    class IntrinsicCalibratorConfiguration(BaseModel):
+        data_path: str = Field()
+
+    _configuration: IntrinsicCalibratorConfiguration
+    _calibration_map: dict[ImageResolution, _DataMapValue]
     _status_message_source: StatusMessageSource
 
     CALIBRATION_MAP_FILENAME: Final[str] = "calibration_map.json"
@@ -50,7 +135,7 @@ class IntrinsicCalibrator:
 
     def __init__(
         self,
-        configuration: CalibratorConfiguration,
+        configuration: IntrinsicCalibratorConfiguration,
         status_message_source: StatusMessageSource
     ):
         self._configuration = configuration
@@ -80,19 +165,19 @@ class IntrinsicCalibrator:
         # and that this file does not somehow already exist (highly unlikely)
         key_path: str = self._path_for_map_key(map_key=map_key)
         if not self._exists_on_filesystem(path=key_path, pathtype="path", create_path=True):
-            raise MCTDetectorRuntimeError(message=f"Failed to create storage location for input image.")
+            raise MCTIntrinsicCalibrationError(message=f"Failed to create storage location for input image.")
         image_identifier: str = str(uuid.uuid4())
         image_filepath = self._image_filepath(
             map_key=map_key,
             image_identifier=image_identifier)
         if os.path.exists(image_filepath):
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Image {image_identifier} appears to already exist. This is never expected to occur. "
                         f"Please try again, and if this error continues to occur then please report a bug.")
         if map_key not in self._calibration_map:
-            self._calibration_map[map_key] = CalibrationMapValue()
+            self._calibration_map[map_key] = _DataMapValue()
         self._calibration_map[map_key].image_metadata_list.append(
-            CalibrationImageMetadata(identifier=image_identifier))
+            IntrinsicCalibrator.ImageMetadata(identifier=image_identifier))
         # noinspection PyTypeChecker
         image_bytes = ImageUtils.image_to_bytes(image_data=image_data, image_format=IntrinsicCalibrator.IMAGE_FORMAT)
         with (open(image_filepath, 'wb') as in_file):
@@ -111,15 +196,21 @@ class IntrinsicCalibrator:
 
         calibration_key: ImageResolution = image_resolution
         if calibration_key not in self._calibration_map:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"No images for given resolution {str(image_resolution)} found.")
 
+        result_identifier: str = str(uuid.uuid4())
+        result_filepath = self._result_filepath(
+            map_key=calibration_key,
+            result_identifier=result_identifier)
+
+
         aruco_detector_parameters: ... = cv2.aruco.DetectorParameters()
-        mismatched_keys: list[str] = assign_key_value_list_to_aruco_detection_parameters(
+        mismatched_keys: list[str] = ArucoOpenCVAnnotator.assign_key_value_list_to_aruco_detection_parameters(
             detection_parameters=aruco_detector_parameters,
             key_value_list=marker_parameters)
         if len(mismatched_keys) > 0:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"The following parameters could not be applied due to key mismatch: {str(mismatched_keys)}")
 
         # TODO: ChArUco board to come from somewhere (user? currently assumed to be 10x8 DICT4x4_100)
@@ -127,12 +218,12 @@ class IntrinsicCalibrator:
         # noinspection PyUnresolvedReferences
         charuco_board: cv2.aruco.CharucoBoard = charuco_spec.create_board()
 
-        calibration_value: CalibrationMapValue = self._calibration_map[calibration_key]
+        calibration_value: _DataMapValue = self._calibration_map[calibration_key]
         all_charuco_corners = list()
         all_charuco_ids = list()
         image_identifiers: list[str] = list()
         for image_metadata in calibration_value.image_metadata_list:
-            if image_metadata.state != CalibrationImageState.SELECT:
+            if image_metadata.state != _ImageState.SELECT:
                 continue
             image_filepath: str = self._image_filepath(
                 map_key=calibration_key,
@@ -172,7 +263,7 @@ class IntrinsicCalibrator:
                 all_charuco_ids.append(frame_charuco_ids)
 
         if len(all_charuco_corners) <= 0:
-            raise MCTDetectorRuntimeError(message="The input images did not contain visible markers.")
+            raise MCTIntrinsicCalibrationError(message="The input images did not contain visible markers.")
 
         # outputs to be stored in these containers
         calibration_result = cv2.aruco.calibrateCameraCharucoExtended(
@@ -237,11 +328,6 @@ class IntrinsicCalibrator:
                         z=charuco_extrinsic_stdevs[i*6 + 2, 0]),
                     reprojection_error=charuco_reprojection_errors[i, 0])
                 for i in range(0, len(charuco_reprojection_errors))])
-
-        result_identifier: str = str(uuid.uuid4())
-        result_filepath = self._result_filepath(
-            map_key=calibration_key,
-            result_identifier=result_identifier)
         IOUtils.json_write(
             filepath=result_filepath,
             json_dict=intrinsic_calibration.model_dump(),
@@ -250,11 +336,12 @@ class IntrinsicCalibrator:
                 message=msg),
             on_error_for_dev=logger.error,
             ignore_none=True)
-        result_metadata: CalibrationResultMetadata = CalibrationResultMetadata(
+
+        result_metadata: IntrinsicCalibrator.ResultMetadata = IntrinsicCalibrator.ResultMetadata(
             identifier=result_identifier,
             image_identifiers=image_identifiers)
         if len(self._calibration_map[calibration_key].result_metadata_list) == 0:
-            result_metadata.state = CalibrationResultState.ACTIVE  # No active result yet, so make this one active
+            result_metadata.state = _ResultState.ACTIVE  # No active result yet, so make this one active
         self._calibration_map[calibration_key].result_metadata_list.append(result_metadata)
         self.save()
         return result_identifier, intrinsic_calibration
@@ -277,10 +364,10 @@ class IntrinsicCalibrator:
 
     def delete_staged(self) -> None:
         for calibration_key in self._calibration_map.keys():
-            calibration_value: CalibrationMapValue = self._calibration_map[calibration_key]
+            calibration_value: _DataMapValue = self._calibration_map[calibration_key]
             image_indices_to_delete: list = list()
             for image_index, image in enumerate(calibration_value.image_metadata_list):
-                if image.state == CalibrationImageState.DELETE:
+                if image.state == _ImageState.DELETE:
                     self._delete_if_exists(self._image_filepath(
                         map_key=calibration_key,
                         image_identifier=image.identifier))
@@ -289,7 +376,7 @@ class IntrinsicCalibrator:
                 del calibration_value.image_metadata_list[i]
             result_indices_to_delete: list = list()
             for result_index, result in enumerate(calibration_value.result_metadata_list):
-                if result.state == CalibrationResultState.DELETE:
+                if result.state == _ResultState.DELETE:
                     self._delete_if_exists(self._result_filepath(
                         map_key=calibration_key,
                         result_identifier=result.identifier))
@@ -327,17 +414,17 @@ class IntrinsicCalibrator:
                     matching_image_resolution = image_resolution
                     break
         if found_count < 1:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Image identifier {image_identifier} is not associated with any image.")
         elif found_count > 1:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Image identifier {image_identifier} is associated with multiple images.")
 
         image_filepath = self._image_filepath(
             map_key=matching_image_resolution,
             image_identifier=image_identifier)
         if not os.path.exists(image_filepath):
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"File does not exist for image {image_identifier} "
                         f"and given resolution {str(matching_image_resolution)}.")
         image_bytes: bytes
@@ -345,7 +432,7 @@ class IntrinsicCalibrator:
             with (open(image_filepath, 'rb') as in_file):
                 image_bytes = in_file.read()
         except OSError:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Failed to open image {image_identifier} for "
                         f"given resolution {str(matching_image_resolution)}.")
         image_base64 = ImageUtils.bytes_to_base64(image_bytes=image_bytes)
@@ -365,10 +452,10 @@ class IntrinsicCalibrator:
                     matching_image_resolution = image_resolution
                     break
         if found_count < 1:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Image identifier {result_identifier} is not associated with any result.")
         elif found_count > 1:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Image identifier {result_identifier} is associated with multiple results.")
 
         return self._get_result_calibration_from_file(
@@ -380,33 +467,33 @@ class IntrinsicCalibrator:
         image_resolution: ImageResolution
     ) -> IntrinsicCalibration | None:
         active_count: int = 0
-        matched_metadata: CalibrationResultMetadata | None = None
+        matched_metadata: IntrinsicCalibrator.ResultMetadata | None = None
         if image_resolution in self._calibration_map:
             result_count: int = len(self._calibration_map[image_resolution].result_metadata_list)
             if result_count > 0:
                 matched_metadata = self._calibration_map[image_resolution].result_metadata_list[0]
-                if matched_metadata.state == CalibrationResultState.ACTIVE:
+                if matched_metadata.state == _ResultState.ACTIVE:
                     active_count = 1
                 for result_index in range(1, result_count):
                     result_metadata = self._calibration_map[image_resolution].result_metadata_list[result_index]
-                    if matched_metadata.state == CalibrationResultState.DELETE:
+                    if matched_metadata.state == _ResultState.DELETE:
                         matched_metadata = result_metadata
                         continue  # basically we ignore any data staged for DELETE
-                    elif matched_metadata.state == CalibrationResultState.RETAIN:
-                        if result_metadata.state == CalibrationResultState.ACTIVE:
+                    elif matched_metadata.state == _ResultState.RETAIN:
+                        if result_metadata.state == _ResultState.ACTIVE:
                             active_count += 1
                             matched_metadata = result_metadata
                             continue  # ACTIVE shall of course take priority
                         elif result_metadata.timestamp_utc() > matched_metadata.timestamp_utc():
                             matched_metadata = result_metadata
                     else:  # matched_result_metadata.state == CalibrationResultState.ACTIVE:
-                        if result_metadata.state == CalibrationResultState.ACTIVE:
+                        if result_metadata.state == _ResultState.ACTIVE:
                             # BOTH metadata are marked ACTIVE. This is not expected to occur. Indicates a problem.
                             active_count += 1
                             if result_metadata.timestamp_utc() > matched_metadata.timestamp_utc():
                                 matched_metadata = result_metadata
         if matched_metadata is None or \
-           matched_metadata.state == CalibrationResultState.DELETE:  # no result that is not marked DELETE
+           matched_metadata.state == _ResultState.DELETE:  # no result that is not marked DELETE
             return None
 
         if active_count < 1:
@@ -435,7 +522,7 @@ class IntrinsicCalibrator:
             map_key=image_resolution,
             result_identifier=result_identifier)
         if not os.path.exists(result_filepath):
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"File does not exist for result {result_identifier} "
                         f"and given resolution {str(image_resolution)}.")
         result_json_raw: str
@@ -443,14 +530,14 @@ class IntrinsicCalibrator:
             with (open(result_filepath, 'r') as in_file):
                 result_json_raw = in_file.read()
         except OSError:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Failed to open result {result_identifier} for "
                         f"given resolution {str(image_resolution)}.")
         result_json_dict: dict
         try:
             result_json_dict = dict(json.loads(result_json_raw))
         except JSONDecodeError:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Failed to parse result {result_identifier} for "
                         f"given resolution {str(image_resolution)}.")
         intrinsic_calibration: IntrinsicCalibration = IntrinsicCalibration(**result_json_dict)
@@ -474,8 +561,8 @@ class IntrinsicCalibrator:
     def list_image_metadata(
         self,
         image_resolution: ImageResolution
-    ) -> list[CalibrationImageMetadata]:
-        image_metadata_list: list[CalibrationImageMetadata] = list()
+    ) -> list[ImageMetadata]:
+        image_metadata_list: list[IntrinsicCalibrator.ImageMetadata] = list()
         map_key: ImageResolution = image_resolution
         if map_key in self._calibration_map:
             image_metadata_list = self._calibration_map[map_key].image_metadata_list
@@ -485,8 +572,8 @@ class IntrinsicCalibrator:
     def list_result_metadata(
         self,
         image_resolution: ImageResolution
-    ) -> list[CalibrationResultMetadata]:
-        result_metadata_list: list[CalibrationResultMetadata] = list()
+    ) -> list[ResultMetadata]:
+        result_metadata_list: list[IntrinsicCalibrator.ResultMetadata] = list()
         map_key: ImageResolution = image_resolution
         if map_key in self._calibration_map:
             result_metadata_list = self._calibration_map[map_key].result_metadata_list
@@ -520,9 +607,9 @@ class IntrinsicCalibrator:
                 severity="error",
                 message="Failed to load calibration map from file.")
             return False
-        calibration_map: CalibrationMap
+        calibration_map: IntrinsicCalibrator.DataMap
         try:
-            calibration_map = CalibrationMap(**json_dict)
+            calibration_map = IntrinsicCalibrator.DataMap(**json_dict)
         except ValidationError as e:
             logger.error(e)
             self._status_message_source.enqueue_status_message(
@@ -554,7 +641,7 @@ class IntrinsicCalibrator:
     def save(self) -> None:
         IOUtils.json_write(
             filepath=self._map_filepath(),
-            json_dict=CalibrationMap.from_dict(self._calibration_map).model_dump(),
+            json_dict=IntrinsicCalibrator.DataMap.from_dict(self._calibration_map).model_dump(),
             on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
                 severity="error",
                 message=msg),
@@ -564,7 +651,7 @@ class IntrinsicCalibrator:
     def update_image_metadata(
         self,
         image_identifier: str,
-        image_state: CalibrationImageState,
+        image_state: ImageState,
         image_label: str | None
     ) -> None:
         found_count: int = 0
@@ -577,7 +664,7 @@ class IntrinsicCalibrator:
                     found_count += 1
                     break
         if found_count < 1:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Image identifier {image_identifier} is not associated with any image.")
         elif found_count > 1:
             self._status_message_source.enqueue_status_message(
@@ -589,7 +676,7 @@ class IntrinsicCalibrator:
     def update_result_metadata(
         self,
         result_identifier: str,
-        result_state: CalibrationResultState,
+        result_state: ResultState,
         result_label: str | None = None
     ) -> None:
         found_count: int = 0
@@ -605,16 +692,16 @@ class IntrinsicCalibrator:
                     break
 
         # Some cleanup as applicable
-        if result_state == CalibrationResultState.ACTIVE:
+        if result_state == _ResultState.ACTIVE:
             for map_key in matching_map_keys:
                 # If size greater than 1, something is wrong... but nonetheless
                 # we'll ensure there is only one active result per resolution
                 for result in self._calibration_map[map_key].result_metadata_list:
-                    if result.identifier != result_identifier and result.state == CalibrationResultState.ACTIVE:
-                        result.state = CalibrationResultState.RETAIN
+                    if result.identifier != result_identifier and result.state == _ResultState.ACTIVE:
+                        result.state = _ResultState.RETAIN
 
         if found_count < 1:
-            raise MCTDetectorRuntimeError(
+            raise MCTIntrinsicCalibrationError(
                 message=f"Result identifier {result_identifier} is not associated with any result.")
         elif found_count > 1:
             self._status_message_source.enqueue_status_message(
