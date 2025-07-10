@@ -63,7 +63,7 @@ class TestMathUtils(TestCase):
             Ray(source_point=origin, direction=[sqrt3, sqrt3, -sqrt3]),
             Ray(source_point=origin, direction=[sqrt3, -sqrt3, -sqrt3]),
             Ray(source_point=origin, direction=[-sqrt3, -sqrt3, -sqrt3])]
-        begin_datetime = datetime.datetime.utcnow()
+        begin_datetime = datetime.datetime.now(tz=datetime.timezone.utc)
         icp_parameters = IterativeClosestPointParameters(
             termination_iteration_count=100,
             termination_delta_translation=0.001,
@@ -77,7 +77,7 @@ class TestMathUtils(TestCase):
             target_rays=target_rays,
             parameters=icp_parameters)
         source_to_target_matrix = icp_output.source_to_target_matrix.as_numpy_array()
-        end_datetime = datetime.datetime.utcnow()
+        end_datetime = datetime.datetime.now(tz=datetime.timezone.utc)
         duration = (end_datetime - begin_datetime)
         duration_seconds = duration.seconds + (duration.microseconds / 1000000.0)
         message = str()

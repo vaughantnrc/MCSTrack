@@ -11,12 +11,13 @@ from .api import \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
-from .exceptions import MCTParsingError
 from .status_messages import \
     SeverityLabel, \
     StatusMessage, \
     StatusMessageSource
-from .structures import MCTParsable
+from .structures import \
+    MCTDeserializable, \
+    MCTSerializationError
 from .util import \
     PythonUtils
 import abc
@@ -29,7 +30,7 @@ from typing import Callable, Optional, TypeVar
 logger = logging.getLogger(__name__)
 
 
-ParsableDynamicSingle = TypeVar('ParsableDynamicSingle', bound=MCTParsable)
+SerializableSingle = TypeVar('SerializableSingle', bound=MCTDeserializable)
 
 
 class MCTComponent(abc.ABC):
@@ -69,13 +70,13 @@ class MCTComponent(abc.ABC):
     def parse_dynamic_series_list(
         self,
         parsable_series_dict: dict,
-        supported_types: list[type[ParsableDynamicSingle]]
-    ) -> list[ParsableDynamicSingle]:
+        supported_types: list[type[SerializableSingle]]
+    ) -> list[SerializableSingle]:
         try:
-            return MCTParsable.parse_dynamic_series_list(
-                parsable_series_dict=parsable_series_dict,
+            return MCTDeserializable.deserialize_series_list(
+                series_dict=parsable_series_dict,
                 supported_types=supported_types)
-        except MCTParsingError as e:
+        except MCTSerializationError as e:
             self.add_status_message(
                 severity="error",
                 message=e.message)
@@ -93,6 +94,11 @@ class MCTComponent(abc.ABC):
             subscriber_label=client_identifier)
         return DequeueStatusMessagesResponse(
             status_messages=status_messages)
+
+    @staticmethod
+    @abc.abstractmethod
+    def get_role_label():
+        pass
 
     def get_status_message_source(self):
         return self._status_message_source
@@ -143,7 +149,7 @@ class MCTComponent(abc.ABC):
                     request_series_list: list[MCTRequest] = self.parse_dynamic_series_list(
                         parsable_series_dict=request_series_dict,
                         supported_types=list(self.supported_request_types().keys()))
-                except MCTParsingError as e:
+                except MCTSerializationError as e:
                     logger.exception(str(e))
                     await websocket.send_json(MCTResponseSeries().model_dump())
                     continue

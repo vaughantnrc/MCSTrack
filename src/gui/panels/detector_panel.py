@@ -16,11 +16,11 @@ from src.common import \
     MCTResponseSeries, \
     StatusMessageSource
 from src.common.structures import \
-    CaptureFormat, \
     DetectorFrame, \
+    ImageFormat, \
     ImageResolution, \
     KeyValueSimpleAny, \
-    MarkerSnapshot
+    Annotation
 from src.controller import \
     MCTController
 from src.detector.api import \
@@ -60,7 +60,7 @@ _SUPPORTED_CORNER_REFINEMENT_METHODS: Final[list[str]] = [
     "SUBPIX",
     "CONTOUR",
     "APRILTAG"]
-_CAPTURE_FORMAT: CaptureFormat = ".jpg"
+_CAPTURE_FORMAT: ImageFormat = ImageFormat.FORMAT_JPG
 
 _CAMERA_PARAMETER_SLOT_COUNT: Final[int] = 100
 
@@ -73,8 +73,8 @@ class DetectorPanel(BasePanel):
     _live_preview_request_id: uuid.UUID | None
 
     _live_preview_image_base64: str | None
-    _live_markers_detected: list[MarkerSnapshot]
-    _live_markers_rejected: list[MarkerSnapshot]
+    _live_markers_detected: list[Annotation]
+    _live_markers_rejected: list[Annotation]
     _live_resolution: ImageResolution | None
 
     _detector_selector: ParameterSelector
@@ -401,14 +401,26 @@ class DetectorPanel(BasePanel):
 
     @staticmethod
     def _marker_snapshot_list_to_opencv_points(
-        marker_snapshot_list: list[MarkerSnapshot],
+        marker_snapshot_list: list[Annotation],
         scale: float
     ) -> numpy.ndarray:
-        corners: list[list[list[(float, float)]]] = [[[
-            (corner_point.x_px * scale, corner_point.y_px * scale)
-            for corner_point in marker.corner_image_points
-        ]] for marker in marker_snapshot_list]
-        return_value = numpy.array(corners, dtype=numpy.int32)
+        if len(marker_snapshot_list) <= 0:
+            return numpy.asarray([], dtype=numpy.int32)
+        return_value: list[list[list[(float, float)]]] = list()
+        current_base_label: str = marker_snapshot_list[0].base_label()
+        current_shape_points: list[list[(float, float)]] = [[
+            marker_snapshot_list[0].x_px * scale,
+            marker_snapshot_list[0].y_px * scale]]
+        for marker_snapshot in marker_snapshot_list:
+            annotation_base_label = marker_snapshot.base_label()
+            if annotation_base_label != current_base_label:
+                return_value.append(current_shape_points)
+                current_base_label = annotation_base_label
+            current_shape_points.append([
+                marker_snapshot.x_px * scale,
+                marker_snapshot.y_px * scale])
+        return_value.append(current_shape_points)
+        return_value = numpy.asarray(return_value, dtype=numpy.int32)
         return return_value
 
     def on_calibration_capture_pressed(self, _event: wx.CommandEvent):
@@ -478,8 +490,8 @@ class DetectorPanel(BasePanel):
             detector_frame: DetectorFrame | None = self._controller.get_live_detector_frame(
                 detector_label=detector_label)
             if detector_frame is not None:
-                self._live_markers_detected = detector_frame.detected_marker_snapshots
-                self._live_markers_rejected = detector_frame.rejected_marker_snapshots
+                self._live_markers_detected = detector_frame.annotations_identified
+                self._live_markers_rejected = detector_frame.annotations_unidentified
                 self._live_resolution = detector_frame.image_resolution
             if self._preview_image_checkbox.checkbox.GetValue() and self._live_preview_request_id is None:
                 if self._live_resolution is not None:

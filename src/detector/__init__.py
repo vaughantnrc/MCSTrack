@@ -33,7 +33,6 @@ from .api import \
     AnnotatorParametersGetRequest, \
     AnnotatorParametersGetResponse, \
     AnnotatorParametersSetRequest
-from .intrinsic_calibrator import IntrinsicCalibrator
 from .detector import \
     Detector, \
     DetectorConfiguration

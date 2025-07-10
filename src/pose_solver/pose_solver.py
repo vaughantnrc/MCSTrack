@@ -97,14 +97,14 @@ class PoseSolver:
         target: TargetBase
     ) -> None:
         for existing_target in self._targets:
-            if target.target_id == existing_target.target_id:
+            if target.label == existing_target.label:
                 raise PoseSolverException(
-                    f"Target with name {target.target_id} is already registered. "
+                    f"Target with name {target.label} is already registered. "
                     f"Please use a different name, and also make sure you are not adding the same target twice.")
         marker_ids = target.get_marker_ids()
         for marker_id in marker_ids:
             if marker_id in self._marker_target_map:
-                target_id: str = self._marker_target_map[marker_id].target_id
+                target_id: str = self._marker_target_map[marker_id].label
                 raise PoseSolverException(
                     f"Marker {marker_id} is already used with target {target_id} and it cannot be reused.")
         target_index = len(self._targets)
@@ -171,7 +171,7 @@ class PoseSolver:
     ) -> None:
         found: bool = False
         for target_index, target in enumerate(self._targets):
-            if target.target_id == target_id:
+            if target.label == target_id:
                 self._targets[0], self._targets[target_index] = self._targets[target_index], self._targets[0]
                 self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
                 found = True
@@ -401,7 +401,7 @@ class PoseSolver:
         # We estimate the pose of each target based on the calculated intersections
         # and the rays projected from each detector
         for target in self._targets:
-            if target.target_id == str(reference_target.target_id):
+            if target.label == str(reference_target.label):
                 continue  # everything is expressed relative to the reference...
             detected_marker_ids_in_target: list[str] = target.get_marker_ids()
 
@@ -436,7 +436,7 @@ class PoseSolver:
                 detected_to_detector: numpy.ndarray = detected_to_detector_matrix4x4.as_numpy_array()
                 detector_to_reference: numpy.ndarray = self._poses_by_detector_label[detector_label].as_numpy_array()
                 detected_to_reference: numpy.ndarray = detector_to_reference @ detected_to_detector
-                self._poses_by_target_id[target.target_id] = Matrix4x4.from_numpy_array(detected_to_reference)
+                self._poses_by_target_id[target.label] = Matrix4x4.from_numpy_array(detected_to_reference)
             else:
                 # Fill in the required variables for the customized iterative closest point
                 detected_known_points: list[list[float]] = list(itertools.chain.from_iterable([
@@ -475,4 +475,4 @@ class PoseSolver:
                         source_ray_points=detected_ray_points,
                         target_rays=reference_rays,
                         parameters=iterative_closest_point_parameters)
-                self._poses_by_target_id[target.target_id] = icp_output.source_to_target_matrix
+                self._poses_by_target_id[target.label] = icp_output.source_to_target_matrix

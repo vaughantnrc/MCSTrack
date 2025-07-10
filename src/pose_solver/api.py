@@ -16,7 +16,7 @@ class PoseSolverAddDetectorFrameRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "add_marker_corners"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverAddDetectorFrameRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -30,7 +30,7 @@ class PoseSolverAddTargetMarkerRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "add_target_marker"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverAddTargetMarkerRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -43,7 +43,7 @@ class PoseSolverAddTargetBoardRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "add_target_board"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverAddTargetBoardRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -56,7 +56,7 @@ class PoseSolverAddTargetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "add_marker_corners"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverAddTargetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -69,7 +69,7 @@ class PoseSolverGetPosesRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "get_poses"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverGetPosesRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -80,7 +80,7 @@ class PoseSolverGetPosesResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "get_poses"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverGetPosesResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -94,7 +94,7 @@ class PoseSolverSetExtrinsicRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "set_extrinsic_parameters"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverSetExtrinsicRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -108,7 +108,7 @@ class PoseSolverSetIntrinsicRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "set_intrinsic_parameters"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverSetIntrinsicRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -122,7 +122,7 @@ class PoseSolverSetReferenceRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "set_reference_marker"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverSetReferenceRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -136,7 +136,7 @@ class PoseSolverSetTargetsRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "set_targets"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverSetTargetsRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -149,7 +149,7 @@ class PoseSolverStartRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "start_pose_solver"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverStartRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -160,7 +160,7 @@ class PoseSolverStopRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "stop_pose_solver"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return PoseSolverStopRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints

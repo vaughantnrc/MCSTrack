@@ -1,5 +1,5 @@
 from .row_selection_table import RowSelectionTable
-from src.detector import IntrinsicCalibrator
+from src.common import IntrinsicCalibrator
 from typing import Final
 import wx
 

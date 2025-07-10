@@ -33,14 +33,13 @@ from .api import \
     DetectorFrameGetResponse, \
     DetectorStartRequest, \
     DetectorStopRequest
-from .intrinsic_calibrator import \
-    IntrinsicCalibrator, \
-    MCTIntrinsicCalibrationError
 from src.common import \
     Annotator, \
     Camera, \
     EmptyResponse, \
     ErrorResponse, \
+    IntrinsicCalibrator, \
+    MCTIntrinsicCalibrationError, \
     MCTCameraRuntimeError, \
     MCTComponent, \
     MCTAnnotatorRuntimeError, \
@@ -51,16 +50,16 @@ from src.common.structures import \
     DetectorFrame, \
     ImageResolution, \
     IntrinsicCalibration, \
-    KeyValueMetaAbstract, \
-    KeyValueMetaAny, \
-    key_value_meta_to_simple, \
-    KeyValueSimpleAny
+    KeyValueMetaAbstract
 import logging
-from typing import Callable
+from typing import Callable, Final
 from pydantic import BaseModel, Field
 
 
 logger = logging.getLogger(__name__)
+
+
+_ROLE_LABEL: Final[str] = "detector"
 
 
 class DetectorConfiguration(BaseModel):
@@ -69,7 +68,7 @@ class DetectorConfiguration(BaseModel):
     """
     calibrator_configuration: IntrinsicCalibrator.Configuration = Field()
     camera_configuration: Camera.Configuration = Field()
-    marker_configuration: Annotator.Configuration = Field()
+    annotator_configuration: Annotator.Configuration = Field()
 
 
 class Detector(MCTComponent):
@@ -78,7 +77,7 @@ class Detector(MCTComponent):
 
     _calibrator: IntrinsicCalibrator
     _camera: Camera
-    _marker: Annotator
+    _annotator: Annotator
 
     _frame_count: int
 
@@ -86,7 +85,7 @@ class Detector(MCTComponent):
         self,
         detector_configuration: DetectorConfiguration,
         camera_type: type[Camera],
-        marker_type: type[Annotator]
+        annotator_type: type[Annotator]
     ):
         super().__init__(
             status_source_label="detector",
@@ -99,8 +98,8 @@ class Detector(MCTComponent):
         self._camera = camera_type(
             configuration=detector_configuration.camera_configuration,
             status_message_source=self.get_status_message_source())
-        self._marker = marker_type(
-            configuration=detector_configuration.marker_configuration,
+        self._annotator = annotator_type(
+            configuration=detector_configuration.annotator_configuration,
             status_message_source=self.get_status_message_source())
         self._frame_count = 0
 
@@ -115,11 +114,8 @@ class Detector(MCTComponent):
         result_identifier: str
         intrinsic_calibration: IntrinsicCalibration
         try:
-            marker_parameters_kvm: list[KeyValueMetaAny] = self._marker.get_parameters()
-            marker_parameters_kvs: list[KeyValueSimpleAny] = key_value_meta_to_simple(marker_parameters_kvm)
             result_identifier, intrinsic_calibration = self._calibrator.calculate(
-                image_resolution=request.image_resolution,
-                marker_parameters=marker_parameters_kvs)
+                image_resolution=request.image_resolution)
         except MCTIntrinsicCalibrationError as e:
             return ErrorResponse(message=e.message)
         return CalibrationCalculateResponse(
@@ -289,14 +285,13 @@ class Detector(MCTComponent):
         detector_frame: DetectorFrame
         try:
             detector_frame = DetectorFrame(
-                detected_marker_snapshots=list(),
-                rejected_marker_snapshots=list(),
-                timestamp_utc_iso8601=self._marker.get_changed_timestamp().isoformat(),
+                annotations=list(),
+                timestamp_utc_iso8601=self._annotator.get_changed_timestamp().isoformat(),
                 image_resolution=self._camera.get_resolution())
             if request.include_detected:
-                detector_frame.detected_marker_snapshots = self._marker.get_markers_detected()
+                detector_frame.annotations += self._annotator.get_markers_detected()
             if request.include_rejected:
-                detector_frame.rejected_marker_snapshots = self._marker.get_markers_rejected()
+                detector_frame.annotations += self._annotator.get_markers_rejected()
         except (MCTCameraRuntimeError, MCTAnnotatorRuntimeError) as e:
             return ErrorResponse(message=e.message)
         return DetectorFrameGetResponse(frame=detector_frame)
@@ -315,9 +310,13 @@ class Detector(MCTComponent):
             return ErrorResponse(message=e.message)
         return EmptyResponse()
 
+    @staticmethod
+    def get_role_label():
+        return _ROLE_LABEL
+
     def marker_parameters_get(self, **_kwargs) -> AnnotatorParametersGetResponse | ErrorResponse:
         try:
-            parameters = self._marker.get_parameters()
+            parameters = self._annotator.get_parameters()
         except MCTAnnotatorRuntimeError as e:
             return ErrorResponse(message=e.message)
         return AnnotatorParametersGetResponse(parameters=parameters)
@@ -328,7 +327,7 @@ class Detector(MCTComponent):
             key="request",
             arg_type=AnnotatorParametersSetRequest)
         try:
-            self._marker.set_parameters(parameters=request.parameters)
+            self._annotator.set_parameters(parameters=request.parameters)
         except MCTAnnotatorRuntimeError as e:
             return ErrorResponse(message=e.message)
         return EmptyResponse()
@@ -367,10 +366,10 @@ class Detector(MCTComponent):
                 self._camera.update()
             except MCTCameraRuntimeError as e:
                 self.add_status_message(severity="error", message=e.message)
-        if self._marker.get_status() == Annotator.Status.RUNNING and \
-           self._camera.get_changed_timestamp() > self._marker.get_changed_timestamp():
+        if self._annotator.get_status() == Annotator.Status.RUNNING and \
+           self._camera.get_changed_timestamp() > self._annotator.get_changed_timestamp():
             try:
-                self._marker.update(self._camera.get_image())
+                self._annotator.update(self._camera.get_image())
             except MCTAnnotatorRuntimeError as e:
                 self.add_status_message(severity="error", message=e.message)
         self._frame_count += 1

@@ -211,7 +211,7 @@ class BoardBuilderPoseSolver:
             if isinstance(target, TargetMarker) and marker_id == target.marker_id:
                 return False
         target: TargetBase = TargetMarker(
-            target_id=str(marker_id),
+            label=str(marker_id),
             marker_id=str(marker_id),
             marker_size=self._board_marker_size)
         target_id: uuid.UUID = uuid.uuid4()

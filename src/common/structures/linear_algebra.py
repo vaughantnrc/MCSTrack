@@ -21,6 +21,17 @@ class IterativeClosestPointParameters(BaseModel):
     termination_rms_point_distance: float = Field()  # root-mean-square
 
 
+class Landmark(BaseModel):
+    """
+    A distinct point in 3D space.
+    Coordinates are in the unit of the user's choosing.
+    """
+    label: str = Field()
+    x: float = Field()
+    y: float = Field()
+    z: float = Field()
+
+
 class Matrix4x4(BaseModel):
 
     @staticmethod
@@ -102,7 +113,6 @@ class Pose(BaseModel):
     solver_timestamp_utc_iso8601: str = Field()
 
 
-# TODO: Turn this into a pydantic class
 class Ray:
     source_point: list[float]
     direction: list[float]
@@ -120,11 +130,8 @@ class Ray:
         self.direction = direction
 
 
-class Vec3(BaseModel):
+class Target(BaseModel):
     """
-    Simply a container for x, y, and z coordinates.
-    TODO: This has limited usage, it may be best to delete it
+    A trackable object.
     """
-    x: float = Field()
-    y: float = Field()
-    z: float = Field()
+    landmarks: list[Landmark]

@@ -1,22 +1,11 @@
-import asyncio
 import sys
 import hjson
-import numpy as np
 import pyigtl
 import time as t
 import logging
 
-from src.common.api import MCTRequestSeries
-from src.common.structures.mct_component import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
-from src.common.structures import TargetBase
 from src.controller.mct_controller import MCTController
-from ipaddress import IPv4Address
 
-from src.pose_solver.api import PoseSolverAddTargetMarkerRequest
-from src.pose_solver.api import TargetMarker
-from src.pose_solver.api import PoseSolverSetReferenceRequest
-
-from src.controller import Connection
 
 # Input filepath is specified by command line arguments
 if len(sys.argv) < 2:

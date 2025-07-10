@@ -2,19 +2,21 @@ import cv2
 import numpy
 import os
 import re
-from src.common import ImageUtils, StatusMessageSource
+from src.common import \
+    ImageUtils, \
+    IntrinsicCalibrator, \
+    StatusMessageSource
 from src.common.structures import \
-    CORNER_REFINEMENT_METHOD_SUBPIX, \
     ImageResolution, \
-    IntrinsicCalibration, \
     KeyValueSimpleAny, \
     KeyValueSimpleString, \
-    MarkerSnapshot
-from src.detector import \
-    IntrinsicCalibrator
+    Annotation
+from src.implementations.common_aruco_opencv import \
+    ArucoOpenCVCommon
 from src.implementations.annotator_aruco_opencv import \
-    ArucoOpenCVAnnotator, \
-    KEY_CORNER_REFINEMENT_METHOD
+    ArucoOpenCVAnnotator
+from src.implementations.intrinsic_charuco_opencv import \
+    CharucoOpenCVIntrinsicCalibrator
 from tempfile import TemporaryDirectory
 from typing import Final
 import unittest
@@ -26,8 +28,8 @@ IMAGE_CONTENT_MATCH_INDEX_FRAME: Final[int] = 2
 IMAGE_RESOLUTION: Final[ImageResolution] = ImageResolution(x_px=1920, y_px=1080)
 MARKER_DETECTION_PARAMETERS: list[KeyValueSimpleAny] = [
     KeyValueSimpleString(
-        key=KEY_CORNER_REFINEMENT_METHOD,
-        value=CORNER_REFINEMENT_METHOD_SUBPIX)]
+        key=ArucoOpenCVCommon.KEY_CORNER_REFINEMENT_METHOD,
+        value=ArucoOpenCVCommon.CORNER_REFINEMENT_METHOD_SUBPIX)]
 
 
 class TestPoseSolver(unittest.TestCase):
@@ -67,9 +69,9 @@ class TestPoseSolver(unittest.TestCase):
         # To simplify our lives and ensure a reasonable result,
         # we'll calibrate all cameras with the same set of input images.
         # We'll use all images from the A# and B# sets of frames.
-        calibration_result: IntrinsicCalibration | None = None
+        calibration_result: CharucoOpenCVIntrinsicCalibrator | None
         with TemporaryDirectory() as temppath:
-            calibrator: IntrinsicCalibrator = IntrinsicCalibrator(
+            calibrator: CharucoOpenCVIntrinsicCalibrator = CharucoOpenCVIntrinsicCalibrator(
                 configuration=IntrinsicCalibrator.Configuration(data_path=temppath),
                 status_message_source=status_message_source)
             for camera_id, image_filepaths_by_frame_id in image_filepaths.items():
@@ -79,15 +81,13 @@ class TestPoseSolver(unittest.TestCase):
                     image: numpy.ndarray = cv2.imread(image_filepath)
                     image_base64: str = ImageUtils.image_to_base64(image)
                     calibrator.add_image(image_base64)
-            _, calibration_result = calibrator.calculate(
-                image_resolution=IMAGE_RESOLUTION,
-                marker_parameters=MARKER_DETECTION_PARAMETERS)
+            _, calibration_result = calibrator.calculate(image_resolution=IMAGE_RESOLUTION)
 
         marker: ArucoOpenCVAnnotator = ArucoOpenCVAnnotator(
             configuration={"method": "aruco_opencv"},
             status_message_source=status_message_source)
         marker.set_parameters(parameters=MARKER_DETECTION_PARAMETERS)
-        image_marker_snapshots: dict[str, dict[str, list[MarkerSnapshot]]] = dict()
+        image_marker_snapshots: dict[str, dict[str, list[Annotation]]] = dict()
         detection_count: int = 0
         for camera_id, image_filepaths_by_frame_id in image_filepaths.items():
             for frame_id, image_filepath in image_filepaths_by_frame_id.items():
@@ -95,7 +95,7 @@ class TestPoseSolver(unittest.TestCase):
                     image_marker_snapshots[camera_id] = dict()
                 image: numpy.ndarray = cv2.imread(image_filepath)
                 marker.update(image)
-                marker_snapshots: list[MarkerSnapshot] = marker.get_markers_detected()
+                marker_snapshots: list[Annotation] = marker.get_markers_detected()
                 image_marker_snapshots[camera_id][frame_id] = marker_snapshots
                 detection_count += len(marker_snapshots)
         message = f"{detection_count} detections."

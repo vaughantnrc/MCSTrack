@@ -1,10 +1,10 @@
+from src.implementations.common_aruco_opencv import ArucoOpenCVCommon
 from src.common.structures import \
-    CharucoBoardSpecification, \
     TargetBoard
 from src.common.structures import Marker
 
 
-board: CharucoBoardSpecification = CharucoBoardSpecification()
+board: ArucoOpenCVCommon.CharucoBoard = ArucoOpenCVCommon.CharucoBoard()
 points: list[list[float]] = board.get_marker_corner_points()
 markers: list[Marker] = list()
 POINTS_PER_MARKER: int = 4

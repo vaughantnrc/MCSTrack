@@ -1,11 +1,11 @@
 from .status_messages import StatusMessage
-from .structures import MCTParsable
+from .structures import MCTDeserializable
 import abc
 from pydantic import BaseModel, Field, SerializeAsAny
 from typing import Final, Literal
 
 
-class MCTRequest(BaseModel, MCTParsable, abc.ABC):
+class MCTRequest(BaseModel, MCTDeserializable, abc.ABC):
     parsable_type: str
 
 
@@ -13,7 +13,7 @@ class MCTRequestSeries(BaseModel):
     series: list[SerializeAsAny[MCTRequest]] = Field()
 
 
-class MCTResponse(BaseModel, MCTParsable, abc.ABC):
+class MCTResponse(BaseModel, MCTDeserializable, abc.ABC):
     parsable_type: str
 
 
@@ -26,7 +26,7 @@ class EmptyResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "empty"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return EmptyResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -37,7 +37,7 @@ class ErrorResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "error"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return ErrorResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -50,7 +50,7 @@ class DequeueStatusMessagesRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "dequeue_status_messages"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return DequeueStatusMessagesRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -61,7 +61,7 @@ class DequeueStatusMessagesResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "dequeue_status_messages"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return DequeueStatusMessagesResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -74,7 +74,7 @@ class TimeSyncStartRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "time_sync_start_request"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return TimeSyncStartRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -85,7 +85,7 @@ class TimeSyncStopRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "time_sync_stop_request"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return TimeSyncStopRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -96,7 +96,7 @@ class TimestampGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "timestamp_get_request"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return TimestampGetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -109,7 +109,7 @@ class TimestampGetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "timestamp_get_response"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return TimestampGetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints

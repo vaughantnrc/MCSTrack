@@ -1,14 +1,14 @@
 from src.common import \
+    IntrinsicCalibrator, \
     MCTRequest, \
     MCTResponse
 from src.common.structures import \
-    CaptureFormat, \
+    ImageFormat, \
     DetectorFrame, \
     IntrinsicCalibration, \
     ImageResolution, \
     KeyValueMetaAny, \
     KeyValueSimpleAny
-from .intrinsic_calibrator import IntrinsicCalibrator
 from pydantic import Field, SerializeAsAny
 from typing import Final, Literal
 
@@ -17,7 +17,7 @@ class AnnotatorParametersGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return AnnotatorParametersGetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -28,7 +28,7 @@ class AnnotatorParametersGetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return AnnotatorParametersGetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -41,7 +41,7 @@ class AnnotatorParametersSetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_marker_parameters_set"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return AnnotatorParametersSetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -54,7 +54,7 @@ class CalibrationCalculateRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_calculate"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationCalculateRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -67,7 +67,7 @@ class CalibrationCalculateResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_calculate"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationCalculateResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -81,7 +81,7 @@ class CalibrationDeleteStagedRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_delete_staged"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationDeleteStagedRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -92,7 +92,7 @@ class CalibrationImageAddRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_image_add"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationImageAddRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -103,7 +103,7 @@ class CalibrationImageAddResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_image_add"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationImageAddResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -116,7 +116,7 @@ class CalibrationImageGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_image_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationImageGetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -129,7 +129,7 @@ class CalibrationImageGetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_image_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationImageGetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -142,7 +142,7 @@ class CalibrationImageMetadataListRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_image_metadata_list"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationImageMetadataListRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -155,7 +155,7 @@ class CalibrationImageMetadataListResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_image_metadata_list"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationImageMetadataListResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -168,7 +168,7 @@ class CalibrationImageMetadataUpdateRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_image_metadata_update"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationImageMetadataUpdateRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -183,7 +183,7 @@ class CalibrationResolutionListRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_detector_resolutions_list"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResolutionListRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -194,7 +194,7 @@ class CalibrationResolutionListResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_detector_resolutions_list"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResolutionListResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -207,7 +207,7 @@ class CalibrationResultGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_result_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResultGetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -220,7 +220,7 @@ class CalibrationResultGetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_result_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResultGetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -233,7 +233,7 @@ class CalibrationResultGetActiveRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_result_active_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResultGetActiveRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -244,7 +244,7 @@ class CalibrationResultGetActiveResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_result_active_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResultGetActiveResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -257,7 +257,7 @@ class CalibrationResultMetadataListRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_result_metadata_list"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResultMetadataListRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -270,7 +270,7 @@ class CalibrationResultMetadataListResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_result_metadata_list"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResultMetadataListResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -283,7 +283,7 @@ class CalibrationResultMetadataUpdateRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_calibration_result_metadata_update"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CalibrationResultMetadataUpdateRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -298,13 +298,13 @@ class CameraImageGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_camera_image_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CameraImageGetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
-    format: CaptureFormat = Field()
+    format: ImageFormat = Field()
     requested_resolution: ImageResolution | None = Field(default=None)
 
 
@@ -312,13 +312,13 @@ class CameraImageGetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_camera_image_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CameraImageGetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
-    format: CaptureFormat = Field()
+    format: ImageFormat = Field()
     image_base64: str = Field()
 
 
@@ -326,7 +326,7 @@ class CameraParametersGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_camera_parameters_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CameraParametersGetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -337,7 +337,7 @@ class CameraParametersGetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_camera_parameters_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CameraParametersGetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -350,7 +350,7 @@ class CameraParametersSetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_camera_parameters_set"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CameraParametersSetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -363,7 +363,7 @@ class CameraParametersSetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_camera_parameters_set"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CameraParametersSetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -376,7 +376,7 @@ class CameraResolutionGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_camera_resolution_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CameraResolutionGetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -387,7 +387,7 @@ class CameraResolutionGetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_camera_resolution_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return CameraResolutionGetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -400,7 +400,7 @@ class DetectorFrameGetRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_frame_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return DetectorFrameGetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -414,7 +414,7 @@ class DetectorFrameGetResponse(MCTResponse):
     _TYPE_IDENTIFIER: Final[str] = "detector_frame_get"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return DetectorFrameGetResponse._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -427,7 +427,7 @@ class DetectorStartRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_start"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return DetectorStartRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
@@ -438,7 +438,7 @@ class DetectorStopRequest(MCTRequest):
     _TYPE_IDENTIFIER: Final[str] = "detector_stop"
 
     @staticmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         return DetectorStopRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints

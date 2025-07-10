@@ -4,7 +4,7 @@ from .status_messages import \
     SeverityLabel, \
     StatusMessageSource
 from .structures import \
-    CaptureFormat, \
+    ImageFormat, \
     ImageResolution, \
     KeyValueSimpleAny, \
     KeyValueMetaAbstract
@@ -69,7 +69,7 @@ class Camera(abc.ABC):
 
     def get_encoded_image(
         self,
-        image_format: CaptureFormat,
+        image_format: ImageFormat,
         requested_resolution: ImageResolution | None  # None means to not alter the image dimensions
     ) -> str:
         image: numpy.ndarray = self.get_image()

@@ -1,7 +1,5 @@
 from src.common import \
     Camera, \
-    CameraConfiguration, \
-    CameraStatus, \
     MCTCameraRuntimeError, \
     StatusMessageSource
 from src.common.structures import \
@@ -85,7 +83,7 @@ class Picamera2Camera(Camera):
 
     def __init__(
         self,
-        configuration: CameraConfiguration,
+        configuration: Camera.Configuration,
         status_message_source: StatusMessageSource
     ):
         super().__init__(
@@ -95,7 +93,7 @@ class Picamera2Camera(Camera):
         self._image_timestamp_utc = datetime.datetime.min
         self._camera = Picamera2()
         self._camera_configuration = self._camera.create_video_configuration()
-        self.set_status(CameraStatus.STOPPED)
+        self.set_status(Camera.Status.STOPPED)
 
     def get_changed_timestamp(self) -> datetime.datetime:
         return self._image_timestamp_utc
@@ -106,7 +104,7 @@ class Picamera2Camera(Camera):
         return self._image
 
     def get_parameters(self, **_kwargs) -> list[KeyValueMetaAbstract]:
-        if self.get_status() != CameraStatus.RUNNING:
+        if self.get_status() != Camera.Status.RUNNING:
             raise MCTCameraRuntimeError(message="The capture is not active, and properties cannot be retrieved.")
 
         current_controls: dict = {
@@ -226,7 +224,7 @@ class Picamera2Camera(Camera):
             raise MCTCameraRuntimeError(
                 message=f"The following parameters could not be applied due to key mismatch: {str(mismatched_keys)}")
 
-        if self.get_status() == CameraStatus.RUNNING:
+        if self.get_status() == Camera.Status.RUNNING:
             self._camera.stop()
             self._camera.configure(self._camera_configuration)
             self._camera.start()
@@ -260,12 +258,12 @@ class Picamera2Camera(Camera):
         self._camera.configure(self._camera_configuration)
         self._camera.start()
         self._image = self._camera.capture_array()
-        self.set_status(CameraStatus.RUNNING)
+        self.set_status(Camera.Status.RUNNING)
 
     def stop(self) -> None:
         if self._image is not None:
             self._image = None
-        self.set_status(CameraStatus.STOPPED)
+        self.set_status(Camera.Status.STOPPED)
         self._camera.stop()
 
     def update(self) -> None:
@@ -274,7 +272,7 @@ class Picamera2Camera(Camera):
         if self._image is None:
             message: str = "Failed to grab frame."
             self.add_status_message(severity="error", message=message)
-            self.set_status(CameraStatus.FAILURE)
+            self.set_status(Camera.Status.FAILURE)
             raise MCTCameraRuntimeError(message=message)
 
         self._image_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

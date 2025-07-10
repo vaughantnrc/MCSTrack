@@ -1,4 +1,4 @@
-from src.common.exceptions import MCTParsingError
+from src.common.exceptions import MCTError
 import abc
 from pydantic import BaseModel, Field, ValidationError
 from typing import Final, Literal, TypeVar, Union
@@ -136,53 +136,61 @@ def key_value_meta_to_simple(
     return [key_value_meta.to_simple() for key_value_meta in key_value_meta_list]
 
 
-ParsableDynamic = TypeVar('ParsableDynamic', bound='MCTParsable')
+DeserializableT = TypeVar('DeserializableT', bound='MCTParsable')
 
 
-class MCTParsable(abc.ABC):
+class MCTSerializationError(MCTError):
+    message: str
+
+    def __init__(self, message: str, *args):
+        super().__init__(args)
+        self.message = message
+
+
+class MCTDeserializable(abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def parsable_type_identifier() -> str:
+    def type_identifier() -> str:
         pass
 
     @staticmethod
-    def parse_dynamic_series_list(
-        parsable_series_dict: dict,
-        supported_types: list[type[ParsableDynamic]]
-    ) -> list[ParsableDynamic]:
-        if "series" not in parsable_series_dict or not isinstance(parsable_series_dict["series"], list):
+    def deserialize_series_list(
+        series_dict: dict,
+        supported_types: list[type[DeserializableT]]
+    ) -> list[DeserializableT]:
+        if "series" not in series_dict or not isinstance(series_dict["series"], list):
             message: str = "parsable_series_dict did not contain field series. Input is improperly formatted."
-            raise MCTParsingError(message)
+            raise MCTSerializationError(message)
 
-        output_series: list[ParsableDynamic] = list()
-        for parsable_dict in parsable_series_dict["series"]:
+        output_series: list[DeserializableT] = list()
+        for parsable_dict in series_dict["series"]:
             if not isinstance(parsable_dict, dict):
                 message: str = "series contained a non-dict element. Input is improperly formatted."
-                raise MCTParsingError(message)
-            output_series.append(MCTParsable.parse_dynamic_single(
-                parsable_dict=parsable_dict,
+                raise MCTSerializationError(message)
+            output_series.append(MCTDeserializable.deserialize_single(
+                single_dict=parsable_dict,
                 supported_types=supported_types))
 
         return output_series
 
     @staticmethod
-    def parse_dynamic_single(
-        parsable_dict: dict,
-        supported_types: list[type[ParsableDynamic]]
-    ) -> ParsableDynamic:
-        if "parsable_type" not in parsable_dict or not isinstance(parsable_dict["parsable_type"], str):
+    def deserialize_single(
+        single_dict: dict,
+        supported_types: list[type[DeserializableT]]
+    ) -> DeserializableT:
+        if "parsable_type" not in single_dict or not isinstance(single_dict["parsable_type"], str):
             message: str = "parsable_dict did not contain parsable_type. Input is improperly formatted."
-            raise MCTParsingError(message) from None
+            raise MCTSerializationError(message) from None
 
         for supported_type in supported_types:
-            if parsable_dict["parsable_type"] == supported_type.parsable_type_identifier():
-                request: ParsableDynamic
+            if single_dict["parsable_type"] == supported_type.parsable_type_identifier():
+                request: DeserializableT
                 try:
-                    request = supported_type(**parsable_dict)
+                    request = supported_type(**single_dict)
                 except ValidationError as e:
-                    raise MCTParsingError(f"A request of type {supported_type} was ill-formed: {str(e)}") from None
+                    raise MCTSerializationError(f"A request of type {supported_type} was ill-formed: {str(e)}") from None
                 return request
 
         message: str = "parsable_type did not match any expected value. Input is improperly formatted."
-        raise MCTParsingError(message)
+        raise MCTSerializationError(message)

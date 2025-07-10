@@ -1,11 +1,8 @@
-import math
-import random
 import numpy as np
 from src.board_builder.test.accuracy.structures import AccuracyTestParameters
 from .projection import projection
 from collections import defaultdict
-
-from src.common.structures import MarkerSnapshot, MarkerCornerImagePoint
+from src.common.structures import Annotation
 
 
 def find_z_axis_intersection(matrix4x4):
@@ -76,7 +73,7 @@ def generate_data(board_coordinates, detector_poses, remove_markers_out_of_frame
     Also trims the data to remove any occluded marker
     """
     parameters = AccuracyTestParameters()
-    collection_data: dict[str, list[MarkerSnapshot]] = {}
+    collection_data: dict[str, list[Annotation]] = {}
     occluded_markers = defaultdict(list, {pose.target_id: [] for pose in detector_poses})  # A list of markers that are occluded (self occlusion or perpendicular)
 
     # Collect data
@@ -100,13 +97,12 @@ def generate_data(board_coordinates, detector_poses, remove_markers_out_of_frame
                     marker_corners.append(pixel)
 
             if len(marker_corners) == 4:
-                marker_snapshot = MarkerSnapshot(label=str(marker), corner_image_points=[])
-                marker_snapshot.label = str(marker)
-                marker_corner_image_point_list = []
-                for marker_corner in marker_corners:
-                    marker_corner_image_point = MarkerCornerImagePoint(x_px=marker_corner[0], y_px=marker_corner[1])
-                    marker_corner_image_point_list.append(marker_corner_image_point)
-                marker_snapshot_list.append(MarkerSnapshot(label=str(marker), corner_image_points=marker_corner_image_point_list))
+                for corner_index, marker_corner in enumerate(marker_corners):
+                    corner_label: str = f"{str(marker)}_{corner_index}"
+                    marker_snapshot_list.append(Annotation(
+                        label=corner_label,
+                        x_px=marker_corner[0],
+                        y_px=marker_corner[1]))
 
         collection_data[pose.target_id] = marker_snapshot_list
 

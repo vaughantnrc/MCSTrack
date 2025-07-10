@@ -10,13 +10,12 @@ from src.common import \
     StatusMessage, \
     TimestampGetResponse
 from src.common.structures import \
-    ComponentRoleLabel, \
     DetectorFrame, \
     ImageResolution, \
     IntrinsicParameters, \
     KeyValueSimpleAny, \
     Matrix4x4, \
-    MCTParsable, \
+    MCTDeserializable, \
     Pose, \
     PoseSolverFrame, \
     TargetBase
@@ -89,7 +88,7 @@ class Connection(abc.ABC):
         def __init__(
             self,
             label: str,
-            role: ComponentRoleLabel,
+            role: str,
             ip_address: IPv4Address,
             port: int
         ):
@@ -146,7 +145,7 @@ class Connection(abc.ABC):
         Human-readable information that shall be shown to a user about a connection.
         """
         label: str
-        role: ComponentRoleLabel
+        role: str
         ip_address: str
         port: int
         status: str
@@ -154,7 +153,7 @@ class Connection(abc.ABC):
         def __init__(
             self,
             label: str,
-            role: ComponentRoleLabel,
+            role: str,
             ip_address: str,
             port: int,
             status: str
@@ -333,8 +332,8 @@ class Connection(abc.ABC):
         def _response_series_converter(
             response_series_dict: dict
         ) -> MCTResponseSeries:
-            series_list: list[MCTResponse] = MCTParsable.parse_dynamic_series_list(
-                parsable_series_dict=response_series_dict,
+            series_list: list[MCTResponse] = MCTDeserializable.deserialize_series_list(
+                series_dict=response_series_dict,
                 supported_types=self.supported_response_types())
             return MCTResponseSeries(series=series_list)
 

@@ -8,7 +8,7 @@ from typing import Final
 
 from .utils import BoardBuilderPoseSolver
 from .structures import PoseLocation, MarkerCorners
-from src.common.structures import Pose, MarkerSnapshot, Matrix4x4
+from src.common.structures import Pose, Annotation, Matrix4x4
 from src.common.structures import Marker, TargetBoard
 
 _HOMOGENEOUS_POINT_COORD: Final[int] = 4
@@ -145,7 +145,7 @@ class BoardBuilder:
 
         return pose_index, other_pose_index
 
-    def _solve_pose(self, detector_data: dict[str, list[MarkerSnapshot]], timestamp: datetime.datetime):
+    def _solve_pose(self, detector_data: dict[str, list[Annotation]], timestamp: datetime.datetime):
         """ Given marker ids and its corner locations, find its pose """
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         for detector_name in detector_data:
@@ -157,16 +157,18 @@ class BoardBuilder:
                     self._matrix_id_index += 1
 
         for detector_name in detector_data:
-            for marker_snapshot in detector_data[detector_name]:
-                corners_list: list[list[float]] = []  # Indexed as [point][coordinate]
-                for corner in marker_snapshot.corner_image_points:
-                    corners_list.append([corner.x_px, corner.y_px])
+            # assumes 4 corners per marker
+            for i in range(0, len(detector_data[detector_name]), 4):
+                corners_list: list[list[float]] = [  # Indexed as [point][coordinate]
+                    [detector_data[detector_name][i].x_px, detector_data[detector_name][i].y_px],
+                    [detector_data[detector_name][i+1].x_px, detector_data[detector_name][i+1].y_px],
+                    [detector_data[detector_name][i+2].x_px, detector_data[detector_name][i+2].y_px],
+                    [detector_data[detector_name][i+3].x_px, detector_data[detector_name][i+3].y_px]]
                 marker_corners = MarkerCorners(
                     detector_label=detector_name,
-                    marker_id=int(marker_snapshot.label),
+                    marker_id=int(detector_data[detector_name][i].label),
                     points=corners_list,
-                    timestamp=timestamp
-                )
+                    timestamp=timestamp)
                 self.pose_solver.add_marker_corners([marker_corners])
 
         target_poses = self.pose_solver.get_target_poses()
@@ -201,7 +203,7 @@ class BoardBuilder:
             json.dump(data, file, indent=4)
 
     @staticmethod
-    def _write_detector_data_to_recording_file(detector_data: dict[str, list[MarkerSnapshot]], data_description: str):
+    def _write_detector_data_to_recording_file(detector_data: dict[str, list[Annotation]], data_description: str):
         formatted_data = {}
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         for detector_name, snapshots in detector_data.items():
@@ -209,9 +211,8 @@ class BoardBuilder:
             for snapshot in snapshots:
                 snapshot_data = {
                     "label": snapshot.label,
-                    "corner_image_points": [{"x_px": pt.x_px, "y_px": pt.y_px} for pt in snapshot.corner_image_points],
-                    "timestamp": timestamp
-                }
+                    "corner_image_points": [snapshot.x_px, snapshot.y_px],
+                    "timestamp": timestamp}
                 formatted_data[detector_name].append(snapshot_data)
 
         current_dir = os.path.dirname(__file__)
@@ -242,23 +243,24 @@ class BoardBuilder:
             json.dump(existing_data, f, indent=4)
 
     # public methods
-    def locate_reference_board(self, detector_data: dict[str, list[MarkerSnapshot]]):
+    def locate_reference_board(self, detector_data: dict[str, list[Annotation]]):
         # self._write_detector_data_to_recording_file(detector_data, "LOCATE REFERENCE DATA")
         if all(isinstance(v, list) and len(v) == 0 for v in detector_data.values()):
             return
         self.detector_poses = []
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         for detector_name in detector_data:
-            for marker_snapshot in detector_data[detector_name]:
-                corners_list: list[list[float]] = []
-                for corner in marker_snapshot.corner_image_points:
-                    corners_list.append([corner.x_px, corner.y_px])
+            for i in range(0, len(detector_data[detector_name]), 4):
+                corners_list: list[list[float]] = [  # Indexed as [point][coordinate]
+                    [detector_data[detector_name][i].x_px, detector_data[detector_name][i].y_px],
+                    [detector_data[detector_name][i+1].x_px, detector_data[detector_name][i+1].y_px],
+                    [detector_data[detector_name][i+2].x_px, detector_data[detector_name][i+2].y_px],
+                    [detector_data[detector_name][i+3].x_px, detector_data[detector_name][i+3].y_px]]
                 marker_corners = MarkerCorners(
                     detector_label=detector_name,
-                    marker_id=int(marker_snapshot.label),
+                    marker_id=int(detector_data[detector_name][i].label),
                     points=corners_list,
-                    timestamp=timestamp
-                )
+                    timestamp=timestamp)
                 self.pose_solver.add_marker_corners([marker_corners])
 
         new_detector_poses = self.pose_solver.get_detector_poses()
@@ -276,7 +278,7 @@ class BoardBuilder:
             self.detector_poses.append(pose)
         self.pose_solver.set_detector_poses(self.detector_poses)
 
-    def collect_data(self, detector_data: dict[str, list[MarkerSnapshot]]):
+    def collect_data(self, detector_data: dict[str, list[Annotation]]):
         """ Collects data of relative position and is entered in matrix. Returns a dictionary of its corners"""
         # self._write_detector_data_to_recording_file(detector_data, "COLLECTION DATA")
         detector_data = self._filter_markers_appearing_in_multiple_detectors(detector_data)

@@ -202,10 +202,10 @@ class PoseSolverPanel(BasePanel):
             for detector_label in detector_labels:
                 retrieved_detector_frame: DetectorFrame = self._controller.get_live_detector_frame(
                     detector_label=detector_label)
-                retrieved_detector_frame_timestamp: datetime.datetime = retrieved_detector_frame.timestamp_utc()
+                retrieved_detector_frame_timestamp: datetime.datetime = retrieved_detector_frame.timestamp_utc
                 if detector_label in self._latest_detector_frames:
                     latest_detector_frame: DetectorFrame = self._latest_detector_frames[detector_label]
-                    latest_detector_frame_timestamp: datetime.datetime = latest_detector_frame.timestamp_utc()
+                    latest_detector_frame_timestamp: datetime.datetime = latest_detector_frame.timestamp_utc
                     if retrieved_detector_frame_timestamp > latest_detector_frame_timestamp:
                         self._latest_detector_frames[detector_label] = retrieved_detector_frame
                 else:

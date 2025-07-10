@@ -1,8 +1,7 @@
 from src.board_builder.board_builder import BoardBuilder
 from src.common import MathUtils
 from src.common.structures import \
-    MarkerCornerImagePoint, \
-    MarkerSnapshot, \
+    Annotation, \
     TargetBoard, \
     Marker
 from .structures import AccuracyTestParameters
@@ -47,12 +46,10 @@ class AccuracyTest:
 
                 # Apply noise
                 for i, corner in enumerate(marker_snapshot.corner_image_points):
-                    noisy_corner_x = corner.x_px + noise[i * 2]
-                    noisy_corner_y = corner.y_px + noise[i * 2 + 1]
-                    noisy_corners.append(MarkerCornerImagePoint(x_px=noisy_corner_x, y_px=noisy_corner_y))
-
-                noisy_marker_snapshot = MarkerSnapshot(label=marker_snapshot.label, corner_image_points=noisy_corners)
-                noisy_marker_snapshots.append(noisy_marker_snapshot)
+                    noisy_marker_snapshots.append(Annotation(
+                        label=f"{marker_snapshot.label}_{i}",
+                        x_px=corner.x_px + noise[i * 2],
+                        y_px=corner.y_px + noise[i * 2 + 1]))
 
             noisy_data[detector_name] = noisy_marker_snapshots
         return noisy_data
@@ -85,7 +82,7 @@ class AccuracyTest:
                 Marker(marker_id=marker.marker_id, marker_size=marker.marker_size, points=aligned_points))
 
         # Return the aligned TargetBoard
-        return TargetBoard(target_id=target_board.target_id, markers=aligned_markers)
+        return TargetBoard(target_id=target_board.label, markers=aligned_markers)
 
     @staticmethod
     def _calculate_rms_error_of_two_corner_dataset(
@@ -163,7 +160,7 @@ class AccuracyTest:
             "generated_board_poses": snapshots_serializable,
             "projected_2D_points": two_dimension_collection_data_serializable,
             "predicted_board": {
-                "target_id": predicted_board.target_id,
+                "target_id": predicted_board.label,
                 "markers": [
                     {
                         "marker_id": marker.marker_id,
@@ -172,7 +169,7 @@ class AccuracyTest:
                 ]
             },
             "simulated_board": {
-                "target_id": simulated_board.target_id,
+                "target_id": simulated_board.label,
                 "markers": [
                     {
                         "marker_id": marker.marker_id,

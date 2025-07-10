@@ -57,16 +57,16 @@ def create_app() -> FastAPI:
         raise RuntimeError(f"Unsupported camera driver {detector_configuration.camera_configuration.driver}.")
 
     marker_type: type[Annotator]
-    if detector_configuration.marker_configuration.method == "aruco_opencv":
+    if detector_configuration.annotator_configuration.method == "aruco_opencv":
         from src.implementations.annotator_aruco_opencv import ArucoOpenCVAnnotator
         marker_type = ArucoOpenCVAnnotator
     else:
-        raise RuntimeError(f"Unsupported marker method {detector_configuration.marker_configuration.method}.")
+        raise RuntimeError(f"Unsupported marker method {detector_configuration.annotator_configuration.method}.")
 
     detector = Detector(
         detector_configuration=detector_configuration,
         camera_type=camera_type,
-        marker_type=marker_type)
+        annotator_type=marker_type)
     detector_app = FastAPI()
 
     # CORS Middleware

@@ -21,20 +21,19 @@ from src.common import \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
 from src.common.structures import \
-    ComponentRoleLabel, \
-    COMPONENT_ROLE_LABEL_DETECTOR, \
-    COMPONENT_ROLE_LABEL_POSE_SOLVER, \
     DetectorFrame, \
     IntrinsicParameters, \
     PoseSolverFrame
-from src.detector.api import \
+from src.detector import \
     CalibrationResultGetActiveRequest, \
     CalibrationResultGetActiveResponse, \
     CameraResolutionGetRequest, \
     CameraResolutionGetResponse, \
+    Detector, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse
-from src.pose_solver.api import \
+from src.pose_solver import \
+    PoseSolverAPI, \
     PoseSolverAddDetectorFrameRequest, \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
@@ -49,13 +48,17 @@ import logging
 import numpy
 import os
 from pydantic import ValidationError
-from typing import Callable, Final, get_args, TypeVar
+from typing import Callable, Final, TypeVar
 import uuid
 
 logger = logging.getLogger(__name__)
 ConnectionType = TypeVar('ConnectionType', bound=Connection)
 
 
+_ROLE_LABEL: Final[str] = "controller"
+_SUPPORTED_ROLES: Final[list[str]] = [
+    Detector.get_role_label(),
+    PoseSolverAPI.get_role_label()]
 _TIME_SYNC_SAMPLE_MAXIMUM_COUNT: Final[int] = 5
 
 
@@ -160,11 +163,11 @@ class MCTController(MCTComponent):
         label = component_address.label
         if label in self._connections:
             raise RuntimeError(f"Connection associated with {label} already exists.")
-        if component_address.role == COMPONENT_ROLE_LABEL_DETECTOR:
+        if component_address.role == Detector.get_role_label():
             return_value: DetectorConnection = DetectorConnection(component_address=component_address)
             self._connections[label] = return_value
             return return_value
-        elif component_address.role == COMPONENT_ROLE_LABEL_POSE_SOLVER:
+        elif component_address.role == PoseSolverAPI.get_role_label():
             return_value: PoseSolverConnection = PoseSolverConnection(component_address=component_address)
             self._connections[label] = return_value
             return return_value
@@ -271,13 +274,13 @@ class MCTController(MCTComponent):
         """
         See get_component_labels.
         """
-        return self.get_component_labels(role=COMPONENT_ROLE_LABEL_DETECTOR, active=True)
+        return self.get_component_labels(role=Detector.get_role_label(), active=True)
 
     def get_active_pose_solver_labels(self) -> list[str]:
         """
         See get_component_labels.
         """
-        return self.get_component_labels(role=COMPONENT_ROLE_LABEL_POSE_SOLVER, active=True)
+        return self.get_component_labels(role=PoseSolverAPI.get_role_label(), active=True)
 
     def get_component_labels(
         self,
@@ -289,7 +292,7 @@ class MCTController(MCTComponent):
         None provided to `role` or `active` is treated as a wildcard (i.e. not filtered on that criteria).
         """
         if role is not None:
-            if role not in ComponentRoleLabel:
+            if role not in _SUPPORTED_ROLES:
                 raise ValueError(f"role must be among the valid values for ComponentRoleLabel")
         return_value: list[str] = list()
         for connection_label, connection in self._connections.items():
@@ -363,6 +366,10 @@ class MCTController(MCTComponent):
             target_poses=pose_solver_connection.target_poses,
             timestamp_utc_iso8601=pose_solver_connection.poses_timestamp.isoformat())
 
+    @staticmethod
+    def get_role_label():
+        return _ROLE_LABEL
+
     def get_status(self) -> Status:
         return self._status
 
@@ -433,7 +440,7 @@ class MCTController(MCTComponent):
             return
         frame: DetectorFrame = response.frame
         adjusted_timestamp_utc: datetime.datetime = \
-            frame.timestamp_utc() - datetime.timedelta(seconds=detector_connection.controller_offset_seconds)
+            frame.timestamp_utc - datetime.timedelta(seconds=detector_connection.controller_offset_seconds)
         frame.timestamp_utc_iso8601 = adjusted_timestamp_utc.isoformat()
         detector_connection.latest_frame = frame
 
@@ -576,9 +583,9 @@ class MCTController(MCTComponent):
                 connection_type=Connection)
             report = connection.get_report()
             # Do not record if specified
-            if report.role == COMPONENT_ROLE_LABEL_DETECTOR and not self._recording_detector:
+            if report.role == Detector.get_role_label() and not self._recording_detector:
                 continue
-            if report.role == COMPONENT_ROLE_LABEL_POSE_SOLVER and not self._recording_pose_solver:
+            if report.role == PoseSolverAPI.get_role_label() and not self._recording_pose_solver:
                 continue
 
             if self._recording_save_path is not None:
@@ -683,7 +690,7 @@ class MCTController(MCTComponent):
             raise RuntimeError("Cannot start up if controller isn't first stopped.")
         for connection in self._connections.values():
             if mode == StartupMode.DETECTING_ONLY and \
-               connection.get_role() == COMPONENT_ROLE_LABEL_POSE_SOLVER:
+               connection.get_role() == PoseSolverAPI.get_role_label():
                 continue
             connection.start_up()
 
@@ -721,7 +728,7 @@ class MCTController(MCTComponent):
             all_connected: bool = True
             for connection in connections:
                 if self._startup_mode == StartupMode.DETECTING_ONLY and \
-                   connection.get_role() == COMPONENT_ROLE_LABEL_POSE_SOLVER:
+                   connection.get_role() == PoseSolverAPI.get_role_label():
                     continue
                 if not connection.is_start_up_finished():
                     all_connected = False
@@ -777,7 +784,7 @@ class MCTController(MCTComponent):
                             detector_label=detector_label)
                         if current_detector_frame is None:
                             continue
-                        current_detector_frame_timestamp: datetime.datetime = current_detector_frame.timestamp_utc()
+                        current_detector_frame_timestamp: datetime.datetime = current_detector_frame.timestamp_utc
                         current_is_new: bool = False
                         if detector_label in pose_solver_connection.detector_timestamps:
                             old_detector_frame_timestamp = \
@@ -789,9 +796,9 @@ class MCTController(MCTComponent):
                         if current_is_new:
                             pose_solver_connection.detector_timestamps[detector_label] = \
                                 current_detector_frame_timestamp
-                            adjusted_detector_frame: DetectorFrame = current_detector_frame.copy()
+                            adjusted_detector_frame: DetectorFrame = current_detector_frame.model_copy()
                             adjusted_timestamp_utc: datetime.datetime = \
-                                current_detector_frame.timestamp_utc() + \
+                                current_detector_frame.timestamp_utc + \
                                 datetime.timedelta(seconds=pose_solver_connection.controller_offset_seconds)
                             adjusted_detector_frame.timestamp_utc_iso8601 = adjusted_timestamp_utc.isoformat()
                             marker_request: PoseSolverAddDetectorFrameRequest = PoseSolverAddDetectorFrameRequest(

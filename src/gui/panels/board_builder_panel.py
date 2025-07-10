@@ -19,7 +19,7 @@ from src.common import \
 from src.common.structures import \
     DetectorFrame, \
     ImageResolution, \
-    MarkerSnapshot, \
+    Annotation, \
     Matrix4x4, \
     PoseSolverFrame, \
     Pose
@@ -79,7 +79,7 @@ class BoardBuilderPanel(BasePanel):
     _build_board_button: wx.Button
     _repeatability_testing_checkbox: ParameterCheckbox
     _reset_button: wx.Button
-    _live_markers_detected: list[MarkerSnapshot]
+    _live_markers_detected: list[Annotation]
 
     _tracked_target_poses: list[Pose]
     # This could maybe be added to the LiveDetectorPreview class
@@ -366,7 +366,7 @@ class BoardBuilderPanel(BasePanel):
             self._renderer.render()
 
         if self._controller.is_running():
-            detector_data: dict[str, list[MarkerSnapshot]] = {}
+            detector_data: dict[str, list[Annotation]] = {}
             should_refresh = False  # Add this flag
 
             for preview in self.live_detector_previews:
@@ -387,7 +387,7 @@ class BoardBuilderPanel(BasePanel):
                         self.handle_response_series(response_series)
                         should_refresh = True  # Only refresh when new data is received
 
-                detector_data[detector_label] = preview.detector_frame.detected_marker_snapshots
+                detector_data[detector_label] = preview.detector_frame.annotations_identified
 
             if detector_data:
                 self._run_board_builder(detector_data)
@@ -406,12 +406,12 @@ class BoardBuilderPanel(BasePanel):
             connection_label=preview.detector_label,
             request_series=request_series)
 
-    def _draw_all_corners(self, detected_marker_snapshots, scale, frame, color):
+    def _draw_all_corners(self, annotations, scale, frame, color):
         """
         Takes in a dictionary of marker UUIDs to their corners and draws each set of corners on the frame with different colors.
         """
 
-        corners = self._marker_snapshot_list_to_opencv_points(detected_marker_snapshots, scale)
+        corners = self._marker_snapshot_list_to_opencv_points(annotations, scale)
 
         cv2.polylines(
             img=frame,
@@ -439,14 +439,26 @@ class BoardBuilderPanel(BasePanel):
 
     @staticmethod
     def _marker_snapshot_list_to_opencv_points(
-            marker_snapshot_list: list[MarkerSnapshot],
-            scale: float
+        marker_snapshot_list: list[Annotation],
+        scale: float
     ) -> numpy.ndarray:
-        corners: list[list[list[(float, float)]]] = [[[
-            (corner_point.x_px * scale, corner_point.y_px * scale)
-            for corner_point in marker.corner_image_points
-        ]] for marker in marker_snapshot_list]
-        return_value = numpy.array(corners, dtype=numpy.int32)
+        if len(marker_snapshot_list) <= 0:
+            return numpy.asarray([], dtype=numpy.int32)
+        return_value: list[list[list[(float, float)]]] = list()
+        current_base_label: str = marker_snapshot_list[0].base_label()
+        current_shape_points: list[list[(float, float)]] = [[
+            marker_snapshot_list[0].x_px * scale,
+            marker_snapshot_list[0].y_px * scale]]
+        for marker_snapshot in marker_snapshot_list:
+            annotation_base_label = marker_snapshot.base_label()
+            if annotation_base_label != current_base_label:
+                return_value.append(current_shape_points)
+                current_base_label = annotation_base_label
+            current_shape_points.append([
+                marker_snapshot.x_px * scale,
+                marker_snapshot.y_px * scale])
+        return_value.append(current_shape_points)
+        return_value = numpy.asarray(return_value, dtype=numpy.int32)
         return return_value
 
     def _on_build_board_button_click(self, event: wx.CommandEvent) -> None:
@@ -568,9 +580,17 @@ class BoardBuilderPanel(BasePanel):
 
         if scale is not None:
             if self._annotate_detected_checkbox.checkbox.GetValue():
-                self._draw_all_corners(preview.detector_frame.detected_marker_snapshots, scale, display_image, [255, 191, 127])
+                self._draw_all_corners(
+                    annotations=preview.detector_frame.annotations_identified,
+                    scale=scale,
+                    frame=display_image,
+                    color=[255, 191, 127])
             if self._annotate_rejected_checkbox.checkbox.GetValue():
-                self._draw_all_corners(preview.detector_frame.rejected_marker_snapshots, scale, display_image, [127, 191, 255])
+                self._draw_all_corners(
+                    annotations=preview.detector_frame.annotations,
+                    scale=scale,
+                    frame=display_image,
+                    color=[127, 191, 255])
 
         image_buffer: bytes = ImageUtils.image_to_bytes(image_data=display_image, image_format=".jpg")
         image_buffer_io: BytesIO = BytesIO(image_buffer)

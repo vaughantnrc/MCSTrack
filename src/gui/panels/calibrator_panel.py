@@ -12,6 +12,7 @@ from src.common import \
     ErrorResponse, \
     EmptyResponse, \
     ImageUtils, \
+    IntrinsicCalibrator, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
@@ -35,8 +36,7 @@ from src.detector import \
     CalibrationResultGetResponse, \
     CalibrationResultMetadataListRequest, \
     CalibrationResultMetadataListResponse, \
-    CalibrationResultMetadataUpdateRequest, \
-    IntrinsicCalibrator
+    CalibrationResultMetadataUpdateRequest
 from io import BytesIO
 import logging
 from typing import Optional

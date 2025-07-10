@@ -21,20 +21,38 @@ from src.common import \
     MCTResponse, \
     PythonUtils
 from src.common.structures import \
-    Pose, \
-    PoseSolverStatus
+    Pose
+from enum import StrEnum
 import logging
-from typing import Callable
+from typing import Callable, Final
 
 
 logger = logging.getLogger(__name__)
+
+
+_ROLE_LABEL: Final[str] = "pose_solver"
 
 
 class PoseSolverAPI(MCTComponent):
     """
     API-friendly layer overtop of a PoseSolver
     """
-    _status: PoseSolverStatus
+
+    class Status:
+
+        class Solve(StrEnum):
+            STOPPED: Final[int] = "stopped"
+            RUNNING: Final[int] = "running"
+            FAILURE: Final[int] = "failure"
+
+        solve_status: Solve
+        solve_errors: list[str]
+
+        def __init__(self):
+            self.solve_status = PoseSolverAPI.Status.Solve.STOPPED
+            self.solve_errors = list()
+
+    _status: Status
     _pose_solver: PoseSolver
 
     def __init__(
@@ -46,7 +64,7 @@ class PoseSolverAPI(MCTComponent):
             status_source_label=configuration.serial_identifier,
             send_status_messages_to_logger=True)
         self._pose_solver = pose_solver
-        self._status = PoseSolverStatus()
+        self._status = PoseSolverAPI.Status()
 
     def add_detector_frame(self, **kwargs) -> EmptyResponse | ErrorResponse:
         request: PoseSolverAddDetectorFrameRequest = PythonUtils.get_kwarg(
@@ -82,6 +100,10 @@ class PoseSolverAPI(MCTComponent):
         return PoseSolverGetPosesResponse(
             detector_poses=detector_poses,
             target_poses=target_poses)
+
+    @staticmethod
+    def get_role_label():
+        return _ROLE_LABEL
 
     def set_extrinsic_matrix(self, **kwargs) -> EmptyResponse | ErrorResponse:
         request: PoseSolverSetExtrinsicRequest = PythonUtils.get_kwarg(
@@ -132,11 +154,11 @@ class PoseSolverAPI(MCTComponent):
         return EmptyResponse()
 
     def start_pose_solver(self, **_kwargs) -> EmptyResponse:
-        self._status.solve_status = PoseSolverStatus.Solve.RUNNING
+        self._status.solve_status = PoseSolverAPI.Status.Solve.RUNNING
         return EmptyResponse()
 
     def stop_pose_solver(self, **_kwargs) -> EmptyResponse:
-        self._status.solve_status = PoseSolverStatus.Solve.STOPPED
+        self._status.solve_status = PoseSolverAPI.Status.Solve.STOPPED
         return EmptyResponse()
 
     def supported_request_types(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
@@ -156,5 +178,5 @@ class PoseSolverAPI(MCTComponent):
     async def update(self):
         if self.time_sync_active:
             return
-        if self._status.solve_status == PoseSolverStatus.Solve.RUNNING:
+        if self._status.solve_status == PoseSolverAPI.Status.Solve.RUNNING:
             self._pose_solver.update()

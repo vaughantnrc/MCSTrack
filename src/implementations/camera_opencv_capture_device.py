@@ -1,7 +1,5 @@
 from src.common import \
     Camera, \
-    CameraConfiguration, \
-    CameraStatus, \
     ImageUtils, \
     MCTCameraRuntimeError, \
     StatusMessageSource
@@ -79,7 +77,7 @@ class OpenCVCaptureDeviceCamera(Camera):
 
     def __init__(
         self,
-        configuration: CameraConfiguration,
+        configuration: Camera.Configuration,
         status_message_source: StatusMessageSource
     ):
         super().__init__(
@@ -89,7 +87,7 @@ class OpenCVCaptureDeviceCamera(Camera):
         self._image_timestamp_utc = datetime.datetime.min
         self._capture = None
         self._capture_device_id = configuration.capture_device
-        self.set_status(CameraStatus.STOPPED)
+        self.set_status(Camera.Status.STOPPED)
 
     def __del__(self):
         if self._capture is not None:
@@ -275,13 +273,13 @@ class OpenCVCaptureDeviceCamera(Camera):
         self._capture.set(cv2.CAP_PROP_SHARPNESS, float(_CAMERA_SHARPNESS_DEFAULT))
         self._capture.set(cv2.CAP_PROP_GAMMA, float(_CAMERA_GAMMA_DEFAULT))
 
-        self.set_status(CameraStatus.RUNNING)
+        self.set_status(Camera.Status.RUNNING)
 
     def stop(self) -> None:
         if self._capture is not None:
             self._capture.release()
             self._capture = None
-        self.set_status(CameraStatus.STOPPED)
+        self.set_status(Camera.Status.STOPPED)
 
     def update(self) -> None:
         grabbed_frame: bool
@@ -289,7 +287,7 @@ class OpenCVCaptureDeviceCamera(Camera):
         if not grabbed_frame:
             message: str = "Failed to grab frame."
             self.add_status_message(severity="error", message=message)
-            self.set_status(CameraStatus.FAILURE)
+            self.set_status(Camera.Status.FAILURE)
             raise MCTCameraRuntimeError(message=message)
 
         retrieved_frame: bool
@@ -297,7 +295,7 @@ class OpenCVCaptureDeviceCamera(Camera):
         if not retrieved_frame:
             message: str = "Failed to retrieve frame."
             self.add_status_message(severity="error", message=message)
-            self.set_status(CameraStatus.FAILURE)
+            self.set_status(Camera.Status.FAILURE)
             raise MCTCameraRuntimeError(message=message)
 
         self._image_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

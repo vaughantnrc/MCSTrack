@@ -1,7 +1,35 @@
-from .serialization import KeyValueSimpleAny
-from .linear_algebra import Vec3
+from enum import StrEnum
 import math
-from pydantic import BaseModel, Field, SerializeAsAny
+from pydantic import BaseModel, Field
+from typing import ClassVar, Final
+
+
+RELATION_CHARACTER: Final[str] = "$"
+
+
+class Annotation(BaseModel):
+    """
+    A distinct point as detected on a detector image.
+    """
+
+    UNIDENTIFIED_LABEL: ClassVar[str] = str()
+
+    label: str = Field()  # Empty indicates that something was detected but not identified
+    x_px: float = Field()
+    y_px: float = Field()
+
+    def base_label(self):
+        """
+        Part of the label before the RELATED_PREFIX.
+        """
+        if RELATION_CHARACTER not in self.label:
+            return self.label
+        return self.label[0:self.label.index(RELATION_CHARACTER)]
+
+
+class ImageFormat(StrEnum):
+    FORMAT_PNG: Final[str] = ".png"
+    FORMAT_JPG: Final[str] = ".jpg"
 
 
 class ImageResolution(BaseModel):
@@ -113,20 +141,8 @@ class IntrinsicParameters(BaseModel):
             tangential_distortion_coefficients=[0.0, 0.0])
 
 
-class IntrinsicCalibrationFrameResult(BaseModel):
-    image_identifier: str = Field()
-    translation: Vec3 = Field()
-    rotation: Vec3 = Field()
-    translation_stdev: Vec3 = Field()
-    rotation_stdev: Vec3 = Field()
-    reprojection_error: float = Field()
-
-
 class IntrinsicCalibration(BaseModel):
     timestamp_utc: str = Field()
     image_resolution: ImageResolution = Field()
-    reprojection_error: float = Field()
     calibrated_values: IntrinsicParameters = Field()
-    calibrated_stdevs: list[float] = Field()
-    marker_parameters: list[SerializeAsAny[KeyValueSimpleAny]] = Field()
-    frame_results: list[IntrinsicCalibrationFrameResult] = Field(default=list())
+    supplemental_data: dict = Field()

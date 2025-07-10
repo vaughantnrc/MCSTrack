@@ -1,31 +1,47 @@
+from .image import Annotation, ImageResolution
 from .linear_algebra import Pose
 import abc
 import datetime
-from enum import IntEnum
 import numpy
 from pydantic import BaseModel, Field, PrivateAttr
-from typing import Final
+
+
+class DetectorFrame(BaseModel):
+    annotations: list[Annotation] = Field(default_factory=list)
+    timestamp_utc_iso8601: str = Field()
+    image_resolution: ImageResolution = Field()
+
+    @property
+    def annotations_identified(self):
+        return [annotation for annotation in self.annotations if annotation.label != Annotation.UNIDENTIFIED_LABEL]
+
+    @property
+    def annotations_unidentified(self):
+        return [annotation for annotation in self.annotations if annotation.label == Annotation.UNIDENTIFIED_LABEL]
+
+    @property
+    def timestamp_utc(self):
+        return datetime.datetime.fromisoformat(self.timestamp_utc_iso8601)
+
+
+class PoseSolverFrame(BaseModel):
+    detector_poses: list[Pose] | None = Field()
+    target_poses: list[Pose] | None = Field()
+    timestamp_utc_iso8601: str = Field()
+
+    def timestamp_utc(self):
+        return datetime.datetime.fromisoformat(self.timestamp_utc_iso8601)
+
+
+# --------------------------------------------------------------------------------
+#  Everything below should be assessed for either migration or deletion
+# --------------------------------------------------------------------------------
 
 
 class Marker(BaseModel):
     marker_id: str = Field()
     marker_size: float | None = Field(default=None)
     points: list[list[float]] | None = Field(default=None)
-
-    # TODO: During validation, make sure either marker_size or points is defined, but not both.
-
-    def get_marker_size(self) -> float:
-        if self.marker_size is None:
-            if self.points is None or len(self.points) < 2:
-                raise RuntimeError("TargetMarker defined with neither marker_size nor enough points.")
-            marker_size_sum: float = 0.0
-            for point_index in range(0, len(self.points)):
-                point_a: numpy.ndarray = numpy.asarray(self.points[point_index])
-                point_b: numpy.ndarray = numpy.asarray(self.points[point_index-1])
-                vector: numpy.ndarray = point_a - point_b
-                marker_size_sum += numpy.linalg.norm(vector)
-            self.marker_size = marker_size_sum / len(self.points)
-        return self.marker_size
 
     def get_points_internal(self) -> list[list[float]]:
         # Use the TargetBase.get_points() instead.
@@ -42,7 +58,7 @@ class Marker(BaseModel):
 
 
 class TargetBase(BaseModel, abc.ABC):
-    target_id: str = Field()
+    label: str = Field()
 
     @abc.abstractmethod
     def get_marker_ids(self) -> list[str]: ...
@@ -63,7 +79,7 @@ class TargetMarker(TargetBase, Marker):
 
     def get_points_for_marker_id(self, marker_id: str) -> list[list[float]]:
         if marker_id != self.marker_id:
-            raise IndexError(f"marker_id {marker_id} is not in target {self.target_id}")
+            raise IndexError(f"marker_id {marker_id} is not in target {self.label}")
         return self.get_points_internal()
 
 
@@ -90,29 +106,5 @@ class TargetBoard(TargetBase):
             for marker in self.markers:
                 self._marker_dict[marker.marker_id] = marker
         if marker_id not in self._marker_dict:
-            raise IndexError(f"marker_id {marker_id} is not in target {self.target_id}")
+            raise IndexError(f"marker_id {marker_id} is not in target {self.label}")
         return self._marker_dict[marker_id].points
-
-
-class PoseSolverStatus:
-
-    class Solve(IntEnum):
-        STOPPED: Final[int] = 0
-        RUNNING: Final[int] = 1
-        FAILURE: Final[int] = 2
-
-    solve_status: Solve
-    solve_errors: list[str]
-
-    def __init__(self):
-        self.solve_status = PoseSolverStatus.Solve.STOPPED
-        self.solve_errors = list()
-
-
-class PoseSolverFrame(BaseModel):
-    detector_poses: list[Pose] | None = Field()
-    target_poses: list[Pose] | None = Field()
-    timestamp_utc_iso8601: str = Field()
-
-    def timestamp_utc(self):
-        return datetime.datetime.fromisoformat(self.timestamp_utc_iso8601)

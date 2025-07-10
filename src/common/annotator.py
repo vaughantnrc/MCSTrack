@@ -4,7 +4,7 @@ from .status_messages import \
     SeverityLabel, \
     StatusMessageSource
 from .structures import \
-    MarkerSnapshot, \
+    Annotation, \
     KeyValueMetaAny, \
     KeyValueSimpleAny
 import abc
@@ -70,10 +70,10 @@ class Annotator(abc.ABC):
     def get_changed_timestamp(self) -> datetime.datetime: ...
 
     @abc.abstractmethod
-    def get_markers_detected(self) -> list[MarkerSnapshot]: ...
+    def get_markers_detected(self) -> list[Annotation]: ...
 
     @abc.abstractmethod
-    def get_markers_rejected(self) -> list[MarkerSnapshot]: ...
+    def get_markers_rejected(self) -> list[Annotation]: ...
 
     @abc.abstractmethod
     def get_parameters(self) -> list[KeyValueMetaAny]: ...

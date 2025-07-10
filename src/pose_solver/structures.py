@@ -1,4 +1,5 @@
 from src.common.structures import \
+    Annotation, \
     DetectorFrame
 import cv2.aruco
 import datetime
@@ -23,10 +24,15 @@ class DetectorFrameRecord:
 
     def _init_corners_by_marker_id(self):
         self._corners_by_marker_id = dict()
-        for snapshot in self._frame.detected_marker_snapshots:
-            self._corners_by_marker_id[snapshot.label] = [
-                [corner_image_point.x_px, corner_image_point.y_px]
-                for corner_image_point in snapshot.corner_image_points]
+        annotations: list[Annotation] = self._frame.annotations_identified
+        for annotation in annotations:
+            base_label: str = annotation.base_label()
+            if base_label in self._corners_by_marker_id.keys():
+                continue
+            self._corners_by_marker_id[base_label] = [
+                [annotation.x_px, annotation.y_px]
+                for annotation in annotations
+                if annotation.base_label() == base_label]
 
     def get_detector_label(self) -> str:
         return self._detector_label
@@ -51,7 +57,7 @@ class DetectorFrameRecord:
 
     def get_timestamp_utc(self):
         if self._timestamp_utc is None:
-            self._timestamp_utc = self._frame.timestamp_utc()
+            self._timestamp_utc = self._frame.timestamp_utc
         return self._timestamp_utc
 
 

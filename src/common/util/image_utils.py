@@ -1,5 +1,5 @@
 from src.common.structures import \
-    CaptureFormat, \
+    ImageFormat, \
     ImageResolution
 import base64
 import cv2
@@ -77,7 +77,7 @@ class ImageUtils:
     @staticmethod
     def image_to_base64(
         image_data: numpy.ndarray,
-        image_format: CaptureFormat = ".png",
+        image_format: ImageFormat = ".png",
     ) -> str:
         """
         :param image_data: Expected to be an OpenCV image *or* a numpy.ndarray (theoretically - to be confirmed)
@@ -93,7 +93,7 @@ class ImageUtils:
     @staticmethod
     def image_to_bytes(
         image_data: numpy.ndarray,
-        image_format: CaptureFormat = ".png",
+        image_format: ImageFormat = ".png",
     ) -> bytes:
         """
         :param image_data: Expected to be an OpenCV image *or* a numpy.ndarray (theoretically - to be confirmed)

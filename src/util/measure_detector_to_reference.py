@@ -1,19 +1,17 @@
 import asyncio
 import sys
 import hjson
-from ipaddress import IPv4Address
 import json
 import logging
 import numpy as np
 import os
 from time import sleep
-from timeit import main
 from scipy.spatial.transform import Rotation as R
 
 from src.board_builder.board_builder import BoardBuilder
-from src.common.structures.mct_component import COMPONENT_ROLE_LABEL_DETECTOR, COMPONENT_ROLE_LABEL_POSE_SOLVER
 from src.controller import Connection, MCTController
 from src.common import MathUtils
+from src.detector import Detector
 
 # input_filepath = "/home/adminpi5/Documents/MCSTrack/data/measure_detector_to_reference_config.json"
 if len(sys.argv) < 2:
@@ -42,7 +40,7 @@ async def main():
     for detector in detectors:
         controller.add_connection(Connection.ComponentAddress(
             label=detector['label'],
-            role=COMPONENT_ROLE_LABEL_DETECTOR,
+            role=Detector.get_role_label(),
             ip_address=detector['ip_address'],
             port=detector['port']))
         all_measured_transforms_by_detector[detector['label']] = []
@@ -67,7 +65,7 @@ async def main():
                 controller.update()
                 frame = controller.get_live_detector_frame(detector_label)
 
-            detectors_and_their_frames[detector_label] = frame.detected_marker_snapshots
+            detectors_and_their_frames[detector_label] = frame.annotations_identified
 
         board_builder.locate_reference_board(detectors_and_their_frames)
     
