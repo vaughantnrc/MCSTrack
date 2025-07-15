@@ -130,12 +130,6 @@ KeyValueMetaAny = Union[
     KeyValueMetaInt]
 
 
-def key_value_meta_to_simple(
-    key_value_meta_list: list[KeyValueMetaAny]
-) -> list[KeyValueSimpleAny]:
-    return [key_value_meta.to_simple() for key_value_meta in key_value_meta_list]
-
-
 DeserializableT = TypeVar('DeserializableT', bound='MCTParsable')
 
 

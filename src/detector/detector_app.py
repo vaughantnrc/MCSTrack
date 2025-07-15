@@ -79,18 +79,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"])
 
     @detector_app.head("/detector/start")
-    async def detector_start(
-        http_request: Request
-    ) -> None:
-        client_identifier: str = NetworkUtils.client_identifier_from_connection(connection=http_request)
-        detector.detector_start(client_identifier=client_identifier)
+    async def detector_start() -> None:
+        detector.detector_start()
 
     @detector_app.head("/detector/stop")
-    async def detector_stop(
-        http_request: Request
-    ) -> None:
-        client_identifier: str = NetworkUtils.client_identifier_from_connection(connection=http_request)
-        detector.detector_stop(client_identifier=client_identifier)
+    async def detector_stop() -> None:
+        detector.detector_stop()
 
     @detector_app.post("/detector/start_time_sync")
     async def start_time_sync(

@@ -130,7 +130,7 @@ class IOUtils:
             create_path=True
         ):
             return False
-        if ignore_none is True:
+        if ignore_none:
             json_dict = IOUtils._remove_all_none_from_dict_recursive(json_dict)
         try:
             with open(filepath, 'w', encoding='utf-8') as output_file:
@@ -143,10 +143,10 @@ class IOUtils:
 
     @staticmethod
     def _remove_all_none_from_dict_recursive(
-        input_dict
+        input_dict: dict
     ) -> dict:
         output_dict = dict(input_dict)
-        for key in output_dict:
+        for key in output_dict.keys():
             if isinstance(output_dict[key], dict):
                 output_dict[key] = IOUtils._remove_all_none_from_dict_recursive(output_dict[key])
             elif output_dict[key] is None:

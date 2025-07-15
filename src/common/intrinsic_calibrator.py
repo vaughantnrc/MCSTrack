@@ -1,9 +1,8 @@
 from .exceptions import MCTError
-from .status_messages import StatusMessageSource
+from .status_messages import SeverityLabel, StatusMessageSource
 from .structures import \
     ImageResolution, \
-    IntrinsicCalibration, \
-    KeyValueSimpleAny
+    IntrinsicCalibration
 from .util import \
     ImageUtils, \
     IOUtils
@@ -36,9 +35,9 @@ class _Configuration(BaseModel):
 
 
 class _ImageState(StrEnum):
-    IGNORE: Final[int] = "ignore"
-    SELECT: Final[int] = "select"
-    DELETE: Final[int] = "delete"  # stage for deletion
+    IGNORE = "ignore"
+    SELECT = "select"
+    DELETE = "delete"  # stage for deletion
 
 
 class _ImageMetadata(BaseModel):
@@ -51,13 +50,13 @@ class _ImageMetadata(BaseModel):
 class _ResultState(StrEnum):
     # indicate to use this calibration (as opposed to simply storing it)
     # normally there shall only ever be one ACTIVE calibration for a given image resolution
-    ACTIVE: Final[str] = "active"
+    ACTIVE = "active"
 
     # store the calibration, but don't mark it for use
-    RETAIN: Final[str] = "retain"
+    RETAIN = "retain"
 
     # stage for deletion
-    DELETE: Final[str] = "delete"
+    DELETE = "delete"
 
 
 class _ResultMetadata(BaseModel):
@@ -133,7 +132,7 @@ class IntrinsicCalibrator(abc.ABC):
         self._status_message_source = status_message_source
         if not self._exists_on_filesystem(path=self._configuration.data_path, pathtype="path", create_path=True):
             self._status_message_source.enqueue_status_message(
-                severity="critical",
+                severity=SeverityLabel.CRITICAL,
                 message="Data path does not exist and could not be created.")
             detailed_message: str = f"{self._configuration.data_path} does not exist and could not be created."
             logger.critical(detailed_message)
@@ -143,7 +142,7 @@ class IntrinsicCalibrator(abc.ABC):
                            "In order to avoid data loss, the software will now abort. " \
                            "Please manually correct or remove the file in the filesystem."
             logger.critical(message)
-            self._status_message_source.enqueue_status_message(severity="critical", message=message)
+            self._status_message_source.enqueue_status_message(severity=SeverityLabel.CRITICAL, message=message)
             raise RuntimeError(message)
 
     def add_image(
@@ -205,7 +204,7 @@ class IntrinsicCalibrator(abc.ABC):
                 image_identifier=image_metadata.identifier)
             if not self._exists_on_filesystem(path=image_filepath, pathtype="filepath"):
                 self._status_message_source.enqueue_status_message(
-                    severity="warning",
+                    severity=SeverityLabel.WARNING,
                     message=f"Image {image_metadata.identifier} was not found. "
                             f"It will be omitted from the calibration.")
                 continue
@@ -219,7 +218,7 @@ class IntrinsicCalibrator(abc.ABC):
             filepath=result_filepath,
             json_dict=intrinsic_calibration.model_dump(),
             on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=msg),
             on_error_for_dev=logger.error,
             ignore_none=True)
@@ -246,13 +245,13 @@ class IntrinsicCalibrator(abc.ABC):
         except FileNotFoundError as e:
             logger.error(e)
             self._status_message_source.enqueue_status_message(
-                severity="warning",  # It *is* an internal error, but it has few consequences for user... so warning
+                severity=SeverityLabel.ERROR,
                 message=f"Failed to remove a file from the calibrator because it does not exist. "
                         f"See its internal log for details.")
         except OSError as e:
             logger.error(e)
             self._status_message_source.enqueue_status_message(
-                severity="warning",  # It *is* an internal error, but it has few consequences for user... so warning
+                severity=SeverityLabel.ERROR,
                 message=f"Failed to remove a file from the calibrator due to an unexpected reason. "
                         f"See its internal log for details.")
 
@@ -290,7 +289,7 @@ class IntrinsicCalibrator(abc.ABC):
             pathtype=pathtype,
             create_path=create_path,
             on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=msg),
             on_error_for_dev=logger.error)
 
@@ -392,12 +391,12 @@ class IntrinsicCalibrator(abc.ABC):
 
         if active_count < 1:
             self._status_message_source.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"No result metadata is active for resolution {str(image_resolution)}."
                         "Returning latest result.")
         elif active_count > 1:
             self._status_message_source.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"Multiple result metadata are active for resolution {str(image_resolution)}. "
                         "Returning latest active result. "
                         "To recover from this ambiguous state, it is strong recommended to explicitly set "
@@ -484,7 +483,7 @@ class IntrinsicCalibrator(abc.ABC):
         elif not os.path.isfile(calibration_map_filepath):
             logger.critical(f"Calibration map file location {calibration_map_filepath} exists but is not a file.")
             self._status_message_source.enqueue_status_message(
-                severity="critical",
+                severity=SeverityLabel.CRITICAL,
                 message="Filepath location for calibration map exists but is not a file. "
                         "Most likely a directory exists at that location, "
                         "and it needs to be manually removed.")
@@ -492,13 +491,13 @@ class IntrinsicCalibrator(abc.ABC):
         json_dict: dict = IOUtils.hjson_read(
             filepath=calibration_map_filepath,
             on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=msg),
             on_error_for_dev=logger.error)
         if not json_dict:
             logger.error(f"Failed to load calibration map from file {calibration_map_filepath}.")
             self._status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message="Failed to load calibration map from file.")
             return False
         calibration_map: IntrinsicCalibrator.DataMap
@@ -507,7 +506,7 @@ class IntrinsicCalibrator(abc.ABC):
         except ValidationError as e:
             logger.error(e)
             self._status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message="Failed to parse calibration map from file.")
             return False
         self._calibration_map = calibration_map.as_dict()
@@ -537,7 +536,7 @@ class IntrinsicCalibrator(abc.ABC):
             filepath=self._map_filepath(),
             json_dict=IntrinsicCalibrator.DataMap.from_dict(self._calibration_map).model_dump(),
             on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=msg),
             on_error_for_dev=logger.error)
 
@@ -562,7 +561,7 @@ class IntrinsicCalibrator(abc.ABC):
                 message=f"Image identifier {image_identifier} is not associated with any image.")
         elif found_count > 1:
             self._status_message_source.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"Image identifier {image_identifier} is associated with multiple images.")
         self.save()
 
@@ -599,7 +598,7 @@ class IntrinsicCalibrator(abc.ABC):
                 message=f"Result identifier {result_identifier} is not associated with any result.")
         elif found_count > 1:
             self._status_message_source.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"Result identifier {result_identifier} is associated with multiple results. "
                         "This suggests that the calibration map is in an inconsistent state. "
                         "It may be prudent to either manually correct it, or recreate it.")

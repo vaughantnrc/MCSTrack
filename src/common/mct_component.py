@@ -18,8 +18,6 @@ from .status_messages import \
 from .structures import \
     MCTDeserializable, \
     MCTSerializationError
-from .util import \
-    PythonUtils
 import abc
 import datetime
 from fastapi import WebSocket, WebSocketDisconnect
@@ -31,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 SerializableSingle = TypeVar('SerializableSingle', bound=MCTDeserializable)
+T = TypeVar("T")
 
 
 class MCTComponent(abc.ABC):
@@ -86,7 +85,7 @@ class MCTComponent(abc.ABC):
         """
         :key client_identifier: str
         """
-        client_identifier: str = PythonUtils.get_kwarg(
+        client_identifier: str = self.get_kwarg(
             kwargs=kwargs,
             key="client_identifier",
             arg_type=str)
@@ -94,6 +93,33 @@ class MCTComponent(abc.ABC):
             subscriber_label=client_identifier)
         return DequeueStatusMessagesResponse(
             status_messages=status_messages)
+
+    @staticmethod
+    def get_kwarg(
+            kwargs: dict,
+            key: str,
+            arg_type: type[T],
+            required: bool = True
+    ) -> T | None:
+        """
+        :param kwargs: kwargs as a dict (without the "**")
+        :param key: key to search for
+        :param arg_type: expected type
+        :param required: If the keyword does not exist, then:
+           required == True -> Raise ValueError
+           required == False -> Return None
+        """
+
+        if key not in kwargs:
+            if required:
+                raise ValueError(f"Missing required key {key} in keyword arguments.")
+            return None
+        value: T = kwargs[key]
+        if not isinstance(value, arg_type):
+            raise ValueError(
+                f"Expected keyword argument {key} to be of type {arg_type.__name__}, "
+                f"but got {type(value).__name__}.")
+        return value
 
     @staticmethod
     @abc.abstractmethod
@@ -119,7 +145,7 @@ class MCTComponent(abc.ABC):
                 TimeSyncStopRequest: self.time_sync_stop}
     
     def timestamp_get(self, **kwargs) -> TimestampGetResponse:
-        request: TimestampGetRequest = PythonUtils.get_kwarg(
+        request: TimestampGetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=TimestampGetRequest)

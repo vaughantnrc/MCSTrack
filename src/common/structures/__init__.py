@@ -25,7 +25,6 @@ from .serialization import \
     KeyValueMetaEnum, \
     KeyValueMetaFloat, \
     KeyValueMetaInt, \
-    key_value_meta_to_simple, \
     MCTSerializationError, \
     MCTDeserializable
 from .tracking import \

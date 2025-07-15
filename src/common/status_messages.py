@@ -8,25 +8,20 @@ from typing import Final
 logger = logging.getLogger(__name__)
 
 
-SEVERITY_LABEL_DEBUG: Final[str] = "debug"
-SEVERITY_LABEL_INFO: Final[str] = "info"
-SEVERITY_LABEL_WARNING: Final[str] = "warning"
-SEVERITY_LABEL_ERROR: Final[str] = "error"
-SEVERITY_LABEL_CRITICAL: Final[str] = "critical"
 class SeverityLabel(StrEnum):
-    DEBUG: Final[str] = SEVERITY_LABEL_DEBUG
-    INFO: Final[str] = SEVERITY_LABEL_INFO
-    WARNING: Final[str] = SEVERITY_LABEL_WARNING
-    ERROR: Final[str] = SEVERITY_LABEL_ERROR
-    CRITICAL: Final[str] = SEVERITY_LABEL_CRITICAL
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
 
 
 SEVERITY_LABEL_TO_INT: Final[dict[SeverityLabel, int]] = {
-    "debug": logging.DEBUG,
-    "info": logging.INFO,
-    "warning": logging.WARNING,
-    "error": logging.ERROR,
-    "critical": logging.CRITICAL}
+    SeverityLabel.DEBUG: logging.DEBUG,
+    SeverityLabel.INFO: logging.INFO,
+    SeverityLabel.WARNING: logging.WARNING,
+    SeverityLabel.ERROR: logging.ERROR,
+    SeverityLabel.CRITICAL: logging.CRITICAL}
 
 
 class StatusMessage(BaseModel):
@@ -66,13 +61,13 @@ class StatusMessageSource:
             message: str = f"{subscriber_label} is now listening for status messages."
             self.enqueue_status_message(
                 source_label=self._source_label,
-                severity="debug",
+                severity=SeverityLabel.DEBUG,
                 message=message)
         else:
             message: str = f"{subscriber_label} is already in status message outboxes."
             self.enqueue_status_message(
                 source_label=self._source_label,
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=message)
 
     def get_source_label(self) -> str:

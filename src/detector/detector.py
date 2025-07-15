@@ -44,8 +44,7 @@ from src.common import \
     MCTComponent, \
     MCTAnnotatorRuntimeError, \
     MCTRequest, \
-    MCTResponse, \
-    PythonUtils
+    MCTResponse
 from src.common.structures import \
     DetectorFrame, \
     ImageResolution, \
@@ -107,7 +106,7 @@ class Detector(MCTComponent):
         self._camera.__del__()
 
     def calibration_calculate(self, **kwargs) -> CalibrationCalculateResponse | ErrorResponse:
-        request: CalibrationCalculateRequest = PythonUtils.get_kwarg(
+        request: CalibrationCalculateRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CalibrationCalculateRequest)
@@ -138,7 +137,7 @@ class Detector(MCTComponent):
         return CalibrationImageAddResponse(image_identifier=image_identifier)
 
     def calibration_image_get(self, **kwargs) -> CalibrationImageGetResponse | ErrorResponse:
-        request: CalibrationImageGetRequest = PythonUtils.get_kwarg(
+        request: CalibrationImageGetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CalibrationImageGetRequest)
@@ -150,7 +149,7 @@ class Detector(MCTComponent):
         return CalibrationImageGetResponse(image_base64=image_base64)
 
     def calibration_image_metadata_list(self, **kwargs) -> CalibrationImageMetadataListResponse | ErrorResponse:
-        request: CalibrationImageMetadataListRequest = PythonUtils.get_kwarg(
+        request: CalibrationImageMetadataListRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CalibrationImageMetadataListRequest)
@@ -163,7 +162,7 @@ class Detector(MCTComponent):
         return CalibrationImageMetadataListResponse(metadata_list=image_metadata_list)
 
     def calibration_image_metadata_update(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: CalibrationImageMetadataUpdateRequest = PythonUtils.get_kwarg(
+        request: CalibrationImageMetadataUpdateRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CalibrationImageMetadataUpdateRequest)
@@ -185,7 +184,7 @@ class Detector(MCTComponent):
         return CalibrationResolutionListResponse(resolutions=resolutions)
 
     def calibration_result_get(self, **kwargs) -> CalibrationResultGetResponse | ErrorResponse:
-        request: CalibrationResultGetRequest = PythonUtils.get_kwarg(
+        request: CalibrationResultGetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CalibrationResultGetRequest)
@@ -206,7 +205,7 @@ class Detector(MCTComponent):
         return CalibrationResultGetActiveResponse(intrinsic_calibration=intrinsic_calibration)
 
     def calibration_result_metadata_list(self, **kwargs) -> CalibrationResultMetadataListResponse | ErrorResponse:
-        request: CalibrationResultMetadataListRequest = PythonUtils.get_kwarg(
+        request: CalibrationResultMetadataListRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CalibrationResultMetadataListRequest)
@@ -219,7 +218,7 @@ class Detector(MCTComponent):
         return CalibrationResultMetadataListResponse(metadata_list=result_metadata_list)
 
     def calibration_result_metadata_update(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: CalibrationResultMetadataUpdateRequest = PythonUtils.get_kwarg(
+        request: CalibrationResultMetadataUpdateRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CalibrationResultMetadataUpdateRequest)
@@ -233,7 +232,7 @@ class Detector(MCTComponent):
         return EmptyResponse()
 
     def camera_image_get(self, **kwargs) -> CameraImageGetResponse | ErrorResponse:
-        request: CameraImageGetRequest = PythonUtils.get_kwarg(
+        request: CameraImageGetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CameraImageGetRequest)
@@ -257,7 +256,7 @@ class Detector(MCTComponent):
         return CameraParametersGetResponse(parameters=parameters)
 
     def camera_parameters_set(self, **kwargs) -> CameraParametersSetResponse | ErrorResponse:
-        request: CameraParametersSetRequest = PythonUtils.get_kwarg(
+        request: CameraParametersSetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=CameraParametersSetRequest)
@@ -278,7 +277,7 @@ class Detector(MCTComponent):
         return CameraResolutionGetResponse(resolution=image_resolution)
 
     def detector_frame_get(self, **kwargs) -> DetectorFrameGetResponse | ErrorResponse:
-        request: DetectorFrameGetRequest = PythonUtils.get_kwarg(
+        request: DetectorFrameGetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=DetectorFrameGetRequest)
@@ -322,7 +321,7 @@ class Detector(MCTComponent):
         return AnnotatorParametersGetResponse(parameters=parameters)
 
     def marker_parameters_set(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: AnnotatorParametersSetRequest = PythonUtils.get_kwarg(
+        request: AnnotatorParametersSetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
             arg_type=AnnotatorParametersSetRequest)
