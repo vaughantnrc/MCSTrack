@@ -1,6 +1,6 @@
 from .api import \
     PoseSolverAddDetectorFrameRequest, \
-    PoseSolverAddTargetMarkerRequest, \
+    PoseSolverAddTargetRequest, \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
     PoseSolverSetExtrinsicRequest, \
@@ -40,9 +40,9 @@ class PoseSolverAPI(MCTComponent):
     class Status:
 
         class Solve(StrEnum):
-            STOPPED: Final[int] = "stopped"
-            RUNNING: Final[int] = "running"
-            FAILURE: Final[int] = "failure"
+            STOPPED = "stopped"
+            RUNNING = "running"
+            FAILURE = "failure"
 
         solve_status: Solve
         solve_errors: list[str]
@@ -79,10 +79,10 @@ class PoseSolverAPI(MCTComponent):
         return EmptyResponse()
 
     def add_target(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverAddTargetMarkerRequest = self.get_kwarg(
+        request: PoseSolverAddTargetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
-            arg_type=PoseSolverAddTargetMarkerRequest)
+            arg_type=PoseSolverAddTargetRequest)
         try:
             self._pose_solver.add_target(target=request.target)
         except PoseSolverException as e:
@@ -164,7 +164,7 @@ class PoseSolverAPI(MCTComponent):
         return_value: dict[type[MCTRequest], Callable[[dict], MCTResponse]] = super().supported_request_types()
         return_value.update({
             PoseSolverAddDetectorFrameRequest: self.add_detector_frame,
-            PoseSolverAddTargetMarkerRequest: self.add_target,
+            PoseSolverAddTargetRequest: self.add_target,
             PoseSolverGetPosesRequest: self.get_poses,
             PoseSolverSetExtrinsicRequest: self.set_extrinsic_matrix,
             PoseSolverSetIntrinsicRequest: self.set_intrinsic_parameters,

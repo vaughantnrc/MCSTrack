@@ -1,10 +1,7 @@
 from enum import StrEnum
 import math
 from pydantic import BaseModel, Field
-from typing import ClassVar, Final
-
-
-RELATION_CHARACTER: Final[str] = "$"
+from typing import ClassVar
 
 
 class Annotation(BaseModel):
@@ -12,24 +9,28 @@ class Annotation(BaseModel):
     A distinct point as detected on a detector image.
     """
 
+    # These can denote that multiple landmarks are related if they share the same
+    # "base label" (the part before the first and only occurrence of this character).
+    RELATION_CHARACTER: ClassVar[str] = "$"
+
     UNIDENTIFIED_LABEL: ClassVar[str] = str()
 
-    label: str = Field()  # Empty indicates that something was detected but not identified
+    feature_label: str = Field()  # Empty indicates that something was detected but not identified
     x_px: float = Field()
     y_px: float = Field()
 
-    def base_label(self):
+    def base_feature_label(self) -> str:
         """
-        Part of the label before the RELATED_PREFIX.
+        Part of the label before the RELATION_CHARACTER.
         """
-        if RELATION_CHARACTER not in self.label:
-            return self.label
-        return self.label[0:self.label.index(RELATION_CHARACTER)]
+        if self.RELATION_CHARACTER not in self.feature_label:
+            return self.feature_label
+        return self.feature_label[0:self.feature_label.index(self.RELATION_CHARACTER)]
 
 
 class ImageFormat(StrEnum):
-    FORMAT_PNG: Final[str] = ".png"
-    FORMAT_JPG: Final[str] = ".jpg"
+    FORMAT_PNG = ".png"
+    FORMAT_JPG = ".jpg"
 
 
 class ImageResolution(BaseModel):

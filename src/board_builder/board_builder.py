@@ -9,7 +9,7 @@ from typing import Final
 from .utils import BoardBuilderPoseSolver
 from .structures import PoseLocation, MarkerCorners
 from src.common.structures import Pose, Annotation, Matrix4x4
-from src.common.structures import Marker, TargetBoard
+from .structures import Marker, TargetBoard
 
 _HOMOGENEOUS_POINT_COORD: Final[int] = 4
 TESTED_BOARD_NAME: str = 'top_data.json'  # If collecting data for repeatability test, specify the file name. cube_data.json, planar_data.json, top_data.json
@@ -115,13 +115,13 @@ class BoardBuilder:
         label_counts = defaultdict(int)
         for snapshots in data.values():
             for snapshot in snapshots:
-                label_counts[snapshot.label] += 1
+                label_counts[snapshot.feature_label] += 1
 
         filtered_data = {}
         for key, snapshots in data.items():
             filtered_snapshots = [
                 snapshot for snapshot in snapshots
-                if label_counts[snapshot.label] >= 2]
+                if label_counts[snapshot.feature_label] >= 2]
             if filtered_snapshots:
                 filtered_data[key] = filtered_snapshots
         return filtered_data
@@ -150,10 +150,10 @@ class BoardBuilder:
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         for detector_name in detector_data:
             for marker_snapshot in detector_data[detector_name]:
-                if marker_snapshot.label not in list(self._index_to_marker_id.values()):
-                    self.pose_solver.add_target_marker(int(marker_snapshot.label))
+                if marker_snapshot.feature_label not in list(self._index_to_marker_id.values()):
+                    self.pose_solver.add_target_marker(int(marker_snapshot.feature_label))
                     self._expand_relative_pose_matrix()
-                    self._index_to_marker_id[self._matrix_id_index] = marker_snapshot.label
+                    self._index_to_marker_id[self._matrix_id_index] = marker_snapshot.feature_label
                     self._matrix_id_index += 1
 
         for detector_name in detector_data:
@@ -166,7 +166,7 @@ class BoardBuilder:
                     [detector_data[detector_name][i+3].x_px, detector_data[detector_name][i+3].y_px]]
                 marker_corners = MarkerCorners(
                     detector_label=detector_name,
-                    marker_id=int(detector_data[detector_name][i].label),
+                    marker_id=int(detector_data[detector_name][i].feature_label),
                     points=corners_list,
                     timestamp=timestamp)
                 self.pose_solver.add_marker_corners([marker_corners])
@@ -210,7 +210,7 @@ class BoardBuilder:
             formatted_data[detector_name] = []
             for snapshot in snapshots:
                 snapshot_data = {
-                    "label": snapshot.label,
+                    "label": snapshot.feature_label,
                     "corner_image_points": [snapshot.x_px, snapshot.y_px],
                     "timestamp": timestamp}
                 formatted_data[detector_name].append(snapshot_data)
@@ -258,7 +258,7 @@ class BoardBuilder:
                     [detector_data[detector_name][i+3].x_px, detector_data[detector_name][i+3].y_px]]
                 marker_corners = MarkerCorners(
                     detector_label=detector_name,
-                    marker_id=int(detector_data[detector_name][i].label),
+                    marker_id=int(detector_data[detector_name][i].feature_label),
                     points=corners_list,
                     timestamp=timestamp)
                 self.pose_solver.add_marker_corners([marker_corners])

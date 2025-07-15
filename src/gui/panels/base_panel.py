@@ -8,6 +8,7 @@ from .parameters import \
 from src.common import \
     ErrorResponse, \
     MCTResponse, \
+    SeverityLabel, \
     StatusMessageSource
 from src.common.structures import \
     KeyValueSimpleAbstract, \
@@ -69,7 +70,7 @@ class BasePanel(wx.Panel):
                 parameter_type = KeyValueSimpleInt
             else:
                 self.status_message_source.enqueue_status_message(
-                    severity="error",
+                    severity=SeverityLabel.ERROR,
                     message=f"Failed to determine parameter type from UI element for key {label}.")
                 continue
             key_values.append(parameter_type(
@@ -120,7 +121,7 @@ class BasePanel(wx.Panel):
                     step_value=key_value.range_step))
             else:
                 self.status_message_source.enqueue_status_message(
-                    severity="error",
+                    severity=SeverityLabel.ERROR,
                     message=f"Unsupported parameter type {key_value.parsable_type} will not be handled")
         return return_value
 
@@ -129,7 +130,7 @@ class BasePanel(wx.Panel):
         response: ErrorResponse
     ):
         self.status_message_source.enqueue_status_message(
-            severity="error",
+            severity=SeverityLabel.ERROR,
             message=f"Received error: {response.message}")
 
     def handle_unknown_response(
@@ -137,12 +138,12 @@ class BasePanel(wx.Panel):
         response: MCTResponse
     ):
         self.status_message_source.enqueue_status_message(
-            severity="error",
+            severity=SeverityLabel.ERROR,
             message=f"Received unexpected response: {str(type(response))}")
 
     def on_page_select(self):
         self.status_message_source.enqueue_status_message(
-            severity="debug",
+            severity=SeverityLabel.DEBUG,
             message=f"{self.GetName()} on_page_select")
         self.panel_is_selected = True
         if not self._update_loop_running:
@@ -151,7 +152,7 @@ class BasePanel(wx.Panel):
 
     def on_page_deselect(self):
         self.status_message_source.enqueue_status_message(
-            severity="debug",
+            severity=SeverityLabel.DEBUG,
             message=f"{self.GetName()} on_page_deselect")
         self.panel_is_selected = False
 

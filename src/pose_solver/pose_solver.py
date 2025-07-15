@@ -2,17 +2,17 @@ from .exceptions import \
     PoseSolverException
 from .structures import \
     DetectorRecord, \
-    DetectorFrameRecord, \
     PoseSolverParameters
 from src.common import MathUtils
 from src.common.structures import \
+    Annotation, \
     DetectorFrame, \
     IntrinsicParameters, \
     IterativeClosestPointParameters, \
     Matrix4x4, \
     Pose, \
     Ray, \
-    TargetBase
+    Target
 import cv2
 import cv2.aruco
 import datetime
@@ -42,17 +42,17 @@ class PoseSolver:
     _parameters: PoseSolverParameters
     _intrinsics_by_detector_label: dict[str, IntrinsicParameters]
     _extrinsics_by_detector_label: dict[str, Matrix4x4]
-    _targets: list[TargetBase]  # First target is considered the "reference"
+    _targets: list[Target]  # First target is considered the "reference"
     # input per frame
     _detector_records_by_detector_label: dict[str, DetectorRecord]
 
     # internal threshold
     _minimum_marker_age_before_removal_seconds: float
     # use this to make sure each marker is associated uniquely to a single target
-    _marker_target_map: dict[str, TargetBase]  # Each marker shall be used at most once by a single target
+    _landmark_target_map: dict[str, Target]  # Each marker shall be used at most once by a single target
 
     # outputs
-    _poses_by_target_id: dict[str, Matrix4x4]
+    _poses_by_target_label: dict[str, Matrix4x4]
     _poses_by_detector_label: dict[str, Matrix4x4]
 
     def __init__(
@@ -73,9 +73,9 @@ class PoseSolver:
             self._parameters.POSE_SINGLE_CAMERA_NEAREST_LIMIT_RAY_AGE_SECONDS,
             self._parameters.POSE_SINGLE_CAMERA_DEPTH_LIMIT_AGE_SECONDS,
             self._parameters.POSE_MULTI_CAMERA_LIMIT_RAY_AGE_SECONDS])
-        self._marker_target_map = dict()
+        self._landmark_target_map = dict()
 
-        self._poses_by_target_id = dict()
+        self._poses_by_target_label = dict()
         self._poses_by_detector_label = dict()
 
     def add_detector_frame(
@@ -83,34 +83,31 @@ class PoseSolver:
         detector_label: str,
         detector_frame: DetectorFrame
     ) -> None:
-        detector_frame_record: DetectorFrameRecord = DetectorFrameRecord(
-            detector_label=detector_label,
-            frame=detector_frame)
         if detector_label not in self._detector_records_by_detector_label:
             self._detector_records_by_detector_label[detector_label] = DetectorRecord()
         self._detector_records_by_detector_label[detector_label].clear_frame_records()
-        self._detector_records_by_detector_label[detector_label].add_frame_record(detector_frame_record)
+        self._detector_records_by_detector_label[detector_label].add_frame_record(detector_frame)
         self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def add_target(
         self,
-        target: TargetBase
+        target: Target
     ) -> None:
         for existing_target in self._targets:
             if target.label == existing_target.label:
                 raise PoseSolverException(
                     f"Target with name {target.label} is already registered. "
                     f"Please use a different name, and also make sure you are not adding the same target twice.")
-        marker_ids = target.get_marker_ids()
-        for marker_id in marker_ids:
-            if marker_id in self._marker_target_map:
-                target_id: str = self._marker_target_map[marker_id].label
+        landmark_labels: list[str] = [landmark.feature_label for landmark in target.landmarks]
+        for landmark_label in landmark_labels:
+            if landmark_label in self._landmark_target_map:
+                target_id: str = self._landmark_target_map[landmark_label].label
                 raise PoseSolverException(
-                    f"Marker {marker_id} is already used with target {target_id} and it cannot be reused.")
+                    f"Landmark {landmark_label} is already used with target {target_id} and it cannot be reused.")
         target_index = len(self._targets)
         self._targets.append(target)
-        for marker_id in marker_ids:
-            self._marker_target_map[marker_id] = self._targets[target_index]
+        for landmark_label in landmark_labels:
+            self._landmark_target_map[landmark_label] = self._targets[target_index]
         self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def clear_extrinsic_matrices(self):
@@ -123,7 +120,7 @@ class PoseSolver:
 
     def clear_targets(self):
         self._targets.clear()
-        self._marker_target_map.clear()
+        self._landmark_target_map.clear()
         self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def get_poses(
@@ -143,10 +140,10 @@ class PoseSolver:
                 target_id=str(target_id),
                 object_to_reference_matrix=pose,
                 solver_timestamp_utc_iso8601=self._last_updated_timestamp_utc.isoformat())
-            for target_id, pose in self._poses_by_target_id.items()]
+            for target_id, pose in self._poses_by_target_label.items()]
         return detector_poses, target_poses
 
-    def list_targets(self) -> list[TargetBase]:
+    def list_targets(self) -> list[Target]:
         return self._targets
 
     def set_extrinsic_matrix(
@@ -181,10 +178,10 @@ class PoseSolver:
 
     def set_targets(
         self,
-        targets: list[TargetBase]
+        targets: list[Target]
     ) -> None:
         self._targets = targets
-        self._poses_by_target_id.clear()
+        self._poses_by_target_label.clear()
         self._poses_by_detector_label.clear()
         self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
@@ -225,7 +222,7 @@ class PoseSolver:
         for point_index, image_point in enumerate(ray_set.image_points):
             reprojection_error_for_point = \
                 numpy.linalg.norm(projected_points[point_index, 0, 0:2] - image_point)
-            sum_reprojection_errors_squared += reprojection_error_for_point ** 2
+            sum_reprojection_errors_squared += float(reprojection_error_for_point) ** 2
         mean_reprojection_errors_squared: float = sum_reprojection_errors_squared / len(object_points_target)
         rms_reprojection_error = numpy.sqrt(mean_reprojection_errors_squared)
         return rms_reprojection_error
@@ -321,142 +318,139 @@ class PoseSolver:
 
         self._last_updated_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
         self._poses_by_detector_label.clear()
-        self._poses_by_target_id.clear()
+        self._poses_by_target_label.clear()
 
-        corners: dict[str, dict[str, list[list[float]]]]  # [detector_label][marker_id][point_index][x/y]
-        corners = {
-            detector_label: detector_record.get_corners()
+        annotation_list_by_detector_label: dict[str, list[Annotation]]
+        annotation_list_by_detector_label = {
+            detector_label: detector_record.get_annotations(deep_copy=True)
             for detector_label, detector_record in self._detector_records_by_detector_label.items()}
         detector_labels: list[str] = list(self._detector_records_by_detector_label.keys())
 
         for detector_label in detector_labels:
             if detector_label not in self._intrinsics_by_detector_label:
                 # TODO: Output a suitable warning that no intrinsics have been received, but don't do it every frame
-                del corners[detector_label]
+                del annotation_list_by_detector_label[detector_label]
 
-        reference_target: TargetBase = self._targets[0]
+        reference_target: Target = self._targets[0]
         for detector_label in detector_labels:
             if detector_label in self._extrinsics_by_detector_label:
                 self._poses_by_detector_label[detector_label] = self._extrinsics_by_detector_label[detector_label]
             else:
                 intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
                 reference_to_detector: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
+                    annotations=annotation_list_by_detector_label[detector_label],
                     target=reference_target,
-                    corners_by_marker_id=corners[detector_label],
                     detector_intrinsics=intrinsics)
                 detector_to_reference: Matrix4x4 = Matrix4x4.from_numpy_array(
                     numpy.linalg.inv(reference_to_detector.as_numpy_array()))
                 self._poses_by_detector_label[detector_label] = detector_to_reference
 
-        # At the time of writing, each marker_id can be used only once.
-        # So we can remove marker_ids used by the reference_target to avoid unnecessary processing.
+        # At the time of writing, each feature label can be used only by one target.
+        # So we can remove annotations whose feature labels match those of the reference_target
+        # to avoid unnecessary processing.
+        reference_feature_labels: set[str] = set([landmark.feature_label for landmark in reference_target.landmarks])
         for detector_label in detector_labels:
-            for marker_id in reference_target.get_marker_ids():
-                corners[detector_label].pop(marker_id)
+            indices_to_remove: list[int] = list()
+            for annotation_index, annotation in enumerate(annotation_list_by_detector_label[detector_label]):
+                if annotation.feature_label in reference_feature_labels:
+                    indices_to_remove.append(annotation_index)
+            for annotation_index in reversed(indices_to_remove):
+                annotation_list_by_detector_label[detector_label].pop(annotation_index)
 
-        rays: dict[str, list[list[Ray]]] = dict()  # indexed as [marker_id][detector_index][corner_index]
-        detector_labels_by_marker_id: dict[str, list[str]] = dict()
+        # Convert annotations to rays
+        rays_by_feature_and_detector: dict[str, dict[str, Ray]] = dict()  # indexed as [feature_label][detector_label]
         for detector_label in detector_labels:
+            annotations: list[Annotation] = annotation_list_by_detector_label[detector_label]
+            annotation_points: list[list[float]] = [[annotation.x_px, annotation.y_px] for annotation in annotations]
             detector_to_reference: Matrix4x4 = self._poses_by_detector_label[detector_label]
             intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
             ray_origin: list[float] = detector_to_reference.get_translation()
-            ray_directions_by_marker_id: dict[str, list[list[float]]]  # [marker_id][point_index][x/y/z]
-            ray_directions_by_marker_id = MathUtils.convert_detector_corners_to_vectors(
-                corners_by_marker_id=corners[detector_label],
+            ray_directions = MathUtils.convert_detector_points_to_vectors(
+                points=annotation_points,
                 detector_intrinsics=intrinsics,
                 detector_to_reference_matrix=detector_to_reference)
-            for marker_id, ray_directions in ray_directions_by_marker_id.items():
-                if marker_id not in rays:
-                    rays[marker_id] = list()
-                rays[marker_id].append([
-                    Ray(source_point=ray_origin, direction=ray_directions_by_marker_id[marker_id][corner_index])
-                    for corner_index in range(0, _CORNER_COUNT)])
-                if marker_id not in detector_labels_by_marker_id:
-                    detector_labels_by_marker_id[marker_id] = list()
-                detector_labels_by_marker_id[marker_id].append(detector_label)
+            feature_labels: list[str] = [annotation.feature_label for annotation in annotations]
+            # note: annotation_labels and ray_directions have a 1:1 correspondence by index
+            assert len(ray_directions) == len(feature_labels)
+            for feature_index, feature_label in enumerate(feature_labels):
+                if feature_label not in rays_by_feature_and_detector:
+                    rays_by_feature_and_detector[feature_label] = dict()
+                rays_by_feature_and_detector[feature_label][detector_label] = Ray(
+                    source_point=ray_origin,
+                    direction=ray_directions[feature_index])
 
-        # intersect rays to find the 3D points for each marker corner in reference coordinates
-        intersections_by_marker_id: dict[str, list[list[float]]] = dict()  # [marker_id][corner_index][x/y/z]
-        standalone_rays_marker_ids: list[str] = list()
-        for marker_id, rays_by_detector_index in rays.items():
-            ray_list_by_corner_index: list[list[Ray]] = [[
-                rays[marker_id][detector_index][corner_index]
-                for detector_index in range(0, len(rays[marker_id]))]
-                for corner_index in range(0, _CORNER_COUNT)]
-            intersections_appear_valid: bool = True  # If something looks off, set this to False
-            corners_reference_by_corner_index: list[list[float]] = list()
-            for corner_index in range(0, _CORNER_COUNT):
-                intersection_result = MathUtils.closest_intersection_between_n_lines(
-                    rays=ray_list_by_corner_index[corner_index],
-                    maximum_distance=self._parameters.INTERSECTION_MAXIMUM_DISTANCE)
-                if intersection_result.centroids.shape[0] == 0:
-                    intersections_appear_valid = False
-                    break
-                corners_reference_by_corner_index.append(list(intersection_result.centroid().flatten()))
-            if not intersections_appear_valid:
-                standalone_rays_marker_ids.append(marker_id)
-                continue
-            intersections_by_marker_id[marker_id] = corners_reference_by_corner_index
+        # intersect rays to find the 3D points for each feature, in reference coordinates
+        # If intersection is not possible, then still note that rays exist via standalone_ray_feature_labels
+        intersections_by_feature_label: dict[str, list[float]] = dict()  # [feature_label][dimension_index]
+        feature_labels_with_rays_only: list[str] = list()
+        for feature_label, rays_by_detector_label in rays_by_feature_and_detector.items():
+            intersection_result = MathUtils.closest_intersection_between_n_lines(
+                rays=list(rays_by_detector_label.values()),
+                maximum_distance=self._parameters.INTERSECTION_MAXIMUM_DISTANCE)
+            if intersection_result.centroids.shape[0] == 0:
+                feature_labels_with_rays_only.append(feature_label)
+                break
+            intersections_by_feature_label[feature_label] = list(intersection_result.centroid().flatten())
 
         # We estimate the pose of each target based on the calculated intersections
         # and the rays projected from each detector
         for target in self._targets:
             if target.label == str(reference_target.label):
-                continue  # everything is expressed relative to the reference...
-            detected_marker_ids_in_target: list[str] = target.get_marker_ids()
+                continue  # everything is expressed relative to the reference, so it's a "known" coordinate system
+            feature_labels_in_target: list[str] = [landmark.feature_label for landmark in target.landmarks]
 
-            marker_ids_with_intersections: list[str] = list()
-            marker_ids_with_rays: list[str] = list()
-            detector_labels: set[str] = set()
-            for marker_id in detected_marker_ids_in_target:
-                if marker_id in intersections_by_marker_id:
-                    marker_ids_with_intersections.append(marker_id)
-                if marker_id in standalone_rays_marker_ids:
-                    marker_ids_with_rays.append(marker_id)
-                if marker_id in detector_labels_by_marker_id:
-                    for detector_label in detector_labels_by_marker_id[marker_id]:
-                        detector_labels.add(detector_label)
+            target_feature_labels_with_intersections: list[str] = list()
+            target_feature_labels_with_rays: list[str] = list()
+            detector_labels_seeing_target: set[str] = set()
+            for target_feature_label in feature_labels_in_target:
+                if target_feature_label in intersections_by_feature_label:
+                    target_feature_labels_with_intersections.append(target_feature_label)
+                if target_feature_label in feature_labels_with_rays_only:
+                    target_feature_labels_with_rays.append(target_feature_label)
+                detector_labels_seeing_target |= set(rays_by_feature_and_detector[target_feature_label].keys())
 
-            if len(marker_ids_with_intersections) <= 0 and len(marker_ids_with_rays) <= 0:
+            if len(target_feature_labels_with_intersections) <= 0 and len(target_feature_labels_with_rays) <= 0:
                 continue  # No information on which to base a pose
 
-            if len(detector_labels) < self._parameters.minimum_detector_count:
+            detector_count_seeing_target: int = len(detector_labels_seeing_target)
+            if detector_count_seeing_target < self._parameters.minimum_detector_count or \
+               detector_count_seeing_target <= 0:
                 continue
 
-            # NB. len() == 0 or less for either of these indicates an internal error
-            one_detector_only: bool = (len(detector_labels) == 1)
+            one_detector_only: bool = (len(detector_labels_seeing_target) == 1)
             if one_detector_only:
                 # Note: there cannot be any intersections in this case
-                detector_label: str = next(iter(detector_labels))
+                detector_label: str = next(iter(detector_labels_seeing_target))
                 intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
                 detected_to_detector_matrix4x4: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
+                    annotations=annotation_list_by_detector_label[detector_label],
                     target=target,
-                    corners_by_marker_id=corners[detector_label],
                     detector_intrinsics=intrinsics)
                 detected_to_detector: numpy.ndarray = detected_to_detector_matrix4x4.as_numpy_array()
                 detector_to_reference: numpy.ndarray = self._poses_by_detector_label[detector_label].as_numpy_array()
                 detected_to_reference: numpy.ndarray = detector_to_reference @ detected_to_detector
-                self._poses_by_target_id[target.label] = Matrix4x4.from_numpy_array(detected_to_reference)
+                self._poses_by_target_label[target.label] = Matrix4x4.from_numpy_array(detected_to_reference)
             else:
                 # Fill in the required variables for the customized iterative closest point
-                detected_known_points: list[list[float]] = list(itertools.chain.from_iterable([
-                    target.get_points_for_marker_id(marker_id)
-                    for marker_id in marker_ids_with_intersections]))
-                reference_known_points: list[list[float]] = list(itertools.chain.from_iterable([
-                    intersections_by_marker_id[marker_id]
-                    for marker_id in marker_ids_with_intersections]))
-                detected_ray_points: list[list[float]] = list(itertools.chain.from_iterable([
-                    target.get_points_for_marker_id(marker_id)
-                    for marker_id in marker_ids_with_rays]))
+                detected_known_points: list[list[float]] = [
+                    target.get_landmark_point(feature_label)
+                    for feature_label in target_feature_labels_with_intersections]
+                reference_known_points: list[list[float]] = [
+                    intersections_by_feature_label[feature_label]
+                    for feature_label in target_feature_labels_with_intersections]
+                detected_ray_points: list[list[float]] = [
+                    target.get_landmark_point(feature_label)
+                    for feature_label in target_feature_labels_with_rays]
                 reference_rays: list[Ray] = list(itertools.chain.from_iterable([
-                    rays[marker_id] for marker_id in marker_ids_with_rays]))
+                    list(rays_by_feature_and_detector[feature_label].values())
+                    for feature_label in target_feature_labels_with_rays]))
                 iterative_closest_point_parameters = IterativeClosestPointParameters(
                     termination_iteration_count=self._parameters.icp_termination_iteration_count,
                     termination_delta_translation=self._parameters.icp_termination_translation,
                     termination_delta_rotation_radians=self._parameters.icp_termination_rotation_radians,
                     termination_mean_point_distance=self._parameters.icp_termination_mean_point_distance,
                     termination_rms_point_distance=self._parameters.icp_termination_rms_point_distance)
-                if len(marker_ids_with_intersections) >= 1:
+                if len(target_feature_labels_with_intersections) >= 1:
                     initial_detected_to_reference_matrix = MathUtils.register_corresponding_points(
                         point_set_from=detected_known_points,
                         point_set_to=reference_known_points,
@@ -475,4 +469,4 @@ class PoseSolver:
                         source_ray_points=detected_ray_points,
                         target_rays=reference_rays,
                         parameters=iterative_closest_point_parameters)
-                self._poses_by_target_id[target.label] = icp_output.source_to_target_matrix
+                self._poses_by_target_label[target.label] = icp_output.source_to_target_matrix

@@ -5,14 +5,13 @@ from src.board_builder.structures import \
     PoseLocation
 from src.common import MathUtils
 from src.common.structures import \
-    CharucoBoardSpecification, \
     IntrinsicParameters, \
     IterativeClosestPointParameters, \
     Matrix4x4, \
     Pose, \
-    Ray, \
-    TargetBase, \
-    TargetMarker
+    Ray
+from src.board_builder.structures import TargetBase, TargetMarker
+from src.implementations.common_aruco_opencv import ArucoOpenCVCommon
 from src.pose_solver.structures import PoseSolverParameters
 import cv2
 import cv2.aruco
@@ -192,7 +191,7 @@ class BoardBuilderPoseSolver:
             self._parameters.POSE_SINGLE_CAMERA_DEPTH_LIMIT_AGE_SECONDS,
             self._parameters.POSE_MULTI_CAMERA_LIMIT_RAY_AGE_SECONDS])
 
-        self._charuco_board = CharucoBoardSpecification()
+        self._charuco_board = ArucoOpenCVCommon.CharucoBoard()
         self._board_marker_ids = self._charuco_board.get_marker_ids()
         self._board_marker_positions = self._charuco_board.get_marker_center_points()
         self._board_marker_size = 10
@@ -567,7 +566,7 @@ class BoardBuilderPoseSolver:
                     intersections_appear_valid = False
                     break
                 else:
-                    corner_points_in_reference.append(intersection_result.centroid())
+                    corner_points_in_reference.append(intersection_result.centroid().tolist())
             if not intersections_appear_valid:
                 rejected_intersection_marker_ids.append(marker_id)
                 continue
@@ -725,7 +724,7 @@ class BoardBuilderPoseSolver:
                 detector_position_reference = detector_to_reference_matrix.as_numpy_array()[0:3, 3]
                 target_position_reference = object_to_reference_matrix[0:3, 3]
                 depth_vector_reference = target_position_reference - detector_position_reference
-                old_depth = numpy.linalg.norm(depth_vector_reference)
+                old_depth = float(numpy.linalg.norm(depth_vector_reference))
                 target_depth_key = TargetDepthKey(target_id=target_id, detector_label=detector_label)
                 new_depth = float(numpy.average(
                     [target_depth.depth for target_depth in

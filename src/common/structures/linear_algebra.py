@@ -1,6 +1,6 @@
 import numpy
 from pydantic import BaseModel, Field
-from typing import Final
+from typing import ClassVar, Final
 
 
 _DEFAULT_EPSILON: Final[float] = 0.0001
@@ -22,14 +22,30 @@ class IterativeClosestPointParameters(BaseModel):
 
 
 class Landmark(BaseModel):
+
+    # These can denote that multiple landmarks are related if they share the same
+    # "base label" (the part before the first and only occurrence of this character).
+    RELATION_CHARACTER: ClassVar[str] = "$"
+
     """
     A distinct point in 3D space.
     Coordinates are in the unit of the user's choosing.
     """
-    label: str = Field()
+    feature_label: str = Field()
     x: float = Field()
     y: float = Field()
     z: float = Field()
+
+    def as_float_list(self) -> list[float]:
+        return [self.x, self.y, self.z]
+
+    def base_feature_label(self) -> str:
+        """
+        Part of the label before the RELATION_CHARACTER.
+        """
+        if self.RELATION_CHARACTER not in self.feature_label:
+            return self.feature_label
+        return self.feature_label[0:self.feature_label.index(self.RELATION_CHARACTER)]
 
 
 class Matrix4x4(BaseModel):
@@ -134,4 +150,14 @@ class Target(BaseModel):
     """
     A trackable object.
     """
+    label: str
     landmarks: list[Landmark]
+
+    def get_landmark_point(
+        self,
+        feature_label: str
+    ) -> list[float]:
+        for landmark in self.landmarks:
+            if landmark.feature_label == feature_label:
+                return landmark.as_float_list()
+        raise ValueError

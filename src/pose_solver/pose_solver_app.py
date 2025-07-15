@@ -1,6 +1,6 @@
 from .api import \
     PoseSolverAddDetectorFrameRequest, \
-    PoseSolverAddTargetMarkerRequest, \
+    PoseSolverAddTargetRequest, \
     PoseSolverGetPosesResponse, \
     PoseSolverSetIntrinsicRequest
 from .pose_solver import \
@@ -55,7 +55,7 @@ def create_app() -> FastAPI:
 
     @pose_solver_app.post("/add_target")
     async def add_target_marker(
-        request: PoseSolverAddTargetMarkerRequest
+        request: PoseSolverAddTargetRequest
     ) -> EmptyResponse | ErrorResponse:
         return pose_solver_api.add_target(request=request)
 

@@ -5,7 +5,7 @@ from src.gui.panels import \
     ControllerPanel, \
     DetectorPanel, \
     PoseSolverPanel
-from src.common import StatusMessageSource
+from src.common import SeverityLabel, StatusMessageSource
 from src.controller import MCTController
 import logging
 import wx
@@ -136,7 +136,7 @@ class ControllerFrame(wx.Frame):
             self._controller.update()
         except Exception as e:
             self._controller.add_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=f"Exception occurred in controller loop: {str(e)}")
 
 

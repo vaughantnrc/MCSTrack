@@ -100,7 +100,7 @@ def generate_data(board_coordinates, detector_poses, remove_markers_out_of_frame
                 for corner_index, marker_corner in enumerate(marker_corners):
                     corner_label: str = f"{str(marker)}_{corner_index}"
                     marker_snapshot_list.append(Annotation(
-                        label=corner_label,
+                        feature_label=corner_label,
                         x_px=marker_corner[0],
                         y_px=marker_corner[1]))
 

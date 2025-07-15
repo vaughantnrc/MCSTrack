@@ -18,7 +18,7 @@ from src.common.structures import \
     MCTDeserializable, \
     Pose, \
     PoseSolverFrame, \
-    TargetBase
+    Target
 from src.detector.api import \
     CalibrationCalculateResponse, \
     CalibrationImageAddResponse, \
@@ -67,17 +67,17 @@ class Connection(abc.ABC):
 
     class State(StrEnum):
         # This is the normal progression cycle ending back in "Inactive"
-        INACTIVE: Final[str] = "Inactive"
-        CONNECTING: Final[str] = "Connecting"
-        INITIALIZING: Final[str] = "Initializing"
-        RUNNING: Final[str] = "Running"
-        RECONNECTING: Final[str] = "Reconnecting"  # Only if connection gets lost
-        NORMAL_DEINITIALIZING: Final[str] = "Deinitializing"   # normal means not in a failure state
-        NORMAL_DISCONNECTING: Final[str] = "Disconnecting"
+        INACTIVE = "Inactive"
+        CONNECTING = "Connecting"
+        INITIALIZING = "Initializing"
+        RUNNING = "Running"
+        RECONNECTING = "Reconnecting"  # Only if connection gets lost
+        NORMAL_DEINITIALIZING = "Deinitializing"   # normal means not in a failure state
+        NORMAL_DISCONNECTING = "Disconnecting"
         # States below indicate abnormal/failed states
-        FAILURE: Final[str] = "Failure"
-        FAILURE_DISCONNECTING: Final[str] = "Failure - Disconnecting"
-        FAILURE_DEINITIALIZING: Final[str] = "Failure - Deinitializing"
+        FAILURE = "Failure"
+        FAILURE_DISCONNECTING = "Failure - Disconnecting"
+        FAILURE_DEINITIALIZING = "Failure - Deinitializing"
 
     class ComponentAddress:
         """
@@ -110,25 +110,25 @@ class Connection(abc.ABC):
             self.error_message = error_message
 
     class DeinitializationResult(StrEnum):
-        IN_PROGRESS: Final[str] = "In Progress"
-        SUCCESS: Final[str] = "Success"
-        FAILURE: Final[str] = "Failure"
+        IN_PROGRESS = "In Progress"
+        SUCCESS = "Success"
+        FAILURE = "Failure"
 
     class InitializationResult(StrEnum):
-        IN_PROGRESS: Final[str] = "In Progress"
-        SUCCESS: Final[str] = "Success"
-        FAILURE: Final[str] = "Failure"
+        IN_PROGRESS = "In Progress"
+        SUCCESS = "Success"
+        FAILURE = "Failure"
 
     class SendRecvResult(StrEnum):
-        NORMAL: Final[str] = "Normal"
-        FAILURE: Final[str] = "Failure"
+        NORMAL = "Normal"
+        FAILURE = "Failure"
 
     class PopResponseSeriesResult:
         class Status(StrEnum):
-            QUEUED: Final[str] = "Exists"
-            IN_PROGRESS: Final[str] = "In Progress"
-            RESPONDED: Final[str] = "Responded"
-            UNTRACKED: Final[str] = "Untracked"  # this suggests an error has occurred
+            QUEUED = "Exists"
+            IN_PROGRESS = "In Progress"
+            RESPONDED = "Responded"
+            UNTRACKED = "Untracked"  # this suggests an error has occurred
         status: Status
         response_series: MCTResponseSeries | None
 
@@ -347,7 +347,7 @@ class Connection(abc.ABC):
             except ConnectionClosed as e:
                 self._state = Connection.State.FAILURE
                 self.enqueue_status_message(
-                    severity="error",
+                    severity=SeverityLabel.ERROR,
                     message=f"Connection is closed for {self._component_address.label}. Cannot send. {str(e)}")
                 return Connection.SendRecvResult.FAILURE
 
@@ -364,7 +364,7 @@ class Connection(abc.ABC):
             except ConnectionClosed as e:
                 self._state = Connection.State.FAILURE
                 self.enqueue_status_message(
-                    severity="error",
+                    severity=SeverityLabel.ERROR,
                     message=f"Connection is closed for {self._component_address.label}. Cannot receive. {str(e)}")
                 return Connection.SendRecvResult.FAILURE
 
@@ -452,7 +452,7 @@ class Connection(abc.ABC):
             request_series_id=self._deinit_request_id)
         if response_result.status == Connection.PopResponseSeriesResult.Status.UNTRACKED:
             self.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=f"The current request ID is not recognized.")
             self._deinit_request_id = None
             return Connection.DeinitializationResult.FAILURE
@@ -476,7 +476,7 @@ class Connection(abc.ABC):
             request_series_id=self._init_request_id)
         if response_result.status == Connection.PopResponseSeriesResult.Status.UNTRACKED:
             self.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=f"The current request ID is not recognized.")
             self._init_request_id = None
             return Connection.InitializationResult.FAILURE
@@ -494,20 +494,26 @@ class Connection(abc.ABC):
             connection_result: Connection.ConnectionResult = self._try_connect()
             if connection_result.success:
                 message = f"Connection successful."
-                self.enqueue_status_message(severity="info", message=message)
+                self.enqueue_status_message(
+                    severity=SeverityLabel.INFO,
+                    message=message)
                 self._state = Connection.State.INITIALIZING
             else:
                 if self._attempt_count >= _ATTEMPT_COUNT_MAXIMUM:
                     message = \
                         f"Failed to connect, received error: {str(connection_result.error_message)}. "\
                         f"Connection is being aborted after {self._attempt_count} attempts."
-                    self.enqueue_status_message(severity="error", message=message)
+                    self.enqueue_status_message(
+                        severity=SeverityLabel.ERROR,
+                        message=message)
                     self._state = Connection.State.FAILURE
                 else:
                     message: str = \
                         f"Failed to connect, received error: {str(connection_result.error_message)}. "\
                         f"Will retry in {_ATTEMPT_TIME_GAP_SECONDS} seconds."
-                    self.enqueue_status_message(severity="warning", message=message)
+                    self.enqueue_status_message(
+                        severity=SeverityLabel.WARNING,
+                        message=message)
                     self._next_attempt_timestamp_utc = now_utc + datetime.timedelta(
                         seconds=_ATTEMPT_TIME_GAP_SECONDS)
 
@@ -550,13 +556,17 @@ class Connection(abc.ABC):
             connection_result: Connection.ConnectionResult = self._try_connect()
             if connection_result.success:
                 message = f"Reconnection successful."
-                self.enqueue_status_message(severity="info", message=message)
+                self.enqueue_status_message(
+                    severity=SeverityLabel.INFO,
+                    message=message)
                 self._state = Connection.State.RUNNING
             else:
                 message: str = \
                     f"Failed to reconnect, received error: {str(connection_result.error_message)}. "\
                     f"Will retry in {_ATTEMPT_TIME_GAP_SECONDS} seconds."
-                self.enqueue_status_message(severity="warning", message=message)
+                self.enqueue_status_message(
+                    severity=SeverityLabel.WARNING,
+                    message=message)
                 self._next_attempt_timestamp_utc = now_utc + datetime.timedelta(
                     seconds=_ATTEMPT_TIME_GAP_SECONDS)
 
@@ -611,11 +621,11 @@ class DetectorConnection(Connection):
         response_count: int = len(response_series.series)
         if response_count != 1:
             self.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"Expected exactly one response to deinitialization requests. Got {response_count}.")
         elif not isinstance(response_series.series[0], (EmptyResponse, CameraParametersSetResponse)):
             self.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"The deinitialization response was not of the expected type EmptyResponse.")
         return Connection.DeinitializationResult.SUCCESS
 
@@ -626,11 +636,11 @@ class DetectorConnection(Connection):
         response_count: int = len(response_series.series)
         if response_count != 1:
             self.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"Expected exactly one response to initialization requests. Got {response_count}.")
         elif not isinstance(response_series.series[0], EmptyResponse):
             self.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"The initialization response was not of the expected type EmptyResponse.")
         return Connection.InitializationResult.SUCCESS
 
@@ -657,7 +667,7 @@ class PoseSolverConnection(Connection):
     # These are variables used directly by the MCTController for storing data
 
     configured_solver_parameters: list[KeyValueSimpleAny] | None
-    configured_targets: list[TargetBase] | None
+    configured_targets: list[Target] | None
 
     request_id: uuid.UUID | None
     detector_poses: list[Pose]
@@ -698,11 +708,11 @@ class PoseSolverConnection(Connection):
         response_count: int = len(response_series.series)
         if response_count != 1:
             self.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"Expected exactly one response to deinitialization requests. Got {response_count}.")
         elif not isinstance(response_series.series[0], EmptyResponse):
             self.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"The deinitialization response was not of the expected type EmptyResponse.")
         return Connection.DeinitializationResult.SUCCESS
 
@@ -713,11 +723,11 @@ class PoseSolverConnection(Connection):
         response_count: int = len(response_series.series)
         if response_count != 1:
             self.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"Expected exactly one response to initialization requests. Got {response_count}.")
         elif not isinstance(response_series.series[0], EmptyResponse):
             self.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"The initialization response was not of the expected type EmptyResponse.")
         return Connection.InitializationResult.SUCCESS
 

@@ -15,6 +15,7 @@ from src.common import \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
+    SeverityLabel, \
     StatusMessageSource, \
     TimestampGetRequest, \
     TimestampGetResponse, \
@@ -65,18 +66,18 @@ _TIME_SYNC_SAMPLE_MAXIMUM_COUNT: Final[int] = 5
 class MCTController(MCTComponent):
 
     class Status(StrEnum):
-        STOPPED: Final[int] = "Idle"
-        STARTING: Final[int] = "Starting"
-        RUNNING: Final[int] = "Running"
-        STOPPING: Final[int] = "Stopping"
+        STOPPED = "Idle"
+        STARTING = "Starting"
+        RUNNING = "Running"
+        STOPPING = "Stopping"
 
     class StartupState(IntEnum):
-        INITIAL: Final[int] = 0
-        CONNECTING: Final[int] = 1
-        TIME_SYNC_START: Final[int] = 2
-        TIME_SYNC_STOP: Final[int] = 3
-        GET_INTRINSICS: Final[int] = 4
-        SET_INTRINSICS: Final[int] = 5
+        INITIAL = 0
+        CONNECTING = 1
+        TIME_SYNC_START = 2
+        TIME_SYNC_STOP = 3
+        GET_INTRINSICS = 4
+        SET_INTRINSICS = 5
 
     _status_message_source: StatusMessageSource
     _status: Status
@@ -115,13 +116,13 @@ class MCTController(MCTComponent):
                 IPv4Address(connection.ip_address)
             except ValueError:
                 self.add_status_message(
-                    severity="error",
+                    severity=SeverityLabel.ERROR,
                     message=f"Connection {connection.label} has invalid IP address {connection.ip_address}. "
                             "It will be skipped.")
                 return False
             if connection.port < 0 or connection.port > 65535:
                 self.add_status_message(
-                    severity="error",
+                    severity=SeverityLabel.ERROR,
                     message=f"Connection {connection.label} has invalid port {connection.port}. "
                             "It will be skipped.")
                 return False
@@ -133,7 +134,7 @@ class MCTController(MCTComponent):
             component_address: Connection.ComponentAddress = Connection.ComponentAddress(
                 label=detector.label,
                 role="detector",
-                ip_address=detector.ip_address,
+                ip_address=IPv4Address(detector.ip_address),
                 port=detector.port)
             detector_connection: DetectorConnection = self.add_connection(component_address=component_address)
             if detector.fixed_transform_to_reference is not None:
@@ -148,7 +149,7 @@ class MCTController(MCTComponent):
             component_address: Connection.ComponentAddress = Connection.ComponentAddress(
                 label=pose_solver.label,
                 role="pose_solver",
-                ip_address=pose_solver.ip_address,
+                ip_address=IPv4Address(pose_solver.ip_address),
                 port=pose_solver.port)
             pose_solver_connection: PoseSolverConnection = self.add_connection(component_address=component_address)
             if pose_solver.solver_parameters is not None:
@@ -177,7 +178,7 @@ class MCTController(MCTComponent):
     def _advance_startup_state(self) -> None:
         if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.CONNECTING:
             self.status_message_source.enqueue_status_message(
-                severity="debug",
+                severity=SeverityLabel.DEBUG,
                 message="CONNECTING complete")
             component_labels: list[str] = self.get_component_labels(active=True)
             request_series: MCTRequestSeries = MCTRequestSeries(series=[TimeSyncStartRequest()])
@@ -194,7 +195,7 @@ class MCTController(MCTComponent):
             self._startup_state = MCTController.StartupState.TIME_SYNC_START
         if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.TIME_SYNC_START:
             self.status_message_source.enqueue_status_message(
-                severity="debug",
+                severity=SeverityLabel.DEBUG,
                 message="TIME_SYNC complete")
             component_labels: list[str] = self.get_component_labels(active=True)
             request_series: MCTRequestSeries = MCTRequestSeries(series=[
@@ -215,7 +216,7 @@ class MCTController(MCTComponent):
                 self._startup_state = MCTController.StartupState.TIME_SYNC_STOP
         if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.TIME_SYNC_STOP:
             self.status_message_source.enqueue_status_message(
-                severity="debug",
+                severity=SeverityLabel.DEBUG,
                 message="STARTING_CAPTURE complete")
             detector_labels: list[str] = self.get_active_detector_labels()
             for detector_label in detector_labels:
@@ -229,7 +230,7 @@ class MCTController(MCTComponent):
             self._startup_state = MCTController.StartupState.GET_INTRINSICS
         if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.GET_INTRINSICS:
             self.status_message_source.enqueue_status_message(
-                severity="debug",
+                severity=SeverityLabel.DEBUG,
                 message="GET_INTRINSICS complete")
             if self._startup_mode == StartupMode.DETECTING_ONLY:
                 self._startup_state = MCTController.StartupState.INITIAL
@@ -244,7 +245,7 @@ class MCTController(MCTComponent):
                             connection_type=DetectorConnection)
                         if detector_connection is None:
                             self.status_message_source.enqueue_status_message(
-                                severity="error",
+                                severity=SeverityLabel.ERROR,
                                 message=f"Failed to find DetectorConnection with label {detector_label}.")
                             continue
                         if detector_connection.current_intrinsic_parameters is not None:
@@ -262,7 +263,7 @@ class MCTController(MCTComponent):
                 self._startup_state = MCTController.StartupState.SET_INTRINSICS
         if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.SET_INTRINSICS:
             self.status_message_source.enqueue_status_message(
-                severity="debug",
+                severity=SeverityLabel.DEBUG,
                 message="SET_INTRINSICS complete")
             self._startup_state = MCTController.StartupState.INITIAL
             self._status = MCTController.Status.RUNNING
@@ -378,7 +379,7 @@ class MCTController(MCTComponent):
         response: ErrorResponse
     ):
         self.status_message_source.enqueue_status_message(
-            severity="error",
+            severity=SeverityLabel.ERROR,
             message=f"Received error: {response.message}")
 
     def handle_response_calibration_result_get_active(
@@ -391,17 +392,17 @@ class MCTController(MCTComponent):
             connection_type=DetectorConnection)
         if detector_connection is None:
             self.status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
         if response.intrinsic_calibration is None:
             if detector_connection.current_resolution is None:
                 self.status_message_source.enqueue_status_message(
-                    severity="error",
+                    severity=SeverityLabel.ERROR,
                     message=f"No calibration was found for detector {detector_label}, and failed to get resolution.")
                 return
             self.status_message_source.enqueue_status_message(
-                severity="warning",
+                severity=SeverityLabel.WARNING,
                 message=f"No calibration was found for detector {detector_label}. "
                         f"Zero parameters for active resolution {detector_connection.current_resolution} will be used.")
             detector_connection.current_intrinsic_parameters = IntrinsicParameters.generate_zero_parameters(
@@ -420,7 +421,7 @@ class MCTController(MCTComponent):
             connection_type=DetectorConnection)
         if detector_connection is None:
             self.status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
         detector_connection.current_resolution = response.resolution
@@ -435,7 +436,7 @@ class MCTController(MCTComponent):
             connection_type=DetectorConnection)
         if detector_connection is None:
             self.status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=f"Failed to find DetectorConnection with label {detector_label}.")
             return
         frame: DetectorFrame = response.frame
@@ -454,7 +455,7 @@ class MCTController(MCTComponent):
             connection_type=PoseSolverConnection)
         if pose_solver_connection is None:
             self.status_message_source.enqueue_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=f"Failed to find PoseSolverConnection with label {pose_solver_label}.")
             return
         pose_solver_connection.detector_poses = response.detector_poses
@@ -481,11 +482,11 @@ class MCTController(MCTComponent):
         network_plus_offset_seconds: float = (responder_timestamp - requester_timestamp).total_seconds()
         connection.network_plus_offset_samples_seconds.append(network_plus_offset_seconds)
         if self._time_sync_sample_count >= _TIME_SYNC_SAMPLE_MAXIMUM_COUNT:
-            connection.network_latency_seconds = numpy.median(connection.network_latency_samples_seconds)
+            connection.network_latency_seconds = float(numpy.median(connection.network_latency_samples_seconds))
             connection.controller_offset_samples_seconds = [
                 network_plus_offset_sample_seconds - (connection.network_latency_seconds / 2.0)
                 for network_plus_offset_sample_seconds in connection.network_plus_offset_samples_seconds]
-            connection.controller_offset_seconds = numpy.median(connection.controller_offset_samples_seconds)
+            connection.controller_offset_seconds = float(numpy.median(connection.controller_offset_samples_seconds))
             print(f"Calculated offset to {connection.get_label()}: {connection.controller_offset_seconds}")
 
     def handle_response_unknown(
@@ -493,7 +494,7 @@ class MCTController(MCTComponent):
         response: MCTResponse
     ):
         self.status_message_source.enqueue_status_message(
-            severity="error",
+            severity=SeverityLabel.ERROR,
             message=f"Received unexpected response: {str(type(response))}")
 
     def handle_response_series(
@@ -509,13 +510,13 @@ class MCTController(MCTComponent):
                 task_text = f" during {task_description}"
             if response_count < expected_response_count:
                 self.status_message_source.enqueue_status_message(
-                    severity="warning",
+                    severity=SeverityLabel.WARNING,
                     message=f"Received a response series{task_text}, "
                             f"but it contained fewer responses ({response_count}) "
                             f"than expected ({expected_response_count}).")
             elif response_count > expected_response_count:
                 self.status_message_source.enqueue_status_message(
-                    severity="warning",
+                    severity=SeverityLabel.WARNING,
                     message=f"Received a response series{task_text}, "
                             f"but it contained more responses ({response_count}) "
                             f"than expected ({expected_response_count}).")
@@ -573,7 +574,7 @@ class MCTController(MCTComponent):
             self._recording_save_path = save_path
         else:
             self.add_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=f"Recording save path not defined")
 
     def recording_stop(self):
@@ -751,7 +752,7 @@ class MCTController(MCTComponent):
                     connection_type=DetectorConnection)
                 if detector_connection is None:
                     self.status_message_source.enqueue_status_message(
-                        severity="error",
+                        severity=SeverityLabel.ERROR,
                         message=f"Failed to find DetectorConnection with label {detector_label}.")
                     continue
                 if detector_connection.request_id is not None:
@@ -767,7 +768,7 @@ class MCTController(MCTComponent):
                     connection_type=PoseSolverConnection)
                 if pose_solver_connection is None:
                     self.status_message_source.enqueue_status_message(
-                        severity="error",
+                        severity=SeverityLabel.ERROR,
                         message=f"Failed to find PoseSolverConnection with label {pose_solver_label}.")
                     continue
                 if pose_solver_connection.request_id is not None:

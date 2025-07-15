@@ -1,16 +1,14 @@
 from src.common.structures import \
     KeyValueSimpleAny, \
     Matrix4x4, \
-    TargetBoard, \
-    TargetMarker
+    Target
 from enum import StrEnum
 from pydantic import BaseModel, Field, SerializeAsAny
-from typing import Final, Union
 
 
 class StartupMode(StrEnum):
-    DETECTING_ONLY: Final[str] = "detecting_only"
-    DETECTING_AND_SOLVING: Final[str] = "detecting_and_solving"
+    DETECTING_ONLY = "detecting_only"
+    DETECTING_AND_SOLVING = "detecting_and_solving"
 
 
 class MCTComponentConfig(BaseModel):
@@ -27,7 +25,7 @@ class DetectorComponentConfig(MCTComponentConfig):
 
 class PoseSolverConfig(MCTComponentConfig):
     solver_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
-    targets: list[Union[TargetBoard, TargetMarker]] | None = Field(default=None)
+    targets: list[Target] | None = Field(default=None)
 
 
 class MCTConfiguration(BaseModel):

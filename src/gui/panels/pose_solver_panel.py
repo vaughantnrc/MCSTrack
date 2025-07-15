@@ -11,6 +11,7 @@ from src.common import \
     EmptyResponse, \
     MCTResponse, \
     MCTResponseSeries, \
+    SeverityLabel, \
     StatusMessageSource
 from src.common.structures import \
     DetectorFrame, \
@@ -184,7 +185,7 @@ class PoseSolverPanel(BasePanel):
                 self._tracking_display_textbox.SetValue(display_text)
             else:
                 self.status_message_source.enqueue_status_message(
-                    severity="error",
+                    severity=SeverityLabel.ERROR,
                     message=f"Target index {selected_index} is out of bounds. Selection will be set to None.")
                 self._tracking_table.set_selected_row_index(None)
         self._update_ui_controls()
@@ -296,7 +297,7 @@ class PoseSolverPanel(BasePanel):
             if tracked_target_index is not None:
                 if tracked_target_index >= len(self._tracked_target_poses):
                     self.status_message_source.enqueue_status_message(
-                        severity="warning",
+                        severity=SeverityLabel.WARNING,
                         message=f"Selected tracked target index {tracked_target_index} is out of bounds. "
                                 "Setting to None.")
                     self._tracking_table.set_selected_row_index(None)

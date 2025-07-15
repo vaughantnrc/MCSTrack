@@ -77,7 +77,7 @@ class MCTComponent(abc.ABC):
                 supported_types=supported_types)
         except MCTSerializationError as e:
             self.add_status_message(
-                severity="error",
+                severity=SeverityLabel.ERROR,
                 message=e.message)
             raise e
 
@@ -206,12 +206,16 @@ class MCTComponent(abc.ABC):
                 else:
                     message: str = f"Received unimplemented parsable_type: {request.parsable_type}."
                     logger.error(message)
-                    self.add_status_message(severity="error", message=message)
+                    self.add_status_message(
+                        severity=SeverityLabel.ERROR,
+                        message=message)
                     response_series.append(ErrorResponse(message=message))
             except Exception as e:
                 message: str = f"Internal error. Failed to process request series."
                 logger.error(message + " " + str(e))
-                self.add_status_message(severity="error", message=message)
+                self.add_status_message(
+                    severity=SeverityLabel.ERROR,
+                    message=message)
                 response_series.append(ErrorResponse(message=message))
         return MCTResponseSeries(
             series=response_series)

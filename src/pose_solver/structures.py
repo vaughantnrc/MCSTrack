@@ -6,79 +6,47 @@ import datetime
 from pydantic import BaseModel, Field
 
 
-class DetectorFrameRecord:
-    _detector_label: str
-    _frame: DetectorFrame
-    _timestamp_utc: datetime.datetime | None
-    _corners_by_marker_id: dict[str, list[list[float]]] | None
-
-    def __init__(
-        self,
-        detector_label: str,
-        frame: DetectorFrame
-    ):
-        self._detector_label = detector_label
-        self._frame = frame
-        self._timestamp_utc = None  # calculated when needed
-        self._corners_by_marker_id = None
-
-    def _init_corners_by_marker_id(self):
-        self._corners_by_marker_id = dict()
-        annotations: list[Annotation] = self._frame.annotations_identified
-        for annotation in annotations:
-            base_label: str = annotation.base_label()
-            if base_label in self._corners_by_marker_id.keys():
-                continue
-            self._corners_by_marker_id[base_label] = [
-                [annotation.x_px, annotation.y_px]
-                for annotation in annotations
-                if annotation.base_label() == base_label]
-
-    def get_detector_label(self) -> str:
-        return self._detector_label
-
-    def get_frame(self) -> DetectorFrame:
-        return self._frame
-
-    def get_marker_corners_by_marker_id(
-        self,
-        marker_id: str
-    ) -> list[list[float]] | None:
-        if self._corners_by_marker_id is None:
-            self._init_corners_by_marker_id()
-        if marker_id in list(self._corners_by_marker_id.keys()):
-            return self._corners_by_marker_id[marker_id]
-        return None
-
-    def get_marker_ids_detected(self) -> list[str]:
-        if self._corners_by_marker_id is None:
-            self._init_corners_by_marker_id()
-        return list(self._corners_by_marker_id.keys())
-
-    def get_timestamp_utc(self):
-        if self._timestamp_utc is None:
-            self._timestamp_utc = self._frame.timestamp_utc
-        return self._timestamp_utc
-
-
 class DetectorRecord:
-    _frame_records_by_marker_id: dict[str, DetectorFrameRecord] = Field(default_factory=dict)
+    """
+    Class whose purpose is to keep track of the latest position of each landmark (in annotation form)
+    for a single detector.
+    """
+
+    class TimestampedAnnotation:
+        annotation: Annotation
+        timestamp_utc: datetime.datetime
+        def __init__(
+            self,
+            annotation: Annotation,
+            timestamp_utc: datetime.datetime
+        ):
+            self.annotation = annotation
+            self.timestamp_utc = timestamp_utc
+
+    _timestamped_annotations: dict[str, TimestampedAnnotation]
 
     def __init__(self):
-        self._frame_records_by_marker_id = dict()
+        self._timestamped_annotations = dict()
 
     def add_frame_record(
         self,
-        frame_record: DetectorFrameRecord
+        frame: DetectorFrame
     ) -> None:
-        marker_ids: list[str] = frame_record.get_marker_ids_detected()
-        for marker_id in marker_ids:
-            if marker_id not in self._frame_records_by_marker_id or \
-               frame_record.get_timestamp_utc() > self._frame_records_by_marker_id[marker_id].get_timestamp_utc():
-                self._frame_records_by_marker_id[marker_id] = frame_record
+        for annotation in frame.annotations:
+            if annotation.feature_label not in self._timestamped_annotations:
+                self._timestamped_annotations[annotation.feature_label] = DetectorRecord.TimestampedAnnotation(
+                    annotation=annotation,
+                    timestamp_utc=frame.timestamp_utc)
+                continue
+            timestamped_annotation: DetectorRecord.TimestampedAnnotation = \
+                self._timestamped_annotations[annotation.feature_label]
+            if frame.timestamp_utc > timestamped_annotation.timestamp_utc:
+                self._timestamped_annotations[annotation.feature_label] = DetectorRecord.TimestampedAnnotation(
+                    annotation=annotation,
+                    timestamp_utc=frame.timestamp_utc)
 
     def clear_frame_records(self):
-        self._frame_records_by_marker_id.clear()
+        self._timestamped_annotations.clear()
 
     def clear_frame_records_older_than(
         self,
@@ -87,30 +55,23 @@ class DetectorRecord:
         """
         returns True if any changes were made
         """
-        return_value: bool = False
-        marker_ids: list[str] = list(self._frame_records_by_marker_id.keys())
-        for marker_id in marker_ids:
-            frame_record: DetectorFrameRecord = self._frame_records_by_marker_id[marker_id]
-            if frame_record.get_timestamp_utc() < timestamp_utc:
-                del self._frame_records_by_marker_id[marker_id]
-                return_value = True
-        return return_value
+        feature_labels_to_remove: list[str] = list()
+        for entry in self._timestamped_annotations.values():
+            if entry.timestamp_utc < timestamp_utc:
+                feature_labels_to_remove.append(entry.annotation.feature_label)
+        if len(feature_labels_to_remove) <= 0:
+            return False
+        for feature_label in feature_labels_to_remove:
+            del self._timestamped_annotations[feature_label]
+        return True
 
-    def get_corners(
-        self
-    ) -> dict[str, list[list[float]]]:  # [marker_id][point_index][x/y/z]
-        corners_by_marker_id: dict[str, list[list[float]]] = dict()
-        for marker_id, frame_record in self._frame_records_by_marker_id.items():
-            corners_by_marker_id[marker_id] = frame_record.get_marker_corners_by_marker_id(marker_id=marker_id)
-        return corners_by_marker_id
-
-    def get_corners_for_marker_id(
+    def get_annotations(
         self,
-        marker_id: str
-    ) -> list[list[float]] | None:  # [point_index][x/y/z]
-        if marker_id not in self._frame_records_by_marker_id:
-            return None
-        return self._frame_records_by_marker_id[marker_id].get_marker_corners_by_marker_id(marker_id=marker_id)
+        deep_copy: bool = True
+    ) -> list[Annotation]:
+        if deep_copy:
+            return [entry.annotation.model_copy() for entry in self._timestamped_annotations.values()]
+        return [entry.annotation for entry in self._timestamped_annotations.values()]
 
 
 class PoseSolverConfiguration(BaseModel):

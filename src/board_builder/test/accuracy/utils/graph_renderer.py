@@ -80,7 +80,7 @@ def graph_renderer(snapshots, all_collection_data, reference_to_detector_poses):
                 ax = ax_green if detector == 'camera 1' else ax_blue
                 for marker_snapshot in marker_snapshots:
                     corners = np.array([(corner.x_px, corner.y_px) for corner in marker_snapshot.corner_image_points])
-                    plot_quadrilateral(ax, corners, f'M{marker_snapshot.label}S{i}', color)
+                    plot_quadrilateral(ax, corners, f'M{marker_snapshot.feature_label}S{i}', color)
 
         # Set limits and aspect
         for ax in [ax_green, ax_blue]:

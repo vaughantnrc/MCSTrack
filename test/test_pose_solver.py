@@ -1,31 +1,30 @@
 from src.pose_solver.pose_solver import PoseSolver
 from src.common.structures import \
+    Annotation, \
     DetectorFrame, \
     ImageResolution, \
     IntrinsicParameters, \
-    Annotation, \
     Matrix4x4, \
     Pose, \
-    RELATION_CHARACTER, \
-    TargetMarker
+    Target
+from src.implementations.common_aruco_opencv import ArucoOpenCVCommon
 import datetime
 from typing import Final
 import unittest
 
 
 IMAGE_RESOLUTION: Final[ImageResolution] = ImageResolution(x_px=640, y_px=480)
+REL_CHAR: Final[str] = Annotation.RELATION_CHARACTER  # For brevity
 MARKER_SIZE_MM: Final[float] = 10.0
 REFERENCE_TARGET_ID: Final[str] = "reference"
 REFERENCE_MARKER_ID: Final[str] = "0"
-REFERENCE_MARKER_TARGET: Final[TargetMarker] = TargetMarker(
-    label=REFERENCE_TARGET_ID,
-    marker_id=REFERENCE_MARKER_ID,
+REFERENCE_MARKER_TARGET: Final[Target] = ArucoOpenCVCommon.target_from_marker_parameters(
+    base_label=REFERENCE_MARKER_ID,
     marker_size=MARKER_SIZE_MM)
 TARGET_TARGET_ID: Final[str] = "target"
 TARGET_MARKER_ID: Final[str] = "1"
-TARGET_MARKER_TARGET: Final[TargetMarker] = TargetMarker(
-    label=TARGET_TARGET_ID,
-    marker_id=TARGET_MARKER_ID,
+TARGET_MARKER_TARGET: Final[Target] = ArucoOpenCVCommon.target_from_marker_parameters(
+    base_label=TARGET_MARKER_ID,
     marker_size=MARKER_SIZE_MM)
 DETECTOR_RED_NAME: Final[str] = "det_red"
 DETECTOR_RED_INTRINSICS: Final[IntrinsicParameters] = IntrinsicParameters(
@@ -115,14 +114,14 @@ class TestPoseSolver(unittest.TestCase):
             detector_label=DETECTOR_RED_NAME,
             detector_frame=DetectorFrame(
                 annotations=[
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}0", x_px=375, y_px=347),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}1", x_px=415, y_px=346),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}2", x_px=416, y_px=386),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}3", x_px=376, y_px=386),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}0", x_px=541, y_px=347),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}1", x_px=581, y_px=348),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}2", x_px=580, y_px=388),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}3", x_px=540, y_px=387)],
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}0", x_px=375, y_px=347),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}1", x_px=415, y_px=346),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}2", x_px=416, y_px=386),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}3", x_px=376, y_px=386),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}0", x_px=541, y_px=347),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}1", x_px=581, y_px=348),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}2", x_px=580, y_px=388),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}3", x_px=540, y_px=387)],
                 image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.update()
@@ -179,56 +178,56 @@ class TestPoseSolver(unittest.TestCase):
             detector_label=DETECTOR_RED_NAME,
             detector_frame=DetectorFrame(
                 annotations=[
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}0", x_px=157, y_px=210),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}1", x_px=165, y_px=221),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}2", x_px=139, y_px=229),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}3", x_px=131, y_px=217),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}0", x_px=196, y_px=266),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}1", x_px=206, y_px=281),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}2", x_px=178, y_px=291),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}3", x_px=167, y_px=275)],
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}0", x_px=157, y_px=210),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}1", x_px=165, y_px=221),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}2", x_px=139, y_px=229),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}3", x_px=131, y_px=217),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}0", x_px=196, y_px=266),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}1", x_px=206, y_px=281),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}2", x_px=178, y_px=291),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}3", x_px=167, y_px=275)],
                 image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.add_detector_frame(
             detector_label=DETECTOR_SKY_NAME,
             detector_frame=DetectorFrame(
                 annotations=[
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}0", x_px=190, y_px=234),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}1", x_px=219, y_px=246),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}2", x_px=195, y_px=270),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}3", x_px=166, y_px=257),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}0", x_px=317, y_px=290),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}1", x_px=352, y_px=306),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}2", x_px=332, y_px=333),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}3", x_px=296, y_px=317)],
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}0", x_px=190, y_px=234),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}1", x_px=219, y_px=246),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}2", x_px=195, y_px=270),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}3", x_px=166, y_px=257),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}0", x_px=317, y_px=290),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}1", x_px=352, y_px=306),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}2", x_px=332, y_px=333),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}3", x_px=296, y_px=317)],
                 image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.add_detector_frame(
             detector_label=DETECTOR_GREEN_NAME,
             detector_frame=DetectorFrame(
                 annotations=[
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}0", x_px=247, y_px=304),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}1", x_px=283, y_px=296),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}2", x_px=291, y_px=326),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}3", x_px=254, y_px=334),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}0", x_px=392, y_px=277),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}1", x_px=426, y_px=271),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}2", x_px=438, y_px=299),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}3", x_px=403, y_px=305)],
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}0", x_px=247, y_px=304),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}1", x_px=283, y_px=296),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}2", x_px=291, y_px=326),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}3", x_px=254, y_px=334),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}0", x_px=392, y_px=277),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}1", x_px=426, y_px=271),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}2", x_px=438, y_px=299),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}3", x_px=403, y_px=305)],
                 image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.add_detector_frame(
             detector_label=DETECTOR_YELLOW_NAME,
             detector_frame=DetectorFrame(
                 annotations=[
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}0", x_px=275, y_px=277),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}1", x_px=289, y_px=251),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}2", x_px=321, y_px=261),
-                    Annotation(label=f"{str(REFERENCE_MARKER_ID)}{RELATION_CHARACTER}3", x_px=306, y_px=288),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}0", x_px=332, y_px=177),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}1", x_px=344, y_px=156),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}2", x_px=372, y_px=163),
-                    Annotation(label=f"{str(TARGET_MARKER_ID)}{RELATION_CHARACTER}3", x_px=361, y_px=185)],
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}0", x_px=275, y_px=277),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}1", x_px=289, y_px=251),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}2", x_px=321, y_px=261),
+                    Annotation(feature_label=f"{str(REFERENCE_MARKER_ID)}{REL_CHAR}3", x_px=306, y_px=288),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}0", x_px=332, y_px=177),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}1", x_px=344, y_px=156),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}2", x_px=372, y_px=163),
+                    Annotation(feature_label=f"{str(TARGET_MARKER_ID)}{REL_CHAR}3", x_px=361, y_px=185)],
                 image_resolution=IMAGE_RESOLUTION,
                 timestamp_utc_iso8601=now_utc.isoformat()))
         pose_solver.update()

@@ -1,3 +1,4 @@
+from src.common import MathUtils
 from src.common.structures import \
     KeyValueMetaAny, \
     KeyValueMetaBool, \
@@ -10,7 +11,9 @@ from src.common.structures import \
     KeyValueSimpleFloat, \
     KeyValueSimpleInt, \
     KeyValueSimpleString, \
-    MCTSerializationError
+    Landmark, \
+    MCTSerializationError, \
+    Target
 import cv2.aruco
 import logging
 import numpy
@@ -343,7 +346,7 @@ class ArucoOpenCVCommon:
         return_value.append(KeyValueMetaEnum(
             key=_KEY_CORNER_REFINEMENT_METHOD,
             value=corner_refinement_method_text,
-            allowable_values=get_args(ArucoOpenCVCommon.CornerRefinementMethod)))
+            allowable_values=list(get_args(ArucoOpenCVCommon.CornerRefinementMethod))))
 
         return_value.append(KeyValueMetaInt(
             key=_KEY_CORNER_REFINEMENT_WIN_SIZE,
@@ -617,3 +620,17 @@ class ArucoOpenCVCommon:
             else:
                 mismatched_keys.append(key_value.key)
         return mismatched_keys
+
+    @staticmethod
+    def target_from_marker_parameters(
+        base_label : str,
+        marker_size: float
+    ) -> Target:
+        corner_points: list[list[float]] = MathUtils.square_marker_corner_points(marker_size=marker_size)
+        landmarks: list[Landmark] = [
+            Landmark(
+                feature_label=f"{base_label}{Landmark.RELATION_CHARACTER}{corner_index}",
+                x=corner_point[0], y=corner_point[1], z=corner_point[2])
+            for corner_index, corner_point in enumerate(corner_points)]
+        target: Target = Target(label=base_label, landmarks=landmarks)
+        return target

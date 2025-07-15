@@ -1,9 +1,9 @@
 from src.board_builder.board_builder import BoardBuilder
 from src.common import MathUtils
-from src.common.structures import \
-    Annotation, \
-    TargetBoard, \
-    Marker
+from src.common.structures import Annotation
+from src.board_builder.structures import \
+    Marker, \
+    TargetBoard
 from .structures import AccuracyTestParameters
 from .utils import \
     generate_virtual_snapshots, \
@@ -47,7 +47,7 @@ class AccuracyTest:
                 # Apply noise
                 for i, corner in enumerate(marker_snapshot.corner_image_points):
                     noisy_marker_snapshots.append(Annotation(
-                        label=f"{marker_snapshot.label}_{i}",
+                        feature_label=f"{marker_snapshot.feature_label}_{i}",
                         x_px=corner.x_px + noise[i * 2],
                         y_px=corner.y_px + noise[i * 2 + 1]))
 
@@ -143,7 +143,7 @@ class AccuracyTest:
             {
                 detector_name: [
                     {
-                        "label": snapshot.label,
+                        "label": snapshot.feature_label,
                         "corner_image_points": [{"x_px": pt.x_px, "y_px": pt.y_px} for pt in
                                                 snapshot.corner_image_points]
                     }

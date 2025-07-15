@@ -2,12 +2,12 @@ from .common_aruco_opencv import ArucoOpenCVCommon
 from src.common import \
     Annotator, \
     MCTAnnotatorRuntimeError, \
+    SeverityLabel, \
     StatusMessageSource
 from src.common.structures import \
     Annotation, \
     KeyValueMetaAny, \
-    KeyValueSimpleAny, \
-    RELATION_CHARACTER
+    KeyValueSimpleAny
 import cv2.aruco
 import datetime
 import logging
@@ -76,7 +76,9 @@ class ArucoOpenCVAnnotator(Annotator):
     ) -> None:
         if self._aruco_dictionary is None:
             message: str = "No ArUco dictionary has been set."
-            self.add_status_message(severity="error", message=message)
+            self.add_status_message(
+                severity=SeverityLabel.ERROR,
+                message=message)
             self.set_status(Annotator.Status.FAILURE)
             return
 
@@ -95,11 +97,11 @@ class ArucoOpenCVAnnotator(Annotator):
             detected_dictionary_indices = list(detected_dictionary_indices.reshape(detected_count))
             for detected_index, detected_id in enumerate(detected_dictionary_indices):
                 for corner_index in range(4):
-                    detected_label: str = f"{detected_id}{RELATION_CHARACTER}{corner_index}"
+                    detected_label: str = f"{detected_id}{Annotation.RELATION_CHARACTER}{corner_index}"
                     self._snapshots_identified.append(Annotation(
-                        label=detected_label,
-                        x_px=detected_corner_points_px[detected_index][corner_index][0],
-                        y_px=detected_corner_points_px[detected_index][corner_index][1]))
+                        feature_label=detected_label,
+                        x_px=float(detected_corner_points_px[detected_index][corner_index][0]),
+                        y_px=float(detected_corner_points_px[detected_index][corner_index][1])))
 
         self._snapshots_unidentified = list()
         if rejected_corner_points_raw:
@@ -107,8 +109,8 @@ class ArucoOpenCVAnnotator(Annotator):
             for rejected_index in range(rejected_corner_points_px.shape[0]):
                 for corner_index in range(4):
                     self._snapshots_unidentified.append(Annotation(
-                        label=Annotation.UNIDENTIFIED_LABEL,
-                        x_px=rejected_corner_points_px[rejected_index][corner_index][0],
-                        y_px=rejected_corner_points_px[rejected_index][corner_index][1]))
+                        feature_label=Annotation.UNIDENTIFIED_LABEL,
+                        x_px=float(rejected_corner_points_px[rejected_index][corner_index][0]),
+                        y_px=float(rejected_corner_points_px[rejected_index][corner_index][1])))
 
         self._update_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

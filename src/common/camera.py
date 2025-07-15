@@ -15,7 +15,7 @@ import datetime
 from enum import StrEnum
 import numpy
 from pydantic import BaseModel, Field
-from typing import Final, Union
+from typing import Union
 
 
 class _Configuration(BaseModel):
@@ -24,9 +24,9 @@ class _Configuration(BaseModel):
 
 
 class _Status(StrEnum):
-    STOPPED: Final[int] = "STOPPED"
-    RUNNING: Final[int] = "RUNNING"
-    FAILURE: Final[int] = "FAILURE"
+    STOPPED = "STOPPED"
+    RUNNING = "RUNNING"
+    FAILURE = "FAILURE"
 
 
 class MCTCameraRuntimeError(MCTError):

@@ -1,9 +1,10 @@
 from ..structures import \
+    Annotation, \
     IterativeClosestPointParameters, \
     IntrinsicParameters, \
     Matrix4x4, \
     Ray, \
-    TargetBase
+    Target
 import cv2
 import numpy
 from scipy.spatial.transform import Rotation
@@ -76,7 +77,7 @@ class MathUtils:
             return (self.closest_point_1 + self.closest_point_2) / 2
 
         def distance(self) -> float:
-            return numpy.linalg.norm(self.closest_point_2 - self.closest_point_1)
+            return float(numpy.linalg.norm(self.closest_point_2 - self.closest_point_1))
 
     @staticmethod
     def closest_intersection_between_two_lines(
@@ -84,8 +85,8 @@ class MathUtils:
         ray_2: Ray,
         epsilon: float = _DEFAULT_EPSILON
     ) -> RayIntersection2Output:  # Returns data on intersection
-        ray_1_direction_normalized = ray_1.direction / numpy.linalg.norm(ray_1.direction)
-        ray_2_direction_normalized = ray_2.direction / numpy.linalg.norm(ray_2.direction)
+        ray_1_direction_normalized = numpy.asarray(ray_1.direction) / numpy.linalg.norm(ray_1.direction)
+        ray_2_direction_normalized = numpy.asarray(ray_2.direction) / numpy.linalg.norm(ray_2.direction)
 
         # ray 3 will be perpendicular to both rays 1 and 2,
         # and will intersect with both rays at the nearest point(s)
@@ -95,8 +96,8 @@ class MathUtils:
         if ray_3_direction_norm < epsilon:
             return MathUtils.RayIntersection2Output(
                 parallel=True,
-                closest_point_1=ray_1.source_point,
-                closest_point_2=ray_2.source_point)
+                closest_point_1=numpy.asarray(ray_1.source_point),
+                closest_point_2=numpy.asarray(ray_2.source_point))
 
         # system of equations Ax = b
         b = numpy.subtract(ray_2.source_point, ray_1.source_point)
@@ -226,28 +227,6 @@ class MathUtils:
         return rays
 
     @staticmethod
-    def convert_detector_corners_to_vectors(
-        corners_by_marker_id: dict[str, list[list[float]]],  # [marker_id][point_index][x/y]
-        detector_intrinsics: IntrinsicParameters,
-        detector_to_reference_matrix: Matrix4x4
-    ) -> dict[str, list[list[float]]]:  # [marker_id][point_index][x/y/z]
-        """
-        Given a detector's matrix transform and its intrinsic properties,
-        convert pixel coordinates to ray directions (with origin at the detector).
-        """
-        ray_vectors_by_marker_id: dict[str, list[list[float]]] = dict()
-        corners: list[list[float]]
-        marker_id: str
-        for marker_id in corners_by_marker_id.keys():
-            corners = corners_by_marker_id[marker_id]
-            rays: list[list[float]] = MathUtils.convert_detector_points_to_vectors(
-                points=corners,
-                detector_intrinsics=detector_intrinsics,
-                detector_to_reference_matrix=detector_to_reference_matrix)
-            ray_vectors_by_marker_id[marker_id] = rays
-        return ray_vectors_by_marker_id
-
-    @staticmethod
     def convex_quadrilateral_area(
         points: list[list[float]],  # 2D points in clockwise order
         epsilon: float = _DEFAULT_EPSILON
@@ -299,16 +278,18 @@ class MathUtils:
 
     @staticmethod
     def estimate_matrix_transform_to_detector(
-        target: TargetBase,
-        corners_by_marker_id: dict[str, list[list[float]]],  # [marker_id][point_index][x/y]
+        annotations: list[Annotation],
+        target: Target,
         detector_intrinsics: IntrinsicParameters
     ) -> Matrix4x4:
         target_points: list[list[float]] = list()    # ordered points [point_index][x/y/z]
         detector_points: list[list[float]] = list()  # ordered points [point_index][x/y]
-        for marker_id in target.get_marker_ids():
-            if marker_id in corners_by_marker_id:
-                target_points += target.get_points_for_marker_id(marker_id=marker_id)
-                detector_points += corners_by_marker_id[marker_id]
+        annotations_dict: dict[str, Annotation] = {annotation.feature_label: annotation for annotation in annotations}
+        for landmark in target.landmarks:
+            if landmark.feature_label in annotations_dict.keys():
+                annotation = annotations_dict[landmark.feature_label]
+                target_points.append([landmark.x, landmark.y, landmark.z])
+                detector_points.append([annotation.x_px, annotation.y_px])
         rotation_vector: numpy.ndarray
         translation_vector: numpy.ndarray
         _, rotation_vector, translation_vector = cv2.solvePnP(
@@ -524,13 +505,14 @@ class MathUtils:
                 for i in range(i, len(point_set)):
                     p2: numpy.ndarray = numpy.asarray(point_set[1])
                     vec1 = p2 - p1
-                    vec1_length: float = numpy.linalg.norm(vec1)
+                    vec1_length: float = float(numpy.linalg.norm(vec1))
                     if vec1_length > collinearity_zero_threshold:
                         break  # points are distinct, move to next phase
                 for i in range(i, len(point_set)):
                     p3: numpy.ndarray = numpy.asarray(point_set[2])
                     vec2: numpy.ndarray = p3 - p1
-                    cross_product_norm: float = numpy.linalg.norm(numpy.cross(vec1, vec2))
+                    # noinspection PyUnboundLocalVariable
+                    cross_product_norm: float = float(numpy.linalg.norm(numpy.cross(vec1, vec2)))
                     if cross_product_norm > collinearity_zero_threshold:
                         collinear = False
                         break
@@ -561,3 +543,16 @@ class MathUtils:
         matrix[0:3, 0:3] = rotation
         matrix[0:3, 3] = translation[0:3].reshape(3)
         return matrix
+
+    @staticmethod
+    def square_marker_corner_points(
+        marker_size: float
+    ) -> list[list[float]]:  #[corner_index][dimension_index], 3D
+        half_width = marker_size / 2.0
+        corner_points = [
+            [-half_width, half_width, 0., 1.],  # Top-left
+            [half_width, half_width, 0., 1.],  # Top-right
+            [half_width, -half_width, 0., 1.],  # Bottom-right
+            [-half_width, -half_width, 0., 1.]]  # Bottom-left
+        return corner_points
+

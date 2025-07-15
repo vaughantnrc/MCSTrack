@@ -3,8 +3,7 @@ from .image import \
     ImageFormat, \
     ImageResolution, \
     IntrinsicCalibration, \
-    IntrinsicParameters, \
-    RELATION_CHARACTER
+    IntrinsicParameters
 from .linear_algebra import \
     IterativeClosestPointParameters, \
     Landmark, \
@@ -30,8 +29,4 @@ from .serialization import \
 from .tracking import \
     Annotation, \
     DetectorFrame, \
-    Marker, \
-    PoseSolverFrame, \
-    TargetBase, \
-    TargetBoard, \
-    TargetMarker
+    PoseSolverFrame

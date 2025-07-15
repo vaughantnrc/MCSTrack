@@ -6,10 +6,9 @@ from src.common.structures import \
     IntrinsicParameters, \
     Matrix4x4, \
     Pose, \
-    TargetBoard, \
-    TargetMarker
+    Target
 from pydantic import Field
-from typing import Final, Literal, Union
+from typing import Final, Literal
 
 
 class PoseSolverAddDetectorFrameRequest(MCTRequest):
@@ -26,34 +25,21 @@ class PoseSolverAddDetectorFrameRequest(MCTRequest):
     detector_frame: DetectorFrame = Field()
 
 
-class PoseSolverAddTargetMarkerRequest(MCTRequest):
-    _TYPE_IDENTIFIER: Final[str] = "add_target_marker"
+class PoseSolverAddTargetRequest(MCTRequest):
+    _TYPE_IDENTIFIER: Final[str] = "add_target"
 
     @staticmethod
     def type_identifier() -> str:
-        return PoseSolverAddTargetMarkerRequest._TYPE_IDENTIFIER
+        return PoseSolverAddTargetRequest._TYPE_IDENTIFIER
 
     # noinspection PyTypeHints
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
-    target: TargetMarker = Field()
-
-
-class PoseSolverAddTargetBoardRequest(MCTRequest):
-    _TYPE_IDENTIFIER: Final[str] = "add_target_board"
-
-    @staticmethod
-    def type_identifier() -> str:
-        return PoseSolverAddTargetBoardRequest._TYPE_IDENTIFIER
-
-    # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
-
-    target: TargetBoard = Field()
+    target: Target = Field()
 
 
 class PoseSolverAddTargetResponse(MCTResponse):
-    _TYPE_IDENTIFIER: Final[str] = "add_marker_corners"
+    _TYPE_IDENTIFIER: Final[str] = "add_target"
 
     @staticmethod
     def type_identifier() -> str:
@@ -142,7 +128,7 @@ class PoseSolverSetTargetsRequest(MCTRequest):
     # noinspection PyTypeHints
     parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
 
-    targets: list[Union[TargetMarker, TargetBoard]] = Field()
+    targets: list[Target] = Field()
 
 
 class PoseSolverStartRequest(MCTRequest):

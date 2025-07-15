@@ -16,14 +16,13 @@ from src.common import \
     Annotator, \
     EmptyResponse, \
     ErrorResponse, \
-    NetworkUtils, \
     TimestampGetRequest, \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
 import asyncio
 import base64
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.websockets import WebSocket
 import hjson

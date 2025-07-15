@@ -1,7 +1,6 @@
 from .api import \
     PoseSolverAddDetectorFrameRequest, \
-    PoseSolverAddTargetMarkerRequest, \
-    PoseSolverAddTargetBoardRequest, \
+    PoseSolverAddTargetRequest, \
     PoseSolverAddTargetResponse, \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
