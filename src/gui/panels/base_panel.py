@@ -7,10 +7,6 @@ from .parameters import \
     ParameterText
 from src.common import \
     ErrorResponse, \
-    MCTResponse, \
-    SeverityLabel, \
-    StatusMessageSource
-from src.common.structures import \
     KeyValueSimpleAbstract, \
     KeyValueSimpleAny, \
     KeyValueSimpleBool, \
@@ -22,7 +18,10 @@ from src.common.structures import \
     KeyValueMetaBool, \
     KeyValueMetaEnum, \
     KeyValueMetaFloat, \
-    KeyValueMetaInt
+    KeyValueMetaInt, \
+    MCTResponse, \
+    SeverityLabel, \
+    StatusMessageSource
 from typing import Final
 import wx
 

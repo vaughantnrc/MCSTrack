@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.common.structures import Matrix4x4, Pose, IntrinsicParameters
+from src.common import Matrix4x4, Pose, IntrinsicParameters
 
 
 class AccuracyTestParameters:

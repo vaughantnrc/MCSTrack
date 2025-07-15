@@ -11,17 +11,23 @@ from .api import \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
-from .status_messages import \
+from .image_processing import \
+    Annotation, \
+    ImageResolution
+from .math import \
+    Pose
+from .serialization import \
+    MCTDeserializable, \
+    MCTSerializationError
+from .status import \
     SeverityLabel, \
     StatusMessage, \
     StatusMessageSource
-from .structures import \
-    MCTDeserializable, \
-    MCTSerializationError
 import abc
 import datetime
 from fastapi import WebSocket, WebSocketDisconnect
 import logging
+from pydantic import BaseModel, Field
 from typing import Callable, Optional, TypeVar
 
 
@@ -30,6 +36,39 @@ logger = logging.getLogger(__name__)
 
 SerializableSingle = TypeVar('SerializableSingle', bound=MCTDeserializable)
 T = TypeVar("T")
+
+
+class DetectorFrame(BaseModel):
+    annotations: list[Annotation] = Field(default_factory=list)
+    timestamp_utc_iso8601: str = Field()
+    image_resolution: ImageResolution = Field()
+
+    @property
+    def annotations_identified(self):
+        return [
+            annotation
+            for annotation in self.annotations
+            if annotation.feature_label != Annotation.UNIDENTIFIED_LABEL]
+
+    @property
+    def annotations_unidentified(self):
+        return [
+            annotation
+            for annotation in self.annotations
+            if annotation.feature_label == Annotation.UNIDENTIFIED_LABEL]
+
+    @property
+    def timestamp_utc(self):
+        return datetime.datetime.fromisoformat(self.timestamp_utc_iso8601)
+
+
+class PoseSolverFrame(BaseModel):
+    detector_poses: list[Pose] | None = Field()
+    target_poses: list[Pose] | None = Field()
+    timestamp_utc_iso8601: str = Field()
+
+    def timestamp_utc(self):
+        return datetime.datetime.fromisoformat(self.timestamp_utc_iso8601)
 
 
 class MCTComponent(abc.ABC):

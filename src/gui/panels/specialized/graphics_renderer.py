@@ -1,4 +1,4 @@
-from src.common.structures import Matrix4x4
+from src.common import Matrix4x4
 from src.gui.graphics import Constants, FileIO, Material, Model, Shader
 import datetime
 import hjson
@@ -208,8 +208,8 @@ class GraphicsRenderer(GLCanvas, wx.Window):
                 geometry_filename = f"{model_part_io.geometry_label}.stl"
                 geometry_filepath = os.path.join(geometry_path, geometry_filename)
                 geometry = stl.mesh.Mesh.from_file(geometry_filepath)
-                vertices: list[numpy.array] = list()
-                normals: list[numpy.array] = list()
+                vertices: list[numpy.ndarray] = list()
+                normals: list[numpy.ndarray] = list()
                 triangles: list[list[int]] = list()
                 for i, face in enumerate(geometry.vectors):
                     for vertex in face:

@@ -7,15 +7,14 @@ from .specialized import \
     TrackingTable, \
     TrackingTableRow
 from src.common import \
+    DetectorFrame, \
     ErrorResponse, \
     EmptyResponse, \
+    Matrix4x4, \
     MCTResponse, \
     MCTResponseSeries, \
+    StatusMessageSource, \
     SeverityLabel, \
-    StatusMessageSource
-from src.common.structures import \
-    DetectorFrame, \
-    Matrix4x4, \
     Pose, \
     PoseSolverFrame
 from src.controller import \

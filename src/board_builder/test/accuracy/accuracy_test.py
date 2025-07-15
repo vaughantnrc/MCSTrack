@@ -1,6 +1,5 @@
 from src.board_builder.board_builder import BoardBuilder
-from src.common import MathUtils
-from src.common.structures import Annotation
+from src.common import Annotation, MathUtils
 from src.board_builder.structures import \
     Marker, \
     TargetBoard

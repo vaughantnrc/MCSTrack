@@ -1,13 +1,12 @@
 from .common_aruco_opencv import ArucoOpenCVCommon
 from src.common import \
     Annotator, \
+    Annotation, \
+    KeyValueMetaAny, \
+    KeyValueSimpleAny, \
     MCTAnnotatorRuntimeError, \
     SeverityLabel, \
     StatusMessageSource
-from src.common.structures import \
-    Annotation, \
-    KeyValueMetaAny, \
-    KeyValueSimpleAny
 import cv2.aruco
 import datetime
 import logging

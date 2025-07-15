@@ -1,24 +1,23 @@
 from src.common import \
     DequeueStatusMessagesResponse, \
+    DetectorFrame, \
     EmptyResponse, \
     ErrorResponse, \
-    MCTRequest, \
-    MCTRequestSeries, \
-    MCTResponse, \
-    MCTResponseSeries, \
-    SeverityLabel, \
-    StatusMessage, \
-    TimestampGetResponse
-from src.common.structures import \
-    DetectorFrame, \
     ImageResolution, \
     IntrinsicParameters, \
     KeyValueSimpleAny, \
     Matrix4x4, \
     MCTDeserializable, \
+    MCTRequest, \
+    MCTRequestSeries, \
+    MCTResponse, \
+    MCTResponseSeries, \
     Pose, \
     PoseSolverFrame, \
-    Target
+    SeverityLabel, \
+    StatusMessage, \
+    Target, \
+    TimestampGetResponse
 from src.detector.api import \
     CalibrationCalculateResponse, \
     CalibrationImageAddResponse, \

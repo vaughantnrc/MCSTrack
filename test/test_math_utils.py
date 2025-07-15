@@ -1,6 +1,6 @@
-from src.common import MathUtils
-from src.common.structures import \
+from src.common import \
     IterativeClosestPointParameters, \
+    MathUtils, \
     Ray
 import datetime
 import numpy

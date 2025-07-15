@@ -1,22 +1,23 @@
-import cv2
-import numpy
-import os
-import re
 from src.common import \
+    Annotation, \
+    Annotator, \
+    ImageResolution, \
     ImageUtils, \
     IntrinsicCalibrator, \
-    StatusMessageSource
-from src.common.structures import \
-    ImageResolution, \
     KeyValueSimpleAny, \
     KeyValueSimpleString, \
-    Annotation
+    SeverityLabel, \
+    StatusMessageSource
 from src.implementations.common_aruco_opencv import \
     ArucoOpenCVCommon
 from src.implementations.annotator_aruco_opencv import \
     ArucoOpenCVAnnotator
 from src.implementations.intrinsic_charuco_opencv import \
     CharucoOpenCVIntrinsicCalibrator
+import cv2
+import numpy
+import os
+import re
 from tempfile import TemporaryDirectory
 from typing import Final
 import unittest
@@ -63,7 +64,9 @@ class TestPoseSolver(unittest.TestCase):
             image_filepaths[camera_id][frame_id] = image_filepath
         image_count: int = sum(len(image_filepaths[camera_id]) for camera_id in image_filepaths.keys())
         message = f"Found {image_count} image files."
-        status_message_source.enqueue_status_message(severity="info", message=message)
+        status_message_source.enqueue_status_message(
+            severity=SeverityLabel.INFO,
+            message=message)
 
         # All cameras have the same imaging parameters.
         # To simplify our lives and ensure a reasonable result,
@@ -84,7 +87,7 @@ class TestPoseSolver(unittest.TestCase):
             _, calibration_result = calibrator.calculate(image_resolution=IMAGE_RESOLUTION)
 
         marker: ArucoOpenCVAnnotator = ArucoOpenCVAnnotator(
-            configuration={"method": "aruco_opencv"},
+            configuration=Annotator.Configuration(method="aruco_opencv"),
             status_message_source=status_message_source)
         marker.set_parameters(parameters=MARKER_DETECTION_PARAMETERS)
         image_marker_snapshots: dict[str, dict[str, list[Annotation]]] = dict()
@@ -99,7 +102,9 @@ class TestPoseSolver(unittest.TestCase):
                 image_marker_snapshots[camera_id][frame_id] = marker_snapshots
                 detection_count += len(marker_snapshots)
         message = f"{detection_count} detections."
-        status_message_source.enqueue_status_message(severity="info", message=message)
+        status_message_source.enqueue_status_message(
+            severity=SeverityLabel.INFO,
+            message=message)
         print(message)
 
         # Constraint: Reference board must be visible to all cameras for first frame_id (frame_0)

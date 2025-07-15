@@ -16,6 +16,7 @@ from src.common import \
     Annotator, \
     EmptyResponse, \
     ErrorResponse, \
+    ImageFormat, \
     TimestampGetRequest, \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
@@ -119,7 +120,7 @@ def create_app() -> FastAPI:
     @detector_app.get("/camera/get_image")
     async def camera_get_image() -> CameraImageGetResponse:
         result: CameraImageGetResponse = detector.camera_image_get(
-            request=CameraImageGetRequest(format=".png"))
+            request=CameraImageGetRequest(format=ImageFormat.FORMAT_PNG))
         image_bytes = base64.b64decode(result.image_base64)
         with open("test.png", "wb") as image_file:
             image_file.write(image_bytes)

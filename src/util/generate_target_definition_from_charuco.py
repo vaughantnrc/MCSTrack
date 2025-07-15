@@ -1,5 +1,5 @@
 from src.implementations.common_aruco_opencv import ArucoOpenCVCommon
-from src.common.structures import Annotation, Landmark, Target
+from src.common import Annotation, Landmark, Target
 
 
 board: ArucoOpenCVCommon.CharucoBoard = ArucoOpenCVCommon.CharucoBoard()

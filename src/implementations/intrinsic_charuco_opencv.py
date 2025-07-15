@@ -1,11 +1,11 @@
 from .common_aruco_opencv import ArucoOpenCVCommon
 from src.common import \
-    IntrinsicCalibrator, \
-    MCTIntrinsicCalibrationError
-from src.common.structures import \
     ImageResolution, \
     IntrinsicCalibration, \
-    IntrinsicParameters
+    IntrinsicCalibrator, \
+    IntrinsicParameters, \
+    MCTIntrinsicCalibrationError, \
+    SeverityLabel
 import cv2
 import cv2.aruco
 import datetime
@@ -45,7 +45,7 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
                 parameters=aruco_detector_parameters)
             if len(marker_corners) <= 0:
                 self._status_message_source.enqueue_status_message(
-                    severity="warning",
+                    severity=SeverityLabel.WARNING,
                     message=f"Image {image_identifier} did not appear to contain any identifiable markers. "
                             f"It will be omitted from the calibration.")
                 continue
@@ -121,17 +121,17 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
             timestamp_utc=datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
             image_resolution=image_resolution,
             calibrated_values=IntrinsicParameters(
-                focal_length_x_px=charuco_camera_matrix[0, 0],
-                focal_length_y_px=charuco_camera_matrix[1, 1],
-                optical_center_x_px=charuco_camera_matrix[0, 2],
-                optical_center_y_px=charuco_camera_matrix[1, 2],
+                focal_length_x_px=float(charuco_camera_matrix[0, 0]),
+                focal_length_y_px=float(charuco_camera_matrix[1, 1]),
+                optical_center_x_px=float(charuco_camera_matrix[0, 2]),
+                optical_center_y_px=float(charuco_camera_matrix[1, 2]),
                 radial_distortion_coefficients=[
-                    charuco_distortion_coefficients[0, 0],
-                    charuco_distortion_coefficients[1, 0],
-                    charuco_distortion_coefficients[4, 0]],
+                    float(charuco_distortion_coefficients[0, 0]),
+                    float(charuco_distortion_coefficients[1, 0]),
+                    float(charuco_distortion_coefficients[4, 0])],
                 tangential_distortion_coefficients=[
-                    charuco_distortion_coefficients[2, 0],
-                    charuco_distortion_coefficients[3, 0]]),
+                    float(charuco_distortion_coefficients[2, 0]),
+                    float(charuco_distortion_coefficients[3, 0])]),
             supplemental_data=supplemental_data)
 
         return intrinsic_calibration, used_image_identifiers

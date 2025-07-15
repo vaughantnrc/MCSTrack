@@ -1,15 +1,14 @@
-from .exceptions import \
-    PoseSolverException
 from .structures import \
     DetectorRecord, \
     PoseSolverParameters
-from src.common import MathUtils
-from src.common.structures import \
+from src.common import \
     Annotation, \
     DetectorFrame, \
     IntrinsicParameters, \
     IterativeClosestPointParameters, \
+    MathUtils, \
     Matrix4x4, \
+    MCTError, \
     Pose, \
     Ray, \
     Target
@@ -27,6 +26,14 @@ _CORNER_COUNT: Final[int] = 4
 
 KeyType = TypeVar("KeyType")
 ValueType = TypeVar("ValueType")
+
+
+class PoseSolverException(MCTError):
+    message: str
+
+    def __init__(self, message: str, *args, **kwargs):
+        super().__init__(args, kwargs)
+        self.message = message
 
 
 class PoseSolver:

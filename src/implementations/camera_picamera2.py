@@ -1,8 +1,5 @@
 from src.common import \
     Camera, \
-    MCTCameraRuntimeError, \
-    StatusMessageSource
-from src.common.structures import \
     ImageResolution, \
     KeyValueSimpleAbstract, \
     KeyValueSimpleAny, \
@@ -12,7 +9,10 @@ from src.common.structures import \
     KeyValueMetaAbstract, \
     KeyValueMetaBool, \
     KeyValueMetaFloat, \
-    KeyValueMetaInt
+    KeyValueMetaInt, \
+    MCTCameraRuntimeError, \
+    SeverityLabel, \
+    StatusMessageSource
 import datetime
 import logging
 import numpy
@@ -271,7 +271,9 @@ class Picamera2Camera(Camera):
 
         if self._image is None:
             message: str = "Failed to grab frame."
-            self.add_status_message(severity="error", message=message)
+            self.add_status_message(
+                severity=SeverityLabel.ERROR,
+                message=message)
             self.set_status(Camera.Status.FAILURE)
             raise MCTCameraRuntimeError(message=message)
 

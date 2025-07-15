@@ -1,11 +1,13 @@
-from .exceptions import MCTError
-from .status_messages import SeverityLabel, StatusMessageSource
-from .structures import \
+from .image_processing import \
     ImageResolution, \
-    IntrinsicCalibration
-from .util import \
     ImageUtils, \
+    IntrinsicCalibration
+from .serialization import \
     IOUtils
+from .status import \
+    MCTError, \
+    SeverityLabel, \
+    StatusMessageSource
 import abc
 import datetime
 from enum import StrEnum
@@ -111,10 +113,7 @@ class IntrinsicCalibrator(abc.ABC):
     ResultMetadata: type[_ResultMetadata] = _ResultMetadata
     DataMap: type[_DataMap] = _DataMap
 
-    class IntrinsicCalibratorConfiguration(BaseModel):
-        data_path: str = Field()
-
-    _configuration: IntrinsicCalibratorConfiguration
+    _configuration: Configuration
     _calibration_map: dict[ImageResolution, _DataMapValue]
     _status_message_source: StatusMessageSource
 
@@ -125,7 +124,7 @@ class IntrinsicCalibrator(abc.ABC):
 
     def __init__(
         self,
-        configuration: IntrinsicCalibratorConfiguration,
+        configuration: Configuration,
         status_message_source: StatusMessageSource
     ):
         self._configuration = configuration

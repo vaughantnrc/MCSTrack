@@ -1,14 +1,13 @@
 from src.common import \
+    DetectorFrame, \
+    ImageFormat, \
+    ImageResolution, \
+    IntrinsicCalibration, \
     IntrinsicCalibrator, \
+    KeyValueMetaAny, \
+    KeyValueSimpleAny, \
     MCTRequest, \
     MCTResponse
-from src.common.structures import \
-    ImageFormat, \
-    DetectorFrame, \
-    IntrinsicCalibration, \
-    ImageResolution, \
-    KeyValueMetaAny, \
-    KeyValueSimpleAny
 from pydantic import Field, SerializeAsAny
 from typing import Final, Literal
 

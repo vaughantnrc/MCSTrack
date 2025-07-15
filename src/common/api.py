@@ -1,5 +1,5 @@
-from .status_messages import StatusMessage
-from .structures import MCTDeserializable
+from .serialization import MCTDeserializable
+from .status import StatusMessage
 import abc
 from pydantic import BaseModel, Field, SerializeAsAny
 from typing import Final, Literal

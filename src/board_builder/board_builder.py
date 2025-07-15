@@ -1,15 +1,13 @@
+from .utils import BoardBuilderPoseSolver
+from .structures import PoseLocation, Marker, MarkerCorners, TargetBoard
+from src.common import Pose, Annotation, Matrix4x4
+from collections import defaultdict
 import datetime
 import json
 import os
 import numpy as np
-
-from collections import defaultdict
 from typing import Final
 
-from .utils import BoardBuilderPoseSolver
-from .structures import PoseLocation, MarkerCorners
-from src.common.structures import Pose, Annotation, Matrix4x4
-from .structures import Marker, TargetBoard
 
 _HOMOGENEOUS_POINT_COORD: Final[int] = 4
 TESTED_BOARD_NAME: str = 'top_data.json'  # If collecting data for repeatability test, specify the file name. cube_data.json, planar_data.json, top_data.json

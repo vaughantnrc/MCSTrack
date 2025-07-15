@@ -36,20 +36,21 @@ from .api import \
 from src.common import \
     Annotator, \
     Camera, \
+    DetectorFrame, \
     EmptyResponse, \
     ErrorResponse, \
+    ImageFormat, \
+    ImageResolution, \
+    IntrinsicCalibration, \
     IntrinsicCalibrator, \
+    KeyValueMetaAbstract, \
     MCTIntrinsicCalibrationError, \
     MCTCameraRuntimeError, \
     MCTComponent, \
     MCTAnnotatorRuntimeError, \
     MCTRequest, \
-    MCTResponse
-from src.common.structures import \
-    DetectorFrame, \
-    ImageResolution, \
-    IntrinsicCalibration, \
-    KeyValueMetaAbstract
+    MCTResponse, \
+    SeverityLabel
 import logging
 from typing import Callable, Final
 from pydantic import BaseModel, Field
@@ -130,7 +131,9 @@ class Detector(MCTComponent):
 
     def calibration_image_add(self, **_kwargs) -> CalibrationImageAddResponse | ErrorResponse:
         try:
-            image_base64: str = self._camera.get_encoded_image(image_format=".png", requested_resolution=None)
+            image_base64: str = self._camera.get_encoded_image(
+                image_format=ImageFormat.FORMAT_PNG,
+                requested_resolution=None)
             image_identifier: str = self._calibrator.add_image(image_base64=image_base64)
         except MCTIntrinsicCalibrationError as e:
             return ErrorResponse(message=e.message)
@@ -364,13 +367,17 @@ class Detector(MCTComponent):
             try:
                 self._camera.update()
             except MCTCameraRuntimeError as e:
-                self.add_status_message(severity="error", message=e.message)
+                self.add_status_message(
+                    severity=SeverityLabel.ERROR,
+                    message=e.message)
         if self._annotator.get_status() == Annotator.Status.RUNNING and \
            self._camera.get_changed_timestamp() > self._annotator.get_changed_timestamp():
             try:
                 self._annotator.update(self._camera.get_image())
             except MCTAnnotatorRuntimeError as e:
-                self.add_status_message(severity="error", message=e.message)
+                self.add_status_message(
+                    severity=SeverityLabel.ERROR,
+                    message=e.message)
         self._frame_count += 1
         if self._frame_count % 1000 == 0:
             print(f"Update count: {self._frame_count}")

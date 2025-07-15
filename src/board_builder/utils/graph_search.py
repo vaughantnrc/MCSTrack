@@ -1,8 +1,8 @@
+from src.board_builder.structures import MatrixNode, PoseLocation
+from src.common import Matrix4x4
 from collections import deque, defaultdict
 from typing import Dict, List, Tuple
 
-from src.board_builder.structures import MatrixNode, PoseLocation
-from src.common.structures import Matrix4x4
 
 def create_graph(
     relative_pose_matrix: List[List[PoseLocation | None]],

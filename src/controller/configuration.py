@@ -1,4 +1,4 @@
-from src.common.structures import \
+from src.common import \
     KeyValueSimpleAny, \
     Matrix4x4, \
     Target

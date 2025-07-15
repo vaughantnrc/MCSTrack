@@ -1,4 +1,4 @@
-from src.common.structures import \
+from src.common import \
     Annotation, \
     DetectorFrame
 import cv2.aruco

@@ -8,6 +8,11 @@ from typing import Final
 logger = logging.getLogger(__name__)
 
 
+class MCTError(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
+
+
 class SeverityLabel(StrEnum):
     DEBUG = "debug"
     INFO = "info"

@@ -1,10 +1,9 @@
 from src.common import \
-    MCTRequest, \
-    MCTResponse
-from src.common.structures import \
     DetectorFrame, \
     IntrinsicParameters, \
     Matrix4x4, \
+    MCTRequest, \
+    MCTResponse, \
     Pose, \
     Target
 from pydantic import Field

@@ -1,7 +1,8 @@
-from src.board_builder.structures import PoseLocation
 import datetime
-from src.common.structures import Matrix4x4
+from src.common import Matrix4x4
+from src.board_builder.structures import PoseLocation
 from src.board_builder.utils.graph_search import create_graph, bfs_shortest_path, get_transform_from_root
+
 
 """
 Description: Test case for the BFS/graph_search algorithm

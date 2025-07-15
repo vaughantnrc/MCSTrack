@@ -14,15 +14,14 @@ from src.common.api import \
     MCTResponse, \
     MCTResponseSeries
 from src.common import \
-    ImageUtils, \
-    StatusMessageSource
-from src.common.structures import \
+    Annotation, \
     DetectorFrame, \
     ImageResolution, \
-    Annotation, \
+    ImageUtils, \
     Matrix4x4, \
+    Pose, \
     PoseSolverFrame, \
-    Pose
+    StatusMessageSource
 from src.controller import MCTController
 from src.detector.api import \
     CameraImageGetRequest, \

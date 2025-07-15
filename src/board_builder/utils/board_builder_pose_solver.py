@@ -3,10 +3,10 @@ from src.board_builder.structures import \
     MarkerRaySet, \
     PoseData, \
     PoseLocation
-from src.common import MathUtils
-from src.common.structures import \
+from src.common import \
     IntrinsicParameters, \
     IterativeClosestPointParameters, \
+    MathUtils, \
     Matrix4x4, \
     Pose, \
     Ray

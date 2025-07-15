@@ -1,5 +1,4 @@
-from src.common import MathUtils
-from src.common.structures import \
+from src.common import \
     KeyValueMetaAny, \
     KeyValueMetaBool, \
     KeyValueMetaEnum, \
@@ -12,6 +11,7 @@ from src.common.structures import \
     KeyValueSimpleInt, \
     KeyValueSimpleString, \
     Landmark, \
+    MathUtils, \
     MCTSerializationError, \
     Target
 import cv2.aruco

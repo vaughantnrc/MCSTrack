@@ -1,4 +1,3 @@
-from .exceptions import ResponseSeriesNotExpected
 from .configuration import \
     MCTComponentConfig, \
     MCTConfiguration, \
@@ -8,23 +7,23 @@ from .connection import \
     DetectorConnection, \
     PoseSolverConnection
 from src.common import \
+    DetectorFrame, \
     EmptyResponse, \
     ErrorResponse, \
+    IntrinsicParameters, \
     MCTComponent, \
+    MCTError, \
     MCTRequest, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
+    PoseSolverFrame, \
     SeverityLabel, \
     StatusMessageSource, \
     TimestampGetRequest, \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
-from src.common.structures import \
-    DetectorFrame, \
-    IntrinsicParameters, \
-    PoseSolverFrame
 from src.detector import \
     CalibrationResultGetActiveRequest, \
     CalibrationResultGetActiveResponse, \
@@ -61,6 +60,10 @@ _SUPPORTED_ROLES: Final[list[str]] = [
     Detector.get_role_label(),
     PoseSolverAPI.get_role_label()]
 _TIME_SYNC_SAMPLE_MAXIMUM_COUNT: Final[int] = 5
+
+
+class ResponseSeriesNotExpected(MCTError):
+    pass
 
 
 class MCTController(MCTComponent):

@@ -11,14 +11,13 @@ from .specialized import \
 from src.common import \
     ErrorResponse, \
     EmptyResponse, \
+    ImageResolution, \
     ImageUtils, \
     IntrinsicCalibrator, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
     StatusMessageSource
-from src.common.structures import \
-    ImageResolution
 from src.controller import \
     MCTController
 from src.detector import \

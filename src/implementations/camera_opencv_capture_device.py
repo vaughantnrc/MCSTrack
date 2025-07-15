@@ -1,9 +1,6 @@
 from src.common import \
     Camera, \
     ImageUtils, \
-    MCTCameraRuntimeError, \
-    StatusMessageSource
-from src.common.structures import \
     ImageResolution, \
     KeyValueSimpleAbstract, \
     KeyValueSimpleAny, \
@@ -15,7 +12,9 @@ from src.common.structures import \
     KeyValueMetaBool, \
     KeyValueMetaEnum, \
     KeyValueMetaFloat, \
-    KeyValueMetaInt
+    KeyValueMetaInt, \
+    MCTCameraRuntimeError, \
+    StatusMessageSource, SeverityLabel
 import cv2
 import datetime
 import logging
@@ -286,7 +285,9 @@ class OpenCVCaptureDeviceCamera(Camera):
         grabbed_frame = self._capture.grab()
         if not grabbed_frame:
             message: str = "Failed to grab frame."
-            self.add_status_message(severity="error", message=message)
+            self.add_status_message(
+                severity=SeverityLabel.ERROR,
+                message=message)
             self.set_status(Camera.Status.FAILURE)
             raise MCTCameraRuntimeError(message=message)
 
@@ -294,7 +295,9 @@ class OpenCVCaptureDeviceCamera(Camera):
         retrieved_frame, self._image = self._capture.retrieve()
         if not retrieved_frame:
             message: str = "Failed to retrieve frame."
-            self.add_status_message(severity="error", message=message)
+            self.add_status_message(
+                severity=SeverityLabel.ERROR,
+                message=message)
             self.set_status(Camera.Status.FAILURE)
             raise MCTCameraRuntimeError(message=message)
 

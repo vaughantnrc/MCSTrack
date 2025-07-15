@@ -1,5 +1,5 @@
 from src.pose_solver.pose_solver import PoseSolver
-from src.common.structures import \
+from src.common import \
     Annotation, \
     DetectorFrame, \
     ImageResolution, \

@@ -9,8 +9,9 @@ from .api import \
     PoseSolverSetTargetsRequest, \
     PoseSolverStartRequest, \
     PoseSolverStopRequest
-from .exceptions import PoseSolverException
-from .pose_solver import PoseSolver
+from .pose_solver import \
+    PoseSolver, \
+    PoseSolverException
 from .structures import \
     PoseSolverConfiguration
 from src.common import \
@@ -18,8 +19,7 @@ from src.common import \
     ErrorResponse, \
     MCTComponent, \
     MCTRequest, \
-    MCTResponse
-from src.common.structures import \
+    MCTResponse, \
     Pose
 from enum import StrEnum
 import logging

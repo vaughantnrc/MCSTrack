@@ -8,19 +8,18 @@ from .parameters import \
     ParameterSpinboxFloat, \
     ParameterSelector
 from src.common import \
+    Annotation, \
+    DetectorFrame, \
     ErrorResponse, \
     EmptyResponse, \
+    ImageFormat, \
+    ImageResolution, \
     ImageUtils, \
+    KeyValueSimpleAny, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
     StatusMessageSource
-from src.common.structures import \
-    DetectorFrame, \
-    ImageFormat, \
-    ImageResolution, \
-    KeyValueSimpleAny, \
-    Annotation
 from src.controller import \
     MCTController
 from src.detector.api import \
