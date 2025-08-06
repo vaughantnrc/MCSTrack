@@ -14,6 +14,12 @@ from .api import \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
+from .calibration import \
+    ExtrinsicCalibration, \
+    ExtrinsicCalibrationDetectorResult, \
+    IntrinsicCalibration, \
+    IntrinsicCalibrator, \
+    MCTIntrinsicCalibrationError
 from .camera import \
     Camera, \
     MCTCameraRuntimeError
@@ -21,13 +27,9 @@ from .image_processing import \
     Annotation, \
     ImageFormat, \
     ImageResolution, \
-    ImageUtils, \
-    IntrinsicCalibration, \
-    IntrinsicParameters
-from .intrinsic_calibrator import \
-    IntrinsicCalibrator, \
-    MCTIntrinsicCalibrationError
+    ImageUtils
 from .math import \
+    IntrinsicParameters, \
     IterativeClosestPointParameters, \
     Landmark, \
     MathUtils, \

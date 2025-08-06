@@ -34,7 +34,7 @@ class MCTAnnotatorRuntimeError(MCTError):
 
 class Annotator(abc.ABC):
     """
-    Functions may raise MCTMarkerRuntimeError
+    Functions may raise MCTAnnotatorRuntimeError
     """
 
     Configuration: type[_Configuration] = _Configuration

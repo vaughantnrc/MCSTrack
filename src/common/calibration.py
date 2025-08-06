@@ -1,7 +1,9 @@
 from .image_processing import \
     ImageResolution, \
-    ImageUtils, \
-    IntrinsicCalibration
+    ImageUtils
+from .math import \
+    IntrinsicParameters, \
+    Matrix4x4
 from .serialization import \
     IOUtils
 from .status import \
@@ -32,6 +34,29 @@ class MCTIntrinsicCalibrationError(MCTError):
         self.message = message
 
 
+class ExtrinsicCalibrationDetectorResult(BaseModel):
+    detector_label: str = Field()
+    detector_to_reference: Matrix4x4 = Field()
+
+
+class ExtrinsicCalibration(BaseModel):
+    timestamp_utc: str = Field()
+    calibrated_values: list[ExtrinsicCalibrationDetectorResult] = Field()
+    supplemental_data: dict = Field()
+
+
+class IntrinsicCalibration(BaseModel):
+    timestamp_utc: str = Field()
+    image_resolution: ImageResolution = Field()
+    calibrated_values: IntrinsicParameters = Field()
+    supplemental_data: dict = Field()
+
+
+# =====================================================================================================================
+# Internal structures applicable to both intrinsic and extrinsic calibrations
+# =====================================================================================================================
+
+
 class _Configuration(BaseModel):
     data_path: str = Field()
 
@@ -44,26 +69,22 @@ class _ImageState(StrEnum):
 
 class _ImageMetadata(BaseModel):
     identifier: str = Field()
-    label: str = Field(default_factory=str)  # human-readable label
+    detector_label: str = Field()
+    image_resolution: ImageResolution = Field()
+    image_label: str = Field(default_factory=str)  # human-readable label
     timestamp_utc: str = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
     state: _ImageState = Field(default=_ImageState.SELECT)
 
 
 class _ResultState(StrEnum):
-    # indicate to use this calibration (as opposed to simply storing it)
-    # normally there shall only ever be one ACTIVE calibration for a given image resolution
-    ACTIVE = "active"
-
-    # store the calibration, but don't mark it for use
-    RETAIN = "retain"
-
-    # stage for deletion
-    DELETE = "delete"
+    ACTIVE = "active"  # will be stored AND marked for use. Only one result expected to be active per image resolution.
+    RETAIN = "retain"  # store, but do not use
+    DELETE = "delete"  # stage for deletion
 
 
 class _ResultMetadata(BaseModel):
     identifier: str = Field()
-    label: str = Field(default_factory=str)
+    result_label: str = Field(default_factory=str)
     timestamp_utc_iso8601: str = Field(
         default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
     image_identifiers: list[str] = Field(default_factory=list)
@@ -73,24 +94,152 @@ class _ResultMetadata(BaseModel):
         return datetime.datetime.fromisoformat(self.timestamp_utc_iso8601)
 
 
-class _DataMapValue(BaseModel):
+class Calibrator(abc.ABC):
+
+    _status_message_source: StatusMessageSource
+
+    def __init__(
+        self,
+        status_message_source: StatusMessageSource
+    ):
+        self._status_message_source = status_message_source
+
+    def _delete_if_exists(self, filepath: str):
+        try:
+            os.remove(filepath)
+        except FileNotFoundError as e:
+            logger.error(e)
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=f"Failed to remove a file from the calibrator because it does not exist. "
+                        f"See its internal log for details.")
+        except OSError as e:
+            logger.error(e)
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=f"Failed to remove a file from the calibrator due to an unexpected reason. "
+                        f"See its internal log for details.")
+
+    def _exists_on_filesystem(
+        self,
+        path: str,
+        pathtype: IOUtils.PathType,
+        create_path: bool = False
+    ) -> bool:
+        return IOUtils.exists(
+            path=path,
+            pathtype=pathtype,
+            create_path=create_path,
+            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=msg),
+            on_error_for_dev=logger.error)
+
+    def _load_dict_from_filepath(
+        self,
+        filepath: str
+    ) -> tuple[dict, bool]:
+        """
+        :return:
+            dict containing existing data (or empty if an unexpected error occurred)
+            bool indicating whether if loaded or if it can be created without overwriting existing data. False otherwise.
+        """
+        if not os.path.exists(filepath):
+            return dict(), True
+        elif not os.path.isfile(filepath):
+            logger.critical(f"Calibration map file location {filepath} exists but is not a file.")
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.CRITICAL,
+                message="Filepath location for calibration map exists but is not a file. "
+                        "Most likely a directory exists at that location, "
+                        "and it needs to be manually removed.")
+            return dict(), False
+        json_dict: dict = IOUtils.hjson_read(
+            filepath=filepath,
+            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=msg),
+            on_error_for_dev=logger.error)
+        if not json_dict:
+            logger.error(f"Failed to load calibration map from file {filepath}.")
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Failed to load calibration map from file.")
+            return dict(), False
+        return json_dict, True
+
+    def _save_dict_to_filepath(
+        self,
+        filepath: str,
+        json_dict: dict
+    ) -> None:
+        IOUtils.json_write(
+            filepath=filepath,
+            json_dict=json_dict,
+            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=msg),
+            on_error_for_dev=logger.error)
+
+    def _save_image_to_filepath(
+        self,
+        filepath: str,
+        image: numpy.ndarray
+    ) -> bool:
+        """
+        Returns true if successful, False otherwise.
+        """
+        # Before making any changes to the calibration map, make sure folders exist
+        if not self._exists_on_filesystem(path=os.path.dirname(filepath), pathtype="path", create_path=True):
+            message = "Failed to create storage location for input image."
+            logger.error(message)
+            self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
+            return False
+        # Also make sure that this file does not somehow already exist (highly unlikely)
+        if os.path.exists(filepath):
+            logger.error(f"Image {filepath} appears to already exist. This is never expected to occur.")
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Image appears to already exist. This is never expected to occur. "
+                        "Please try again, and if this error continues to occur then please report a bug.")
+            return False
+        image_bytes: bytes
+        image_bytes = ImageUtils.image_to_bytes(image_data=image, image_format=IntrinsicCalibrator.IMAGE_FORMAT)
+        try:
+            with (open(filepath, 'wb') as in_file):
+                in_file.write(image_bytes)
+        except IOError as e:
+            logger.error(f"Failed to save image to {filepath}, reason: {str(e)}.")
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Failed to save image - see calibration log for more details.")
+            return False
+        return True
+
+
+# =====================================================================================================================
+# Intrinsic calibration
+# =====================================================================================================================
+
+
+class _IntrinsicDataMapValue(BaseModel):
     image_metadata_list: list[_ImageMetadata] = Field(default_factory=list)
     result_metadata_list: list[_ResultMetadata] = Field(default_factory=list)
 
 
-class _DataMapEntry(BaseModel):
+class _IntrinsicDataMapEntry(BaseModel):
     key: ImageResolution = Field()
-    value: _DataMapValue = Field()
+    value: _IntrinsicDataMapValue = Field()
 
 
-class _DataMap(BaseModel):
-    entries: list[_DataMapEntry] = Field(default_factory=list)
+class _IntrinsicDataMap(BaseModel):
+    entries: list[_IntrinsicDataMapEntry] = Field(default_factory=list)
 
-    def as_dict(self) -> dict[ImageResolution, _DataMapValue]:
-        return_value: dict[ImageResolution, _DataMapValue] = dict()
+    def as_dict(self) -> dict[ImageResolution, _IntrinsicDataMapValue]:
+        return_value: dict[ImageResolution, _IntrinsicDataMapValue] = dict()
         for entry in self.entries:
             if entry.key not in return_value:
-                return_value[entry.key] = _DataMapValue()
+                return_value[entry.key] = _IntrinsicDataMapValue()
             for image_metadata in entry.value.image_metadata_list:
                 return_value[entry.key].image_metadata_list.append(image_metadata)
             for result_metadata in entry.value.result_metadata_list:
@@ -98,26 +247,26 @@ class _DataMap(BaseModel):
         return return_value
 
     @staticmethod
-    def from_dict(in_dict: dict[ImageResolution, _DataMapValue]):
-        entries: list[_DataMapEntry] = list()
+    def from_dict(in_dict: dict[ImageResolution, _IntrinsicDataMapValue]):
+        entries: list[_IntrinsicDataMapEntry] = list()
         for key in in_dict.keys():
-            entries.append(_DataMapEntry(key=key, value=in_dict[key]))
-        return _DataMap(entries=entries)
+            entries.append(_IntrinsicDataMapEntry(key=key, value=in_dict[key]))
+        return _IntrinsicDataMap(entries=entries)
 
 
-class IntrinsicCalibrator(abc.ABC):
+class IntrinsicCalibrator(Calibrator, abc.ABC):
     Configuration: type[_Configuration] = _Configuration
     ImageState: type[_ImageState] = _ImageState
     ImageMetadata: type[_ImageMetadata] = _ImageMetadata
     ResultState: type[_ResultState] = _ResultState
     ResultMetadata: type[_ResultMetadata] = _ResultMetadata
-    DataMap: type[_DataMap] = _DataMap
+    DataMap: type[_IntrinsicDataMap] = _IntrinsicDataMap
 
-    _configuration: Configuration
-    _calibration_map: dict[ImageResolution, _DataMapValue]
-    _status_message_source: StatusMessageSource
+    _calibration_map: dict[ImageResolution, _IntrinsicDataMapValue]
 
-    CALIBRATION_MAP_FILENAME: Final[str] = "calibration_map.json"
+    _data_path: str
+    _data_ledger_filepath: str
+    CALIBRATION_MAP_FILENAME: Final[str] = "intrinsic_calibrations.json"
 
     IMAGE_FORMAT: Final[str] = ".png"  # work in lossless image format
     RESULT_FORMAT: Final[str] = ".json"
@@ -127,15 +276,18 @@ class IntrinsicCalibrator(abc.ABC):
         configuration: Configuration,
         status_message_source: StatusMessageSource
     ):
-        self._configuration = configuration
-        self._status_message_source = status_message_source
-        if not self._exists_on_filesystem(path=self._configuration.data_path, pathtype="path", create_path=True):
+        super().__init__(status_message_source=status_message_source)
+
+        self._data_path = configuration.data_path
+        if not self._exists_on_filesystem(path=self._data_path, pathtype="path", create_path=True):
             self._status_message_source.enqueue_status_message(
                 severity=SeverityLabel.CRITICAL,
                 message="Data path does not exist and could not be created.")
-            detailed_message: str = f"{self._configuration.data_path} does not exist and could not be created."
+            detailed_message: str = f"{self._data_path} does not exist and could not be created."
             logger.critical(detailed_message)
             raise RuntimeError(detailed_message)
+
+        self._data_ledger_filepath = os.path.join(self._data_path, IntrinsicCalibrator.CALIBRATION_MAP_FILENAME)
         if not self.load():
             message: str = "The calibration map could not be loaded or created. "\
                            "In order to avoid data loss, the software will now abort. " \
@@ -146,31 +298,23 @@ class IntrinsicCalibrator(abc.ABC):
 
     def add_image(
         self,
-        image_base64: str
+        image_base64: str,
+        detector_label: str = ""
     ) -> str:  # id of image
         image_data: numpy.ndarray = ImageUtils.base64_to_image(input_base64=image_base64, color_mode="color")
         map_key: ImageResolution = ImageResolution(x_px=image_data.shape[1], y_px=image_data.shape[0])
-        # Before making any changes to the calibration map, make sure folders exist,
-        # and that this file does not somehow already exist (highly unlikely)
-        key_path: str = self._path_for_map_key(map_key=map_key)
-        if not self._exists_on_filesystem(path=key_path, pathtype="path", create_path=True):
-            raise MCTIntrinsicCalibrationError(message=f"Failed to create storage location for input image.")
         image_identifier: str = str(uuid.uuid4())
-        image_filepath = self._image_filepath(
-            map_key=map_key,
-            image_identifier=image_identifier)
-        if os.path.exists(image_filepath):
-            raise MCTIntrinsicCalibrationError(
-                message=f"Image {image_identifier} appears to already exist. This is never expected to occur. "
-                        f"Please try again, and if this error continues to occur then please report a bug.")
+        image_filepath = self._image_filepath(map_key=map_key, image_identifier=image_identifier)
+        self._save_image_to_filepath(
+            filepath=image_filepath,
+            image=image_data)
         if map_key not in self._calibration_map:
-            self._calibration_map[map_key] = _DataMapValue()
+            self._calibration_map[map_key] = _IntrinsicDataMapValue()
         self._calibration_map[map_key].image_metadata_list.append(
-            IntrinsicCalibrator.ImageMetadata(identifier=image_identifier))
-        # noinspection PyTypeChecker
-        image_bytes = ImageUtils.image_to_bytes(image_data=image_data, image_format=IntrinsicCalibrator.IMAGE_FORMAT)
-        with (open(image_filepath, 'wb') as in_file):
-            in_file.write(image_bytes)
+            IntrinsicCalibrator.ImageMetadata(
+                identifier=image_identifier,
+                detector_label=detector_label,
+                image_resolution=map_key))
         self.save()
         return image_identifier
 
@@ -192,7 +336,7 @@ class IntrinsicCalibrator(abc.ABC):
             map_key=calibration_key,
             result_identifier=result_identifier)
 
-        calibration_value: _DataMapValue = self._calibration_map[calibration_key]
+        calibration_value: _IntrinsicDataMapValue = self._calibration_map[calibration_key]
         # don't load images right away in case of memory constraints
         image_identifiers: list[str] = list()
         for image_metadata in calibration_value.image_metadata_list:
@@ -238,25 +382,9 @@ class IntrinsicCalibrator(abc.ABC):
     ) -> tuple[IntrinsicCalibration, list[str]]:  # image_identifiers that were actually used in calibration
         pass
 
-    def _delete_if_exists(self, filepath: str):
-        try:
-            os.remove(filepath)
-        except FileNotFoundError as e:
-            logger.error(e)
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=f"Failed to remove a file from the calibrator because it does not exist. "
-                        f"See its internal log for details.")
-        except OSError as e:
-            logger.error(e)
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=f"Failed to remove a file from the calibrator due to an unexpected reason. "
-                        f"See its internal log for details.")
-
     def delete_staged(self) -> None:
         for calibration_key in self._calibration_map.keys():
-            calibration_value: _DataMapValue = self._calibration_map[calibration_key]
+            calibration_value: _IntrinsicDataMapValue = self._calibration_map[calibration_key]
             image_indices_to_delete: list = list()
             for image_index, image in enumerate(calibration_value.image_metadata_list):
                 if image.state == _ImageState.DELETE:
@@ -276,21 +404,6 @@ class IntrinsicCalibrator(abc.ABC):
             for i in reversed(result_indices_to_delete):
                 del calibration_value.result_metadata_list[i]
         self.save()
-
-    def _exists_on_filesystem(
-        self,
-        path: str,
-        pathtype: IOUtils.PathType,
-        create_path: bool = False
-    ) -> bool:
-        return IOUtils.exists(
-            path=path,
-            pathtype=pathtype,
-            create_path=create_path,
-            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=msg),
-            on_error_for_dev=logger.error)
 
     # noinspection DuplicatedCode
     def get_image(
@@ -440,9 +553,9 @@ class IntrinsicCalibrator(abc.ABC):
         map_key: ImageResolution,
         image_identifier: str
     ) -> str:
-        key_path: str = self._path_for_map_key(map_key=map_key)
         return os.path.join(
-            key_path,
+            self._data_path,
+            str(map_key),
             image_identifier + IntrinsicCalibrator.IMAGE_FORMAT)
 
     def list_resolutions(self) -> list[ImageResolution]:
@@ -475,29 +588,10 @@ class IntrinsicCalibrator(abc.ABC):
         """
         :return: True if loaded or if it can be created without overwriting existing data. False otherwise.
         """
-        calibration_map_filepath: str = self._map_filepath()
-        if not os.path.exists(calibration_map_filepath):
-            self._calibration_map = dict()
-            return True
-        elif not os.path.isfile(calibration_map_filepath):
-            logger.critical(f"Calibration map file location {calibration_map_filepath} exists but is not a file.")
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.CRITICAL,
-                message="Filepath location for calibration map exists but is not a file. "
-                        "Most likely a directory exists at that location, "
-                        "and it needs to be manually removed.")
-            return False
-        json_dict: dict = IOUtils.hjson_read(
-            filepath=calibration_map_filepath,
-            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=msg),
-            on_error_for_dev=logger.error)
-        if not json_dict:
-            logger.error(f"Failed to load calibration map from file {calibration_map_filepath}.")
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message="Failed to load calibration map from file.")
+        json_dict: dict
+        load_success: bool
+        json_dict, load_success = self._load_dict_from_filepath(filepath=self._data_ledger_filepath)
+        if not load_success:
             return False
         calibration_map: IntrinsicCalibrator.DataMap
         try:
@@ -511,33 +605,20 @@ class IntrinsicCalibrator(abc.ABC):
         self._calibration_map = calibration_map.as_dict()
         return True
 
-    def _map_filepath(self) -> str:
-        return os.path.join(self._configuration.data_path, IntrinsicCalibrator.CALIBRATION_MAP_FILENAME)
-
-    def _path_for_map_key(
-        self,
-        map_key: ImageResolution
-    ) -> str:
-        return os.path.join(self._configuration.data_path, str(map_key))
-
     def _result_filepath(
         self,
         map_key: ImageResolution,
         result_identifier: str
     ) -> str:
-        key_path: str = self._path_for_map_key(map_key=map_key)
         return os.path.join(
-            key_path,
+            self._data_path,
+            str(map_key),
             result_identifier + IntrinsicCalibrator.RESULT_FORMAT)
 
     def save(self) -> None:
-        IOUtils.json_write(
-            filepath=self._map_filepath(),
-            json_dict=IntrinsicCalibrator.DataMap.from_dict(self._calibration_map).model_dump(),
-            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=msg),
-            on_error_for_dev=logger.error)
+        return self._save_dict_to_filepath(
+            filepath=self._data_ledger_filepath,
+            json_dict=IntrinsicCalibrator.DataMap.from_dict(self._calibration_map).model_dump())
 
     # noinspection DuplicatedCode
     def update_image_metadata(
@@ -552,7 +633,7 @@ class IntrinsicCalibrator(abc.ABC):
                 if image.identifier == image_identifier:
                     image.state = image_state
                     if image_label is not None:
-                        image.label = image_label
+                        image.image_label = image_label
                     found_count += 1
                     break
         if found_count < 1:
@@ -578,7 +659,7 @@ class IntrinsicCalibrator(abc.ABC):
                 if result.identifier == result_identifier:
                     result.state = result_state
                     if result_label is not None:
-                        result.label = result_label
+                        result.result_label = result_label
                     found_count += 1
                     matching_map_keys.add(map_key)
                     break
@@ -603,3 +684,66 @@ class IntrinsicCalibrator(abc.ABC):
                         "It may be prudent to either manually correct it, or recreate it.")
 
         self.save()
+
+
+# =====================================================================================================================
+# Extrinsic calibration
+# =====================================================================================================================
+
+
+class _ExtrinsicDataListing(BaseModel):
+    image_metadata_list: list[_ImageMetadata] = Field(default_factory=list)
+    result_metadata_list: list[_ResultMetadata] = Field(default_factory=list)
+
+
+class ExtrinsicCalibrator(abc.ABC):
+    Configuration: type[_Configuration] = _Configuration
+    ImageState: type[_ImageState] = _ImageState
+    ImageMetadata: type[_ImageMetadata] = _ImageMetadata
+    ResultState: type[_ResultState] = _ResultState
+    ResultMetadata: type[_ResultMetadata] = _ResultMetadata
+
+    _image_filepaths: dict[tuple[str, str], str]  # (detector_id, timestamp_iso8601) -> image_filepath
+
+    DATA_FILENAME: Final[str] = "extrinsic_calibrations.json"
+
+    def __init__(
+        self,
+        configuration: Configuration,
+        status_message_source: StatusMessageSource
+    ):
+        self._configuration = configuration
+        self._status_message_source = status_message_source
+        if not self._exists_on_filesystem(path=self._configuration.data_path, pathtype="path", create_path=True):
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.CRITICAL,
+                message="Data path does not exist and could not be created.")
+            detailed_message: str = f"{self._configuration.data_path} does not exist and could not be created."
+            logger.critical(detailed_message)
+            raise RuntimeError(detailed_message)
+        if not self.load():
+            message: str = "The calibration map could not be loaded or created. "\
+                           "In order to avoid data loss, the software will now abort. " \
+                           "Please manually correct or remove the file in the filesystem."
+            logger.critical(message)
+            self._status_message_source.enqueue_status_message(severity=SeverityLabel.CRITICAL, message=message)
+            raise RuntimeError(message)
+
+    # data:
+    #   per detector:
+    #     initial_frame transform to reference_target
+    #     final transform to reference_target
+    #     per frame:
+    #       image
+    #       (marker_id,2d_points)s
+    #   final (frame_id,marker_id,3d_points)s
+    #
+    # input data:
+    #   per detector:
+    #     per frame:
+    #       PNG: image
+    #
+    # output data:
+    #   per detector:
+    #     JSON: transform to reference_target
+    #     JSON: Additional stats, inc. reference_target definition

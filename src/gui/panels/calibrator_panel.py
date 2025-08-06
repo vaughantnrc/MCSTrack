@@ -561,7 +561,7 @@ class CalibratorPanel(BasePanel):
                 else:
                     image_metadata: IntrinsicCalibrator.ImageMetadata = self._image_metadata_list[image_index]
                     self._image_label_textbox.Enable(True)
-                    self._image_label_textbox.textbox.SetValue(image_metadata.label)
+                    self._image_label_textbox.textbox.SetValue(image_metadata.image_label)
                     self._image_state_selector.Enable(True)
                     self._image_state_selector.selector.SetStringSelection(image_metadata.state.name)
                     self._image_update_button.Enable(True)
@@ -590,7 +590,7 @@ class CalibratorPanel(BasePanel):
                     result_metadata: IntrinsicCalibrator.ResultMetadata = self._result_metadata_list[result_index]
                     self._result_display_textbox.Enable(True)
                     self._result_label_textbox.Enable(True)
-                    self._result_label_textbox.textbox.SetValue(result_metadata.label)
+                    self._result_label_textbox.textbox.SetValue(result_metadata.result_label)
                     self._result_state_selector.Enable(True)
                     self._result_state_selector.selector.SetStringSelection(result_metadata.state.name)
                     self._result_update_button.Enable(True)
