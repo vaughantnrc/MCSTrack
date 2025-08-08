@@ -107,16 +107,3 @@ class TestPoseSolver(unittest.TestCase):
             message=message)
         print(message)
 
-        # Constraint: Reference board must be visible to all cameras for first frame_id (frame_0)
-        # - Estimate camera position relative to frame_0
-        #   MathUtils.estimate_matrix_transform_to_detector()
-        # - Convert points to rays for all (camera_id, frame_id) using frame_0 as basis
-        #   MathUtils.convert_detector_corners_to_vectors()
-        # - For each (frame_id, point_id), intersect N rays to get 3D points. All 3D Points = working_points.
-        #   MathUtils.closest_intersection_between_n_lines()
-        # - Refine camera positions based on working_points via PnP
-        #   MathUtils.estimate_matrix_transform_to_detector()
-        # Iterate max times or until convergence:
-        #  - Convert points to rays for all (camera_id, frame_id), using working_points as basis
-        #  - For each (frame_id, point_id), intersect N rays to get 3D points. All 3D Points = working_points.
-        #  - Refine camera positions based on working_points via PnP

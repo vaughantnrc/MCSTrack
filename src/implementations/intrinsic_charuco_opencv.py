@@ -16,8 +16,8 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
     def _calculate_implementation(
         self,
         image_resolution: ImageResolution,
-        image_identifiers: list[str]
-    ) -> tuple[IntrinsicCalibration, list[str]]:  # image_identifiers that were actually used in calibration
+        image_metadata_list: list[IntrinsicCalibrator.ImageMetadata]
+    ) -> tuple[IntrinsicCalibration, list[IntrinsicCalibrator.ImageMetadata]]:
         aruco_detector_parameters: ... = cv2.aruco.DetectorParameters()
 
         # mismatched_keys: list[str] = ArucoOpenCVAnnotator.assign_key_value_list_to_aruco_detection_parameters(
@@ -32,12 +32,9 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
 
         all_charuco_corners = list()
         all_charuco_ids = list()
-        used_image_identifiers: list[str] = list()
-        for image_identifier in image_identifiers:
-            image_filepath: str = self._image_filepath(
-                map_key=image_resolution,
-                image_identifier=image_identifier)
-            image_rgb = cv2.imread(image_filepath)
+        used_image_metadata: list[IntrinsicCalibrator.ImageMetadata] = list()
+        for metadata in image_metadata_list:
+            image_rgb = cv2.imread(metadata.filepath)
             image_greyscale = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
             (marker_corners, marker_ids, _) = cv2.aruco.detectMarkers(
                 image=image_greyscale,
@@ -46,10 +43,10 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
             if len(marker_corners) <= 0:
                 self._status_message_source.enqueue_status_message(
                     severity=SeverityLabel.WARNING,
-                    message=f"Image {image_identifier} did not appear to contain any identifiable markers. "
+                    message=f"Image {metadata.identifier} did not appear to contain any identifiable markers. "
                             f"It will be omitted from the calibration.")
                 continue
-            used_image_identifiers.append(image_identifier)
+            used_image_metadata.append(metadata)
             # Note:
             # Marker corners are the corners of the markers, whereas
             # ChArUco corners are the corners of the chessboard.
@@ -91,7 +88,7 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
             "calibrated_stdevs": [value[0] for value in charuco_intrinsic_stdevs],
             # "marker_parameters": marker_parameters,
             "frame_results": [{
-                "image_identifier": image_identifiers[i],
+                "image_identifier": used_image_metadata[i].identifier,
                 "translation": [
                     charuco_translation_vectors[i][0, 0],
                     charuco_translation_vectors[i][1, 0],
@@ -134,4 +131,4 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
                     float(charuco_distortion_coefficients[3, 0])]),
             supplemental_data=supplemental_data)
 
-        return intrinsic_calibration, used_image_identifiers
+        return intrinsic_calibration, used_image_metadata

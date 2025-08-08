@@ -17,6 +17,7 @@ from .api import \
 from .calibration import \
     ExtrinsicCalibration, \
     ExtrinsicCalibrationDetectorResult, \
+    ExtrinsicCalibrator, \
     IntrinsicCalibration, \
     IntrinsicCalibrator, \
     MCTIntrinsicCalibrationError

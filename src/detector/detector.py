@@ -146,7 +146,7 @@ class Detector(MCTComponent):
             arg_type=CalibrationImageGetRequest)
         image_base64: str
         try:
-            image_base64 = self._calibrator.get_image(image_identifier=request.image_identifier)
+            image_base64 = self._calibrator.load_image(identifier=request.image_identifier)
         except MCTIntrinsicCalibrationError as e:
             return ErrorResponse(message=e.message)
         return CalibrationImageGetResponse(image_base64=image_base64)
@@ -158,7 +158,7 @@ class Detector(MCTComponent):
             arg_type=CalibrationImageMetadataListRequest)
         image_metadata_list: list[IntrinsicCalibrator.ImageMetadata]
         try:
-            image_metadata_list = self._calibrator.list_image_metadata(
+            image_metadata_list = self._calibrator.list_image_metadata_by_image_resolution(
                 image_resolution=request.image_resolution)
         except MCTIntrinsicCalibrationError as e:
             return ErrorResponse(message=e.message)
@@ -202,7 +202,7 @@ class Detector(MCTComponent):
         intrinsic_calibration: IntrinsicCalibration | None
         try:
             image_resolution: ImageResolution = self._camera.get_resolution()
-            intrinsic_calibration = self._calibrator.get_result_active(image_resolution=image_resolution)
+            intrinsic_calibration = self._calibrator.get_result_active_by_image_resolution(image_resolution=image_resolution)
         except MCTIntrinsicCalibrationError as e:
             return ErrorResponse(message=e.message)
         return CalibrationResultGetActiveResponse(intrinsic_calibration=intrinsic_calibration)
@@ -214,7 +214,7 @@ class Detector(MCTComponent):
             arg_type=CalibrationResultMetadataListRequest)
         result_metadata_list: list[IntrinsicCalibrator.ResultMetadata]
         try:
-            result_metadata_list = self._calibrator.list_result_metadata(
+            result_metadata_list = self._calibrator.list_result_metadata_by_image_resolution(
                 image_resolution=request.image_resolution)
         except MCTIntrinsicCalibrationError as e:
             return ErrorResponse(message=e.message)
@@ -227,8 +227,8 @@ class Detector(MCTComponent):
             arg_type=CalibrationResultMetadataUpdateRequest)
         try:
             self._calibrator.update_result_metadata(
-                result_identifier=request.result_identifier,
-                result_state=request.result_state,
+                identifier=request.result_identifier,
+                state=request.result_state,
                 result_label=request.result_label)
         except MCTIntrinsicCalibrationError as e:
             return ErrorResponse(message=e.message)
