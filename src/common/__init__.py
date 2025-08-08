@@ -20,6 +20,7 @@ from .calibration import \
     ExtrinsicCalibrator, \
     IntrinsicCalibration, \
     IntrinsicCalibrator, \
+    MCTExtrinsicCalibrationError, \
     MCTIntrinsicCalibrationError
 from .camera import \
     Camera, \
@@ -30,6 +31,7 @@ from .image_processing import \
     ImageResolution, \
     ImageUtils
 from .math import \
+    FeatureRay, \
     IntrinsicParameters, \
     IterativeClosestPointParameters, \
     Landmark, \

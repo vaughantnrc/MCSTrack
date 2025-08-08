@@ -218,6 +218,24 @@ class Ray:
         self.direction = direction
 
 
+class FeatureRay(Ray):
+    """Same as Ray, but with an added feature_label str"""
+    feature_label: str
+
+    def __init__(
+        self,
+        feature_label: str,
+        source_point: list[float],
+        direction: list[float],
+        epsilon: float = _DEFAULT_EPSILON
+    ):
+        super().__init__(
+            source_point=source_point,
+            direction=direction,
+            epsilon=epsilon)
+        self.feature_label = feature_label
+
+
 class Target(BaseModel):
     """
     A trackable object.
@@ -418,7 +436,7 @@ class MathUtils:
 
     @staticmethod
     def convert_detector_points_to_vectors(
-        points: list[list[float]],  # [point_index][x/y/z]
+        points: list[list[float]],  # [point_index][x/y]
         detector_intrinsics: IntrinsicParameters,
         detector_to_reference_matrix: Matrix4x4
     ) -> list[list[float]]:
@@ -499,13 +517,13 @@ class MathUtils:
     @staticmethod
     def estimate_matrix_transform_to_detector(
         annotations: list[Annotation],
-        target: Target,
+        landmarks: list[Landmark],
         detector_intrinsics: IntrinsicParameters
     ) -> Matrix4x4:
         target_points: list[list[float]] = list()    # ordered points [point_index][x/y/z]
         detector_points: list[list[float]] = list()  # ordered points [point_index][x/y]
         annotations_dict: dict[str, Annotation] = {annotation.feature_label: annotation for annotation in annotations}
-        for landmark in target.landmarks:
+        for landmark in landmarks:
             if landmark.feature_label in annotations_dict.keys():
                 annotation = annotations_dict[landmark.feature_label]
                 target_points.append([landmark.x, landmark.y, landmark.z])

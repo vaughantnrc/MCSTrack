@@ -33,6 +33,14 @@ class MCTIntrinsicCalibrationError(MCTError):
         self.message = message
 
 
+class MCTExtrinsicCalibrationError(MCTError):
+    message: str
+
+    def __init__(self, message: str, *args):
+        super().__init__(args)
+        self.message = message
+
+
 _RESULT_FORMAT: Final[str] = ".json"
 
 
@@ -57,7 +65,8 @@ class _ImageMetadata(BaseModel):
     detector_label: str = Field()
     resolution: ImageResolution = Field()
     image_label: str = Field(default_factory=str)  # human-readable label
-    timestamp_utc: str = Field(default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
+    timestamp_utc_iso8601: str = Field(
+        default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
     state: _ImageState = Field(default=_ImageState.SELECT)
 
     def is_selected(self):
@@ -464,7 +473,10 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
         self,
         image_base64: str,
         detector_label: str = "",
+        timestamp_utc_iso8601: str | None = None
     ) -> str:  # id of image
+        if timestamp_utc_iso8601 is None:
+            timestamp_utc_iso8601 = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         image: numpy.ndarray = ImageUtils.base64_to_image(input_base64=image_base64, color_mode="color")
         identifier: str = str(uuid.uuid4())
         resolution: ImageResolution = ImageResolution(x_px=image.shape[1], y_px=image.shape[0])
@@ -473,7 +485,8 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
             identifier=identifier,
             filepath=filepath,
             detector_label=detector_label,
-            resolution=resolution)
+            resolution=resolution,
+            timestamp_utc_iso8601=timestamp_utc_iso8601)
         self._add_image(
             image=image,
             metadata=metadata)
@@ -655,7 +668,8 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
     def add_image(
         self,
         image_base64: str,
-        detector_label: str
+        detector_label: str,
+        timestamp_utc_iso8601: str
     ) -> str:  # id of image
         image: numpy.ndarray = ImageUtils.base64_to_image(input_base64=image_base64, color_mode="color")
         identifier: str = str(uuid.uuid4())
@@ -665,7 +679,8 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
             identifier=identifier,
             filepath=filepath,
             detector_label=detector_label,
-            resolution=resolution)
+            resolution=resolution,
+            timestamp_utc_iso8601=timestamp_utc_iso8601)
         self._add_image(
             image=image,
             metadata=metadata)
@@ -692,6 +707,13 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
                             "It will be omitted from the calibration.")
                 continue
             image_metadata_list.append(image_metadata)
+
+        # This is a check to make sure that there are no duplicates over any (timestamp, detector_label)
+        identifiers: list[tuple[str, str]] = [
+            (metadata.timestamp_utc_iso8601, metadata.detector_label)
+            for metadata in image_metadata_list]
+        if len(identifiers) != len(set(identifiers)):
+            raise MCTExtrinsicCalibrationError(message="Duplicates were detected over (timestamp, detector_label).")
 
         if len(image_metadata_list) == 0:
             raise MCTIntrinsicCalibrationError(message=f"No images found for calibration.")

@@ -1,4 +1,5 @@
 from src.common import \
+    Annotation, \
     KeyValueMetaAny, \
     KeyValueMetaBool, \
     KeyValueMetaEnum, \
@@ -143,11 +144,33 @@ class ArucoOpenCVCommon:
             self.marker_size_px = 400
             self.px_per_mm = 40
 
-        def aruco_dictionary(self) -> ...:  # type cv2.aruco.Dictionary
+        def aruco_dictionary(self) -> cv2.aruco.Dictionary:
             if self.dictionary_name != "DICT_4X4_100":
                 raise NotImplementedError("Only DICT_4X4_100 is currently implemented")
             aruco_dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
             return aruco_dictionary
+
+        def as_target(
+            self,
+            target_label: str
+        ) -> Target:
+            """
+            Note that the coordinates assume the same axes as get_marker_center_points,
+            but the origin is in the center of the board, not the bottom-left corner.
+            """
+            corner_points: list[list[float]] = self.get_marker_corner_points()
+            marker_count: int = len(corner_points) // 4
+            landmarks: list[Landmark] = list()
+            for marker_index in range(0, marker_count):
+                for corner_index in range(0, 4):
+                    landmarks.append(Landmark(
+                        feature_label=f"{marker_index}{Landmark.RELATION_CHARACTER}{corner_index}",
+                        x=corner_points[marker_index*4+corner_index][0],
+                        y=corner_points[marker_index*4+corner_index][1],
+                        z=corner_points[marker_index*4+corner_index][2]))
+            return Target(
+                label=target_label,
+                landmarks=landmarks)
 
         def size_px(self) -> tuple[float, float]:
             board_size_x_px = self.square_count_x * self.square_size_px
@@ -215,6 +238,44 @@ class ArucoOpenCVCommon:
         def get_marker_ids(self) -> list[int]:
             num_markers = self.square_count_x * self.square_count_y // 2
             return list(range(num_markers))
+
+    @staticmethod
+    def annotations_from_greyscale_image(
+        aruco_detector_parameters: cv2.aruco.DetectorParameters,
+        aruco_dictionary: cv2.aruco.Dictionary,
+        image_greyscale: numpy.ndarray
+    ) -> tuple[list[Annotation], list[Annotation]]:
+        (detected_corner_points_raw, detected_dictionary_indices, rejected_corner_points_raw) = cv2.aruco.detectMarkers(
+            image=image_greyscale,
+            dictionary=aruco_dictionary,
+            parameters=aruco_detector_parameters)
+
+        detected_annotations: list[Annotation] = list()
+        # note: detected_indices is (inconsistently) None sometimes if nothing is detected
+        if detected_dictionary_indices is not None and len(detected_dictionary_indices) > 0:
+            detected_count = detected_dictionary_indices.size
+            # Shape of some output was previously observed to (also) be inconsistent... make it consistent here:
+            detected_corner_points_px = numpy.array(detected_corner_points_raw).reshape((detected_count, 4, 2))
+            detected_dictionary_indices = list(detected_dictionary_indices.reshape(detected_count))
+            for detected_index, detected_id in enumerate(detected_dictionary_indices):
+                for corner_index in range(4):
+                    detected_label: str = f"{detected_id}{Annotation.RELATION_CHARACTER}{corner_index}"
+                    detected_annotations.append(Annotation(
+                        feature_label=detected_label,
+                        x_px=float(detected_corner_points_px[detected_index][corner_index][0]),
+                        y_px=float(detected_corner_points_px[detected_index][corner_index][1])))
+
+        rejected_annotations: list[Annotation] = list()
+        if rejected_corner_points_raw:
+            rejected_corner_points_px = numpy.array(rejected_corner_points_raw).reshape((-1, 4, 2))
+            for rejected_index in range(rejected_corner_points_px.shape[0]):
+                for corner_index in range(4):
+                    rejected_annotations.append(Annotation(
+                        feature_label=Annotation.UNIDENTIFIED_LABEL,
+                        x_px=float(rejected_corner_points_px[rejected_index][corner_index][0]),
+                        y_px=float(rejected_corner_points_px[rejected_index][corner_index][1])))
+
+        return detected_annotations, rejected_annotations
 
     @staticmethod
     def assign_aruco_detection_parameters_to_key_value_list(
@@ -626,6 +687,10 @@ class ArucoOpenCVCommon:
         base_label : str,
         marker_size: float
     ) -> Target:
+        """
+        :param base_label: Should correspond to the index of the ArUco marker in the dictionary
+        :param marker_size:
+        """
         corner_points: list[list[float]] = MathUtils.square_marker_corner_points(marker_size=marker_size)
         landmarks: list[Landmark] = [
             Landmark(

@@ -1,54 +1,264 @@
 from .common_aruco_opencv import ArucoOpenCVCommon
 from src.common import \
+    Annotation, \
     ExtrinsicCalibration, \
+    ExtrinsicCalibrationDetectorResult, \
     ExtrinsicCalibrator, \
-    IntrinsicParameters
+    FeatureRay, \
+    IntrinsicParameters, \
+    Landmark, \
+    MathUtils, \
+    Matrix4x4, \
+    Target
 import cv2
 import cv2.aruco
+import datetime
+import numpy
+from pydantic import BaseModel, Field
+from typing import Final
+
+
+_EPSILON: Final[float] = 0.0001
+
+
+class _ImageData(BaseModel):
+    """
+    Helper structure - data stored for each image
+    """
+    detector_label: str = Field()
+    annotations: list[Annotation] = Field()
+    rays: list[FeatureRay] = Field(default_factory=list)
+
+    def annotations_as_points(self) -> list[list[float]]:
+        return [
+            [annotation.x_px, annotation.y_px]
+            for annotation in self.annotations]
+
+
+class _FeatureData(BaseModel):
+    """
+    Helper structure - data stored for each feature
+    """
+    feature_label: str = Field()
+    position: Landmark | None = Field(default=None)  # None means it has not (or cannot) be calculated
+
+
+class _TimestampData(BaseModel):
+    """
+    Helper structure - data stored for each unique timestamp
+    """
+    timestamp_utc_iso8601: str = Field()
+    images: list[_ImageData] = Field(default_factory=list)
+    features: list[_FeatureData] = Field(default_factory=list)
+
+
+class _DetectorData(BaseModel):
+    """
+    Helper structure - data stored for each detector
+    """
+    detector_label: str = Field()
+    intrinsic_parameters: IntrinsicParameters = Field()
+    initial_to_reference: Matrix4x4 | None = Field(default=None)  # Stored primarily for analyses
+    refined_to_reference: Matrix4x4 | None = Field(default=None)
+
+
+class _CalibrationData(BaseModel):
+    """
+    Helper structure - container for all things related to calibration
+    """
+    timestamps: list[_TimestampData] = Field(default_factory=list)
+    detectors: list[_DetectorData] = Field(default_factory=list)
+
+    def get_detector_container(
+        self,
+        detector_label: str
+    ) -> _DetectorData:
+        for detector in self.detectors:
+            if detector.detector_label == detector_label:
+                return detector
+        raise IndexError()
+
+    def get_feature_container(
+        self,
+        timestamp_utc_iso8601: str,
+        feature_label: str
+    ) -> _FeatureData:
+        for timestamp in self.timestamps:
+            if timestamp.timestamp_utc_iso8601 == timestamp_utc_iso8601:
+                for feature in timestamp.features:
+                    if feature.feature_label == feature_label:
+                        return feature
+                break
+        raise IndexError()
+
+    def get_image_container(
+        self,
+        timestamp_utc_iso8601: str,
+        detector_label: str
+    ) -> _ImageData:
+        for timestamp in self.timestamps:
+            if timestamp.timestamp_utc_iso8601 == timestamp_utc_iso8601:
+                for image in timestamp.images:
+                    if image.detector_label == detector_label:
+                        return image
+                break
+        raise IndexError()
+
+    def get_timestamp_container(
+        self,
+        timestamp_utc_iso8601: str
+    ) -> _TimestampData:
+        for timestamp in self.timestamps:
+            if timestamp.timestamp_utc_iso8601 == timestamp_utc_iso8601:
+                return timestamp
+        raise IndexError()
 
 
 class CharucoOpenCVIntrinsicCalibrator(ExtrinsicCalibrator):
+
+    @staticmethod
+    def _annotate_image(
+        aruco_detector_parameters: cv2.aruco.DetectorParameters,
+        aruco_dictionary: cv2.aruco.Dictionary,
+        image_metadata: ExtrinsicCalibrator.ImageMetadata
+    ) -> list[Annotation]:
+        image_rgb = cv2.imread(image_metadata.filepath)
+        image_greyscale = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+        annotations: list[Annotation]
+        annotations, _ = ArucoOpenCVCommon.annotations_from_greyscale_image(
+            aruco_detector_parameters=aruco_detector_parameters,
+            aruco_dictionary=aruco_dictionary,
+            image_greyscale=image_greyscale)
+        return annotations
+
     def _calculate_implementation(
         self,
         detector_intrinsics_by_label: dict[str, IntrinsicParameters],
         image_metadata_list: list[ExtrinsicCalibrator.ImageMetadata]
     ) -> tuple[ExtrinsicCalibration, list[ExtrinsicCalibrator.ImageMetadata]]:
-        aruco_detector_parameters: ... = cv2.aruco.DetectorParameters()
+        charuco_spec: ArucoOpenCVCommon.CharucoBoard = ArucoOpenCVCommon.CharucoBoard()
+        aruco_detector_parameters: cv2.aruco.DetectorParameters = cv2.aruco.DetectorParameters()
+        aruco_dictionary: cv2.aruco.Dictionary = charuco_spec.aruco_dictionary()
+        charuco_target: Target = charuco_spec.as_target(target_label="board")
 
-        charuco_spec = ArucoOpenCVCommon.CharucoBoard()
-        charuco_board: cv2.aruco.CharucoBoard = charuco_spec.create_board()
+        # Populate _CalibrationData structure, including detection of annotations
+        data: _CalibrationData = _CalibrationData()
+        for metadata in image_metadata_list:
+            annotations: list[Annotation] = self._annotate_image(
+                aruco_detector_parameters=aruco_detector_parameters,
+                aruco_dictionary=aruco_dictionary,
+                image_metadata=metadata)
+            image_data: _ImageData = _ImageData(
+                detector_label=metadata.detector_label,
+                annotations=annotations)
+            timestamp_data: _TimestampData
+            try:
+                timestamp_data = data.get_timestamp_container(timestamp_utc_iso8601=metadata.timestamp_utc_iso8601)
+            except IndexError:
+                timestamp_data = _TimestampData(timestamp_utc_iso8601=metadata.timestamp_utc_iso8601)
+                data.timestamps.append(timestamp_data)
+            timestamp_data.images.append(image_data)
+            try:
+                data.get_detector_container(detector_label=image_data.detector_label)
+            except IndexError:
+                detector: _DetectorData = _DetectorData(
+                    detector_label=metadata.detector_label,
+                    intrinsic_parameters=detector_intrinsics_by_label[metadata.detector_label])
+                data.detectors.append(detector)
+            for annotation in annotations:
+                try:
+                    data.get_feature_container(
+                        timestamp_utc_iso8601=metadata.timestamp_utc_iso8601,
+                        feature_label=annotation.feature_label)
+                except IndexError:
+                    feature_data: _FeatureData = _FeatureData(feature_label=annotation.feature_label)
+                    timestamp_data = data.get_timestamp_container(timestamp_utc_iso8601=metadata.timestamp_utc_iso8601)
+                    timestamp_data.features.append(feature_data)
 
-        raise NotImplementedError()
+        # Initial estimate of the pose of each detector relative to first frame
+        first_timestamp: _TimestampData = data.get_timestamp_container(
+            timestamp_utc_iso8601=min([metadata.timestamp_utc_iso8601 for metadata in image_metadata_list]))
+        for metadata in image_metadata_list:
+            if metadata.timestamp_utc_iso8601 == first_timestamp.timestamp_utc_iso8601:
+                image_data: _ImageData = data.get_image_container(
+                    timestamp_utc_iso8601=metadata.timestamp_utc_iso8601,
+                    detector_label=metadata.detector_label)
+                intrinsic_parameters: IntrinsicParameters = detector_intrinsics_by_label[metadata.detector_label]
+                initial_to_reference: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
+                    annotations=image_data.annotations,
+                    landmarks=charuco_target.landmarks,
+                    detector_intrinsics=intrinsic_parameters)
+                detector: _DetectorData = _DetectorData(
+                    detector_label=metadata.detector_label,
+                    intrinsic_parameters=intrinsic_parameters,
+                    initial_to_reference=initial_to_reference,
+                    refined_to_reference=initial_to_reference)
+                data.detectors.append(detector)
 
-        # data:
-        #   per detector:
-        #     initial_frame transform to reference_target
-        #     final transform to reference_target
-        #     per frame:
-        #       image
-        #       (marker_id,2d_points)s
-        #   final (frame_id,marker_id,3d_points)s
-        #
-        # input data:
-        #   per detector:
-        #     per frame:
-        #       PNG: image
-        #
-        # output data:
-        #   per detector:
-        #     JSON: transform to reference_target
-        #     JSON: Additional stats, inc. reference_target definition
+        max_iter: int = 500
+        for i in range(0, max_iter):
+            # Update each ray based on the current pose
+            for timestamp_data in data.timestamps:
+                for image_data in timestamp_data.images:
+                    detector_data: _DetectorData = data.get_detector_container(detector_label=image_data.detector_label)
+                    feature_labels: list[str] = [annotation.feature_label for annotation in image_data.annotations]
+                    ray_directions: list[list[float]] = MathUtils.convert_detector_points_to_vectors(
+                        points=image_data.annotations_as_points(),
+                        detector_intrinsics=detector_data.intrinsic_parameters,
+                        detector_to_reference_matrix=detector_data.refined_to_reference)
+                    source_point: list[float] = detector_data.refined_to_reference.get_translation()
+                    annotation_count = len(image_data.annotations)
+                    image_data.rays = [
+                        FeatureRay(
+                            feature_label=feature_labels[annotation_index],
+                            source_point=source_point,
+                            direction=ray_directions[annotation_index])
+                        for annotation_index in range(0, annotation_count)]
+            # For each (timestamp, feature_label), intersect rays to get 3D positions in a common coordinate system
+            for timestamp_data in data.timestamps:
+                for feature_data in timestamp_data.features:
+                    ray_list: list[FeatureRay] = list()
+                    feature_label = feature_data.feature_label
+                    for image_data in timestamp_data.images:
+                        for ray in image_data.rays:
+                            if ray.feature_label == feature_label:
+                                ray_list.append(ray)
+                    ray_intersection: MathUtils.RayIntersectionNOutput = MathUtils.closest_intersection_between_n_lines(
+                        rays=ray_list,
+                        maximum_distance=_EPSILON)
+                    if ray_intersection.intersection_count() > 0:
+                        position: numpy.ndarray = ray_intersection.centroid()
+                        feature_data.position = Landmark(
+                            feature_label=feature_label,
+                            x=float(position[0]),
+                            y=float(position[1]),
+                            z=float(position[2]))
+                    else:
+                        feature_data.position = None
+            # Use the newly-calculated 3D points together with the annotations to update the pose (PnP)
+            for detector_data in data.detectors:
+                landmarks: list[Landmark] = list()
+                annotations: list[Annotation] = list()
+                for timestamp_data in data.timestamps:
+                    for feature_data in timestamp_data.features:
+                        for image_data in timestamp_data.images:
+                            for annotation in image_data.annotations:
+                                if annotation.feature_label == feature_data.feature_label:
+                                    landmarks.append(feature_data.position)
+                                    annotations.append(annotation)
+                refined_to_reference = MathUtils.estimate_matrix_transform_to_detector(
+                    annotations=annotations,
+                    landmarks=landmarks,
+                    detector_intrinsics=detector_data.intrinsic_parameters)
+                detector_data.refined_to_reference = refined_to_reference
+                # TODO: Termination criteria, check convergence on angle AND distance
 
-        # Constraint: Reference board must be visible to all cameras for first frame_id (frame_0)
-        # - Estimate camera position relative to frame_0
-        #   MathUtils.estimate_matrix_transform_to_detector()
-        # - Convert points to rays for all (camera_id, frame_id) using frame_0 as basis
-        #   MathUtils.convert_detector_corners_to_vectors()
-        # - For each (frame_id, point_id), intersect N rays to get 3D points. All 3D Points = working_points.
-        #   MathUtils.closest_intersection_between_n_lines()
-        # - Refine camera positions based on working_points via PnP
-        #   MathUtils.estimate_matrix_transform_to_detector()
-        # Iterate max times or until convergence:
-        #  - Convert points to rays for all (camera_id, frame_id), using working_points as basis
-        #  - For each (frame_id, point_id), intersect N rays to get 3D points. All 3D Points = working_points.
-        #  - Refine camera positions based on working_points via PnP
+        extrinsic_calibration: ExtrinsicCalibration = ExtrinsicCalibration(
+            timestamp_utc=datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            calibrated_values=[
+                ExtrinsicCalibrationDetectorResult(
+                    detector_label=detector_data.detector_label,
+                    detector_to_reference=detector_data.refined_to_reference)
+                for detector_data in data.detectors],
+            supplemental_data=data.model_dump())
+        return extrinsic_calibration, image_metadata_list

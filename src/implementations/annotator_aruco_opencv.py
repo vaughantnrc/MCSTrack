@@ -80,36 +80,9 @@ class ArucoOpenCVAnnotator(Annotator):
                 message=message)
             self.set_status(Annotator.Status.FAILURE)
             return
-
         image_greyscale = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        (detected_corner_points_raw, detected_dictionary_indices, rejected_corner_points_raw) = cv2.aruco.detectMarkers(
-            image=image_greyscale,
-            dictionary=self._aruco_dictionary,
-            parameters=self._aruco_parameters)
-
-        self._snapshots_identified = list()
-        # note: detected_indices is (inconsistently) None sometimes if nothing is detected
-        if detected_dictionary_indices is not None and len(detected_dictionary_indices) > 0:
-            detected_count = detected_dictionary_indices.size
-            # Shape of some output was previously observed to (also) be inconsistent... make it consistent here:
-            detected_corner_points_px = numpy.array(detected_corner_points_raw).reshape((detected_count, 4, 2))
-            detected_dictionary_indices = list(detected_dictionary_indices.reshape(detected_count))
-            for detected_index, detected_id in enumerate(detected_dictionary_indices):
-                for corner_index in range(4):
-                    detected_label: str = f"{detected_id}{Annotation.RELATION_CHARACTER}{corner_index}"
-                    self._snapshots_identified.append(Annotation(
-                        feature_label=detected_label,
-                        x_px=float(detected_corner_points_px[detected_index][corner_index][0]),
-                        y_px=float(detected_corner_points_px[detected_index][corner_index][1])))
-
-        self._snapshots_unidentified = list()
-        if rejected_corner_points_raw:
-            rejected_corner_points_px = numpy.array(rejected_corner_points_raw).reshape((-1, 4, 2))
-            for rejected_index in range(rejected_corner_points_px.shape[0]):
-                for corner_index in range(4):
-                    self._snapshots_unidentified.append(Annotation(
-                        feature_label=Annotation.UNIDENTIFIED_LABEL,
-                        x_px=float(rejected_corner_points_px[rejected_index][corner_index][0]),
-                        y_px=float(rejected_corner_points_px[rejected_index][corner_index][1])))
-
+        self._snapshots_identified, self._snapshots_unidentified = ArucoOpenCVCommon.annotations_from_greyscale_image(
+            aruco_detector_parameters=self._aruco_parameters,
+            aruco_dictionary=self._aruco_dictionary,
+            image_greyscale=image_greyscale)
         self._update_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)

@@ -346,7 +346,7 @@ class PoseSolver:
                 intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
                 reference_to_detector: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
                     annotations=annotation_list_by_detector_label[detector_label],
-                    target=reference_target,
+                    landmarks=reference_target.landmarks,
                     detector_intrinsics=intrinsics)
                 detector_to_reference: Matrix4x4 = Matrix4x4.from_numpy_array(
                     numpy.linalg.inv(reference_to_detector.as_numpy_array()))
@@ -431,7 +431,7 @@ class PoseSolver:
                 intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
                 detected_to_detector_matrix4x4: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
                     annotations=annotation_list_by_detector_label[detector_label],
-                    target=target,
+                    landmarks=target.landmarks,
                     detector_intrinsics=intrinsics)
                 detected_to_detector: numpy.ndarray = detected_to_detector_matrix4x4.as_numpy_array()
                 detector_to_reference: numpy.ndarray = self._poses_by_detector_label[detector_label].as_numpy_array()
