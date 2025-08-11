@@ -151,6 +151,10 @@ class Matrix4x4(BaseModel):
         result_numpy_array = numpy.matmul(self.as_numpy_array(), other.as_numpy_array())
         return Matrix4x4(values=list(result_numpy_array.flatten()))
 
+    def get_rotation_as_quaternion(self) -> list[float]:
+        # noinspection PyArgumentList
+        return Rotation.from_matrix(self.as_numpy_array()[0:3, 0:3]).as_quat().tolist()
+
     def get_translation(self) -> list[float]:
         """
         Return a vector of [x,y,z] representing translation.
@@ -218,22 +222,11 @@ class Ray:
         self.direction = direction
 
 
-class FeatureRay(Ray):
+class FeatureRay(BaseModel, Ray):
     """Same as Ray, but with an added feature_label str"""
+    source_point: list[float]
+    direction: list[float]
     feature_label: str
-
-    def __init__(
-        self,
-        feature_label: str,
-        source_point: list[float],
-        direction: list[float],
-        epsilon: float = _DEFAULT_EPSILON
-    ):
-        super().__init__(
-            source_point=source_point,
-            direction=direction,
-            epsilon=epsilon)
-        self.feature_label = feature_label
 
 
 class Target(BaseModel):
@@ -358,7 +351,7 @@ class MathUtils:
         centroids: numpy.ndarray
 
         # How many rays were used.
-        # Note that centroids might not use all possible intersections (e.g. parallel rays)
+        # Note that centroids might not use all possible intersections (e.g. parallel rays, exceeded maximum distance)
         ray_count: int
 
         def __init__(

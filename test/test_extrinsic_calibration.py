@@ -1,8 +1,9 @@
 from src.common import \
-    Annotation, \
-    Annotator, \
+    ExtrinsicCalibration, \
     ImageResolution, \
     ImageUtils, \
+    IntrinsicParameters, \
+    IntrinsicCalibration, \
     IntrinsicCalibrator, \
     KeyValueSimpleAny, \
     KeyValueSimpleString, \
@@ -10,11 +11,12 @@ from src.common import \
     StatusMessageSource
 from src.implementations.common_aruco_opencv import \
     ArucoOpenCVCommon
-from src.implementations.annotator_aruco_opencv import \
-    ArucoOpenCVAnnotator
+from src.implementations.extrinsic_charuco_opencv import \
+    CharucoOpenCVExtrinsicCalibrator
 from src.implementations.intrinsic_charuco_opencv import \
     CharucoOpenCVIntrinsicCalibrator
 import cv2
+import datetime
 import numpy
 import os
 import re
@@ -42,7 +44,11 @@ class TestPoseSolver(unittest.TestCase):
         # Organize ourselves with respect to the input data
         image_location: str = os.path.join("images", "simulated", "ideal")
         image_contents: list[str] = os.listdir(image_location)
-        image_filepaths: dict[str, dict[str, str]] = dict()  # Access as: images[CameraID][FrameID]
+        image_filepaths_by_camera_frame: dict[str, dict[str, str]] = dict()  # Access as: x[CameraID][FrameID]
+        image_filepaths_by_frame_camera: dict[str, dict[str, str]] = dict()  # Access as: x[FrameID][CameraID]
+        timestamps_iso8601_by_frame: dict[str, str] = dict()  # Access as: x[FrameID]
+        reference_time: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)
+        image_count: int = 0
         for image_content in image_contents:
             if image_content == "about.txt":
                 continue
@@ -59,10 +65,17 @@ class TestPoseSolver(unittest.TestCase):
 
             camera_id: str = match.group(IMAGE_CONTENT_MATCH_INDEX_CAMERA)
             frame_id: str = match.group(IMAGE_CONTENT_MATCH_INDEX_FRAME)
-            if camera_id not in image_filepaths:
-                image_filepaths[camera_id] = dict()
-            image_filepaths[camera_id][frame_id] = image_filepath
-        image_count: int = sum(len(image_filepaths[camera_id]) for camera_id in image_filepaths.keys())
+            if camera_id not in image_filepaths_by_camera_frame:
+                image_filepaths_by_camera_frame[camera_id] = dict()
+            image_filepaths_by_camera_frame[camera_id][frame_id] = image_filepath
+            if frame_id not in image_filepaths_by_frame_camera:
+                image_filepaths_by_frame_camera[frame_id] = dict()
+                timestamps_iso8601_by_frame[frame_id] = (
+                    reference_time
+                    - datetime.timedelta(hours=1)
+                    + datetime.timedelta(seconds=image_count)).isoformat()
+            image_filepaths_by_frame_camera[frame_id][camera_id] = image_filepath
+            image_count += 1
         message = f"Found {image_count} image files."
         status_message_source.enqueue_status_message(
             severity=SeverityLabel.INFO,
@@ -72,38 +85,42 @@ class TestPoseSolver(unittest.TestCase):
         # To simplify our lives and ensure a reasonable result,
         # we'll calibrate all cameras with the same set of input images.
         # We'll use all images from the A# and B# sets of frames.
-        calibration_result: CharucoOpenCVIntrinsicCalibrator | None
+        intrinsic_parameters: IntrinsicParameters
         with TemporaryDirectory() as temppath:
-            calibrator: CharucoOpenCVIntrinsicCalibrator = CharucoOpenCVIntrinsicCalibrator(
+            intrinsic_calibrator: CharucoOpenCVIntrinsicCalibrator = CharucoOpenCVIntrinsicCalibrator(
                 configuration=IntrinsicCalibrator.Configuration(data_path=temppath),
                 status_message_source=status_message_source)
-            for camera_id, image_filepaths_by_frame_id in image_filepaths.items():
+            for camera_id, image_filepaths_by_frame_id in image_filepaths_by_camera_frame.items():
                 for frame_id, image_filepath in image_filepaths_by_frame_id.items():
                     if not frame_id.startswith("A") and not frame_id.startswith("B"):
                         continue
                     image: numpy.ndarray = cv2.imread(image_filepath)
                     image_base64: str = ImageUtils.image_to_base64(image)
-                    calibrator.add_image(image_base64)
-            _, calibration_result = calibrator.calculate(image_resolution=IMAGE_RESOLUTION)
+                    intrinsic_calibrator.add_image(image_base64)
+            intrinsics_calibration: IntrinsicCalibration
+            _, intrinsics_calibration = intrinsic_calibrator.calculate(image_resolution=IMAGE_RESOLUTION)
+            intrinsic_parameters = intrinsics_calibration.calibrated_values
 
-        marker: ArucoOpenCVAnnotator = ArucoOpenCVAnnotator(
-            configuration=Annotator.Configuration(method="aruco_opencv"),
-            status_message_source=status_message_source)
-        marker.set_parameters(parameters=MARKER_DETECTION_PARAMETERS)
-        image_marker_snapshots: dict[str, dict[str, list[Annotation]]] = dict()
-        detection_count: int = 0
-        for camera_id, image_filepaths_by_frame_id in image_filepaths.items():
-            for frame_id, image_filepath in image_filepaths_by_frame_id.items():
-                if camera_id not in image_marker_snapshots:
-                    image_marker_snapshots[camera_id] = dict()
-                image: numpy.ndarray = cv2.imread(image_filepath)
-                marker.update(image)
-                marker_snapshots: list[Annotation] = marker.get_markers_detected()
-                image_marker_snapshots[camera_id][frame_id] = marker_snapshots
-                detection_count += len(marker_snapshots)
-        message = f"{detection_count} detections."
-        status_message_source.enqueue_status_message(
-            severity=SeverityLabel.INFO,
-            message=message)
+        intrinsics_by_camera: dict[str, IntrinsicParameters] = dict()  # Access as x[camera_id]
+        for camera_id in image_filepaths_by_camera_frame.keys():
+            intrinsics_by_camera[camera_id] = intrinsic_parameters
+
+        extrinsic_calibrator: CharucoOpenCVExtrinsicCalibrator
+        extrinsic_calibration: ExtrinsicCalibration
+        with TemporaryDirectory() as temppath:
+            extrinsic_calibrator: CharucoOpenCVExtrinsicCalibrator = CharucoOpenCVExtrinsicCalibrator(
+                configuration=IntrinsicCalibrator.Configuration(data_path=temppath),
+                status_message_source=status_message_source)
+            for frame_id, image_filepaths_by_camera_id in image_filepaths_by_frame_camera.items():
+                for camera_id, image_filepath in image_filepaths_by_camera_id.items():
+                    image: numpy.ndarray = cv2.imread(image_filepath)
+                    image_base64: str = ImageUtils.image_to_base64(image)
+                    extrinsic_calibrator.add_image(
+                        image_base64=image_base64,
+                        detector_label=camera_id,
+                        timestamp_utc_iso8601=timestamps_iso8601_by_frame[frame_id])
+            _, extrinsic_calibration = extrinsic_calibrator.calculate(detector_intrinsics_by_label=intrinsics_by_camera)
+
+        message = f"{len(extrinsic_calibration.calibrated_values)} calibrations."
         print(message)
 

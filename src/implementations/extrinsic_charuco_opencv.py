@@ -15,10 +15,16 @@ import cv2.aruco
 import datetime
 import numpy
 from pydantic import BaseModel, Field
+from scipy.spatial.transform import Rotation
+import sys
 from typing import Final
 
 
 _EPSILON: Final[float] = 0.0001
+_MAX_FLOAT: Final[float] = sys.float_info.max
+_TERMINATION_ITERATION_COUNT: Final[int] = 500
+_TERMINATION_ROTATION_CHANGE_DEGREES: Final[float] = 0.05
+_TERMINATION_TRANSLATION_CHANGE: Final[float] = 0.05
 
 
 class _ImageData(BaseModel):
@@ -114,7 +120,7 @@ class _CalibrationData(BaseModel):
         raise IndexError()
 
 
-class CharucoOpenCVIntrinsicCalibrator(ExtrinsicCalibrator):
+class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
 
     @staticmethod
     def _annotate_image(
@@ -188,18 +194,16 @@ class CharucoOpenCVIntrinsicCalibrator(ExtrinsicCalibrator):
                     annotations=image_data.annotations,
                     landmarks=charuco_target.landmarks,
                     detector_intrinsics=intrinsic_parameters)
-                detector: _DetectorData = _DetectorData(
-                    detector_label=metadata.detector_label,
-                    intrinsic_parameters=intrinsic_parameters,
-                    initial_to_reference=initial_to_reference,
-                    refined_to_reference=initial_to_reference)
-                data.detectors.append(detector)
+                detector: _DetectorData = data.get_detector_container(detector_label=image_data.detector_label)
+                detector.initial_to_reference = initial_to_reference
+                detector.refined_to_reference = initial_to_reference
 
-        max_iter: int = 500
-        for i in range(0, max_iter):
+        for i in range(0, _TERMINATION_ITERATION_COUNT):
             # Update each ray based on the current pose
             for timestamp_data in data.timestamps:
                 for image_data in timestamp_data.images:
+                    if len(image_data.annotations) == 0:
+                        continue
                     detector_data: _DetectorData = data.get_detector_container(detector_label=image_data.detector_label)
                     feature_labels: list[str] = [annotation.feature_label for annotation in image_data.annotations]
                     ray_directions: list[list[float]] = MathUtils.convert_detector_points_to_vectors(
@@ -225,7 +229,7 @@ class CharucoOpenCVIntrinsicCalibrator(ExtrinsicCalibrator):
                                 ray_list.append(ray)
                     ray_intersection: MathUtils.RayIntersectionNOutput = MathUtils.closest_intersection_between_n_lines(
                         rays=ray_list,
-                        maximum_distance=_EPSILON)
+                        maximum_distance=_MAX_FLOAT)
                     if ray_intersection.intersection_count() > 0:
                         position: numpy.ndarray = ray_intersection.centroid()
                         feature_data.position = Landmark(
@@ -236,6 +240,7 @@ class CharucoOpenCVIntrinsicCalibrator(ExtrinsicCalibrator):
                     else:
                         feature_data.position = None
             # Use the newly-calculated 3D points together with the annotations to update the pose (PnP)
+            converged: bool = True  # until shown otherwise
             for detector_data in data.detectors:
                 landmarks: list[Landmark] = list()
                 annotations: list[Annotation] = list()
@@ -243,15 +248,29 @@ class CharucoOpenCVIntrinsicCalibrator(ExtrinsicCalibrator):
                     for feature_data in timestamp_data.features:
                         for image_data in timestamp_data.images:
                             for annotation in image_data.annotations:
-                                if annotation.feature_label == feature_data.feature_label:
+                                if annotation.feature_label == feature_data.feature_label and \
+                                   feature_data.position is not None:
                                     landmarks.append(feature_data.position)
                                     annotations.append(annotation)
-                refined_to_reference = MathUtils.estimate_matrix_transform_to_detector(
+                refined_to_reference: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
                     annotations=annotations,
                     landmarks=landmarks,
                     detector_intrinsics=detector_data.intrinsic_parameters)
+                translation_change: float = numpy.linalg.norm(
+                    numpy.asarray(refined_to_reference.get_translation()) -
+                    numpy.asarray(detector_data.refined_to_reference.get_translation()))
+                old_to_reference: numpy.ndarray = detector_data.refined_to_reference.as_numpy_array()
+                reference_to_refined: numpy.ndarray = refined_to_reference.inverse().as_numpy_array()
+                old_to_refined: numpy.ndarray = numpy.matmul(reference_to_refined, old_to_reference)
+                # noinspection PyArgumentList
+                rotation_change_degrees: float = \
+                    numpy.linalg.norm(Rotation.from_matrix(old_to_refined[0:3, 0:3]).as_rotvec(degrees=True))
                 detector_data.refined_to_reference = refined_to_reference
-                # TODO: Termination criteria, check convergence on angle AND distance
+                if rotation_change_degrees > _TERMINATION_ROTATION_CHANGE_DEGREES or \
+                   translation_change > _TERMINATION_TRANSLATION_CHANGE:
+                    converged = False
+            if converged:
+                break
 
         extrinsic_calibration: ExtrinsicCalibration = ExtrinsicCalibration(
             timestamp_utc=datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),

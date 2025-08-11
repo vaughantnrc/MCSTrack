@@ -688,12 +688,17 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
     def calculate(
         self,
-        detector_labels: list[str],
-        detector_intrinsics: list[IntrinsicParameters]
+        detector_intrinsics_by_label: dict[str, IntrinsicParameters]
     ) -> tuple[str, ExtrinsicCalibration]:
         """
         :returns: a tuple containing a result identifier (GUID as string) and the ExtrinsicCalibration structure
         """
+
+        # if detector_labels != list(set(detector_labels)):
+        #     raise MCTIntrinsicCalibrationError(message=f"Detector labels must not contain duplicated elements.")
+        # if len(detector_labels) != len(detector_intrinsics):
+        #     raise MCTIntrinsicCalibrationError(message=f"Expected detector labels and intrinsics to be of same size.")
+        # detector_intrinsics_by_label: dict[str, IntrinsicParameters] = dict(zip(detector_labels, detector_intrinsics))
 
         image_metadata_list: list[_ImageMetadata] = list()  # image metadata available for calibration
         for image_index, image_metadata in enumerate(self._data_ledger.image_metadata_list):
@@ -718,21 +723,13 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
         if len(image_metadata_list) == 0:
             raise MCTIntrinsicCalibrationError(message=f"No images found for calibration.")
 
-        if detector_labels != list(set(detector_labels)):
-            raise MCTIntrinsicCalibrationError(message=f"Detector labels must not contain duplicated elements.")
-
-        if len(detector_labels) != len(detector_intrinsics):
-            raise MCTIntrinsicCalibrationError(message=f"Expected detector labels and intrinsics to be of same size.")
-
-        detector_intrinsics_by_label: dict[str, IntrinsicParameters] = dict(zip(detector_labels, detector_intrinsics))
-
         extrinsic_calibration, image_metadata_list = self._calculate_implementation(
             detector_intrinsics_by_label=detector_intrinsics_by_label,
             image_metadata_list=image_metadata_list)
 
         result_identifier: str = str(uuid.uuid4())
         result_filepath = os.path.join(self._data_path, result_identifier + _RESULT_FORMAT)
-        result_metadata: ExtrinsicCalibration.ResultMetadata = ExtrinsicCalibration.ResultMetadata(
+        result_metadata: ExtrinsicCalibrator.ResultMetadata = ExtrinsicCalibrator.ResultMetadata(
             identifier=result_identifier,
             filepath=result_filepath,
             image_identifiers=[image_metadata.identifier for image_metadata in image_metadata_list])
