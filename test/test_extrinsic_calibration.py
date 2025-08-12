@@ -1,9 +1,9 @@
 from src.common import \
     ExtrinsicCalibration, \
+    ExtrinsicCalibrationDetectorResult, \
     ImageResolution, \
     ImageUtils, \
     IntrinsicParameters, \
-    IntrinsicCalibration, \
     IntrinsicCalibrator, \
     KeyValueSimpleAny, \
     KeyValueSimpleString, \
@@ -13,8 +13,6 @@ from src.implementations.common_aruco_opencv import \
     ArucoOpenCVCommon
 from src.implementations.extrinsic_charuco_opencv import \
     CharucoOpenCVExtrinsicCalibrator
-from src.implementations.intrinsic_charuco_opencv import \
-    CharucoOpenCVIntrinsicCalibrator
 import cv2
 import datetime
 import numpy
@@ -82,24 +80,14 @@ class TestPoseSolver(unittest.TestCase):
             message=message)
 
         # All cameras have the same imaging parameters.
-        # To simplify our lives and ensure a reasonable result,
-        # we'll calibrate all cameras with the same set of input images.
-        # We'll use all images from the A# and B# sets of frames.
-        intrinsic_parameters: IntrinsicParameters
-        with TemporaryDirectory() as temppath:
-            intrinsic_calibrator: CharucoOpenCVIntrinsicCalibrator = CharucoOpenCVIntrinsicCalibrator(
-                configuration=IntrinsicCalibrator.Configuration(data_path=temppath),
-                status_message_source=status_message_source)
-            for camera_id, image_filepaths_by_frame_id in image_filepaths_by_camera_frame.items():
-                for frame_id, image_filepath in image_filepaths_by_frame_id.items():
-                    if not frame_id.startswith("A") and not frame_id.startswith("B"):
-                        continue
-                    image: numpy.ndarray = cv2.imread(image_filepath)
-                    image_base64: str = ImageUtils.image_to_base64(image)
-                    intrinsic_calibrator.add_image(image_base64)
-            intrinsics_calibration: IntrinsicCalibration
-            _, intrinsics_calibration = intrinsic_calibrator.calculate(image_resolution=IMAGE_RESOLUTION)
-            intrinsic_parameters = intrinsics_calibration.calibrated_values
+        # These were calculated by hand assuming lenses without any distortions
+        intrinsic_parameters: IntrinsicParameters = IntrinsicParameters(
+            focal_length_x_px=3582.76878,
+            focal_length_y_px=3640.38430,
+            optical_center_x_px=960.0,
+            optical_center_y_px=540.0,
+            radial_distortion_coefficients=[0, 0, 0],
+            tangential_distortion_coefficients=[0, 0])
 
         intrinsics_by_camera: dict[str, IntrinsicParameters] = dict()  # Access as x[camera_id]
         for camera_id in image_filepaths_by_camera_frame.keys():
@@ -121,6 +109,14 @@ class TestPoseSolver(unittest.TestCase):
                         timestamp_utc_iso8601=timestamps_iso8601_by_frame[frame_id])
             _, extrinsic_calibration = extrinsic_calibrator.calculate(detector_intrinsics_by_label=intrinsics_by_camera)
 
-        message = f"{len(extrinsic_calibration.calibrated_values)} calibrations."
-        print(message)
+        calibrated_value: ExtrinsicCalibrationDetectorResult
+        for calibrated_value in extrinsic_calibration.calibrated_values:
+            print(
+                f"Detector {calibrated_value.detector_label}:\n"
+                f"  Translation: {calibrated_value.detector_to_reference.get_translation()}\n"
+                f"  Rotation: {calibrated_value.detector_to_reference.get_rotation_as_quaternion(canonical=True)}")
 
+
+if __name__ == "__main__":
+    a = TestPoseSolver()
+    a.test()
