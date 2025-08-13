@@ -8,9 +8,7 @@ from .math import \
 from .serialization import \
     IOUtils
 from .status import \
-    MCTError, \
-    SeverityLabel, \
-    StatusMessageSource
+    MCTError
 import abc
 import datetime
 from enum import StrEnum
@@ -25,20 +23,36 @@ import uuid
 logger = logging.getLogger(__name__)
 
 
-class MCTIntrinsicCalibrationError(MCTError):
-    message: str
+class CalibrationErrorReason(StrEnum):
+    INITIALIZATION: Final[str] = "initialization"
+    INVALID_INPUT: Final[str] = "invalid_input"
+    INVALID_STATE: Final[str] = "invalid_state"
+    DATA_NOT_FOUND: Final[str] = "data_not_found"
+    COMPUTATION_FAILURE: Final[str] = "computation_failure"
 
-    def __init__(self, message: str, *args):
+
+_PUBLIC_MESSAGE_KEY: Final[str] = "public_message"
+_PRIVATE_MESSAGE_KEY: Final[str] = "private_message"
+
+
+class MCTCalibrationError(MCTError):
+    public_message: str | None
+    private_message: str
+    reason: CalibrationErrorReason
+
+    def __init__(
+        self,
+        reason: CalibrationErrorReason,
+        public_message: str | None = None,
+        private_message: str | None = None,
+        *args
+    ):
         super().__init__(args)
-        self.message = message
-
-
-class MCTExtrinsicCalibrationError(MCTError):
-    message: str
-
-    def __init__(self, message: str, *args):
-        super().__init__(args)
-        self.message = message
+        self.reason = reason
+        self.public_message = public_message
+        self.private_message = private_message
+        if self.private_message is None and self.public_message is not None:
+            self.private_message = self.private_message
 
 
 _RESULT_FORMAT: Final[str] = ".json"
@@ -106,70 +120,54 @@ class AbstractCalibrator(abc.ABC):
     _data_ledger: _DataLedger
     _data_ledger_filepath: str
 
-    _status_message_source: StatusMessageSource
-
     def __init__(
         self,
-        status_message_source: StatusMessageSource,
-        data_path: str
+        data_path: str,
+        **kwargs
     ):
-        self._status_message_source = status_message_source
-
         self._data_path = data_path
         if not self._exists_on_filesystem(path=self._data_path, pathtype="path", create_path=True):
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.CRITICAL,
-                message="Data path does not exist and could not be created.")
-            detailed_message: str = f"{self._data_path} does not exist and could not be created."
-            logger.critical(detailed_message)
-            raise RuntimeError(detailed_message)
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INITIALIZATION,
+                public_message="Data path does not exist and could not be created.",
+                private_message=f"{self._data_path} does not exist and could not be created.")
 
         self._data_ledger_filepath = os.path.join(self._data_path, AbstractCalibrator._DATA_LEDGER_FILENAME)
-        if not self._load_data_ledger():
-            message: str = "The data ledger could not be loaded or created. "\
-                           "In order to avoid data loss, the software will now abort. " \
-                           "Please manually correct or remove the file in the filesystem."
-            logger.critical(message)
-            self._status_message_source.enqueue_status_message(severity=SeverityLabel.CRITICAL, message=message)
-            raise RuntimeError(message)
+        self._load_data_ledger()
 
     def _add_image(
         self,
         image: numpy.ndarray,
         metadata: _ImageMetadata,
-    ) -> bool:
+    ) -> None:
         """
         Helper for saving images consistently across different types of calibrators
         Returns true if successful, False otherwise.
         """
         # Before making any changes to the data ledger, make sure folders exist
         if not self._exists_on_filesystem(path=os.path.dirname(metadata.filepath), pathtype="path", create_path=True):
-            message = "Failed to create storage location for input image."
-            logger.error(message)
-            self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
-            return False
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message="Failed to create storage location for input image.")
         # Also make sure that this file does not somehow already exist (highly unlikely)
         if os.path.exists(metadata.filepath):
-            logger.error(f"Image {metadata.filepath} appears to already exist. This is never expected to occur.")
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message="Image appears to already exist. This is never expected to occur. "
-                        "Please try again, and if this error continues to occur then please report a bug.")
-            return False
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message="Image appears to already exist. This is never expected to occur. "
+                               "Please try again, and if this error continues to occur then please report a bug.",
+                private_message=f"Image {metadata.filepath} appears to already exist. This is never expected to occur.")
         image_bytes: bytes
         image_bytes = ImageUtils.image_to_bytes(image_data=image, image_format=ImageFormat.FORMAT_PNG)
         try:
             with (open(metadata.filepath, 'wb') as in_file):
                 in_file.write(image_bytes)
         except IOError as e:
-            logger.error(f"Failed to save image to {metadata.filepath}, reason: {str(e)}.")
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message="Failed to save image - see calibration log for more details.")
-            return False
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message="Failed to save image - see local log for more details.",
+                private_message=f"Failed to save image to {metadata.filepath}, reason: {str(e)}.")
         self._data_ledger.image_metadata_list.append(metadata)
         self._save_data_ledger()
-        return True
 
     def _add_result(
         self,
@@ -183,22 +181,20 @@ class AbstractCalibrator(abc.ABC):
         self._data_ledger.result_metadata_list.append(metadata)
         self._save_data_ledger()
 
-    def _delete_file_if_exists(self, filepath: str):
+    @staticmethod
+    def _delete_file_if_exists(filepath: str):
         try:
             os.remove(filepath)
-        except FileNotFoundError as e:
-            logger.error(e)
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=f"Failed to remove a file from the calibrator because it does not exist. "
-                        f"See its internal log for details.")
+        except FileNotFoundError:
+            pass
         except OSError as e:
-            logger.error(e)
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=f"Failed to remove a file from the calibrator due to an unexpected reason. "
-                        f"See its internal log for details.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message=f"Failed to remove a file from the calibrator due to an unexpected reason. "
+                               f"See local log for details.",
+                private_message=f"Failed to delete file {filepath} for reason: {str(e)}.")
 
+    # noinspection DuplicatedCode
     def delete_staged(self) -> None:
         image_indices_to_delete: list = list()
         image_metadata: _ImageMetadata
@@ -218,21 +214,28 @@ class AbstractCalibrator(abc.ABC):
             del self._data_ledger.result_metadata_list[i]
         self._save_data_ledger()
 
+    @staticmethod
     def _exists_on_filesystem(
-        self,
         path: str,
         pathtype: IOUtils.PathType,
         create_path: bool = False
     ) -> bool:
-        return IOUtils.exists(
+        errors: dict[str, str] = dict()
+        return_value: bool = IOUtils.exists(
             path=path,
             pathtype=pathtype,
             create_path=create_path,
-            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=msg),
-            on_error_for_dev=logger.error)
+            on_error_for_user=lambda msg: errors.__setitem__(_PUBLIC_MESSAGE_KEY, msg),
+            on_error_for_dev=lambda msg: errors.__setitem__(_PRIVATE_MESSAGE_KEY, msg))
+        if len(errors) > 0:
+            logger.error(errors[_PRIVATE_MESSAGE_KEY])
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message=f"Error determining if a file exists on the file system; See local log for details.",
+                private_message=errors[_PRIVATE_MESSAGE_KEY])
+        return return_value
 
+    # noinspection DuplicatedCode
     def _get_result_metadata_by_identifier(
         self,
         identifier: str
@@ -245,11 +248,13 @@ class AbstractCalibrator(abc.ABC):
                 matching_result_metadata = result_metadata
                 break
         if match_count < 1:
-            raise MCTIntrinsicCalibrationError(
-                message=f"Identifier {identifier} is not associated with any result.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.DATA_NOT_FOUND,
+                public_message=f"Identifier {identifier} is not associated with any result.")
         elif match_count > 1:
-            raise MCTIntrinsicCalibrationError(
-                message=f"Identifier {identifier} is associated with multiple results.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message=f"Identifier {identifier} is associated with multiple results.")
         return matching_result_metadata
 
     def list_image_metadata(self) -> list[_ImageMetadata]:
@@ -258,58 +263,50 @@ class AbstractCalibrator(abc.ABC):
     def list_result_metadata(self) -> list[_ResultMetadata]:
         return list(self._data_ledger.result_metadata_list)
 
-    def _load_data_ledger(self) -> bool:
+    def _load_data_ledger(self) -> None:
         """
         :return: True if loaded or if it can be created without overwriting existing data. False otherwise.
         """
         json_dict: dict
-        load_success: bool
-        json_dict, load_success = self._load_dict_from_filepath(filepath=self._data_ledger_filepath)
-        if not load_success:
-            return False
+        json_dict = self._load_dict_from_filepath(filepath=self._data_ledger_filepath)
         try:
             self._data_ledger = _DataLedger(**json_dict)
         except ValidationError as e:
             logger.error(e)
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message="Failed to parse data ledger from file.")
-            return False
-        return True
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message=f"Error loading the data ledger; See local log for details.",
+                private_message=str(e))
 
+    @staticmethod
     def _load_dict_from_filepath(
-        self,
         filepath: str
-    ) -> tuple[dict, bool]:
+    ) -> dict:
         """
-        :return:
-            dict containing existing data (or empty if an unexpected error occurred)
-            bool indicating whether if loaded or if it can be created without overwriting existing data. False otherwise.
+        :return: dict containing existing data (or empty if no data exists)
         """
         if not os.path.exists(filepath):
-            return dict(), True
+            return dict()  # Not considered an error, just doesn't exist yet
         elif not os.path.isfile(filepath):
-            logger.critical(f"Json file location {filepath} exists but is not a file.")
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.CRITICAL,
-                message="Filepath location for json exists but is not a file. "
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message="A file failed to load. See local log for details.",
+                private_message=f"JSON at {filepath} exists but is not a file. "
                         "Most likely a directory exists at that location, "
                         "and it needs to be manually removed.")
-            return dict(), False
+        errors: dict[str, str] = dict()
         json_dict: dict = IOUtils.hjson_read(
             filepath=filepath,
-            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=msg),
-            on_error_for_dev=logger.error)
+            on_error_for_user=lambda msg: errors.__setitem__(_PUBLIC_MESSAGE_KEY, msg),
+            on_error_for_dev=lambda msg: errors.__setitem__(_PRIVATE_MESSAGE_KEY, msg))
         if not json_dict:
-            logger.error(f"Failed to load json from file {filepath}.")
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message="Failed to load json from file.")
-            return dict(), False
-        return json_dict, True
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message=f"Error loading data; See local log for details.",
+                private_message=errors[_PRIVATE_MESSAGE_KEY])
+        return json_dict
 
+    # noinspection DuplicatedCode
     def load_image(
         self,
         identifier: str
@@ -322,20 +319,26 @@ class AbstractCalibrator(abc.ABC):
                 matching_metadata = image_metadata
                 break
         if match_count < 1:
-            raise MCTIntrinsicCalibrationError(
-                message=f"Identifier {identifier} is not associated with any image.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.DATA_NOT_FOUND,
+                private_message=f"Identifier {identifier} is not associated with any image.")
         elif match_count > 1:
-            raise MCTIntrinsicCalibrationError(
-                message=f"Identifier {identifier} is associated with multiple images.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                private_message=f"Identifier {identifier} is associated with multiple images.")
 
         if not os.path.exists(matching_metadata.filepath):
-            raise MCTIntrinsicCalibrationError(message=f"File does not exist for image {identifier}.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                private_message=f"File does not exist for image {identifier}.")
         image_bytes: bytes
         try:
             with (open(matching_metadata.filepath, 'rb') as in_file):
                 image_bytes = in_file.read()
         except OSError:
-            raise MCTIntrinsicCalibrationError(message=f"Failed to open image {identifier}.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                private_message=f"Failed to open image {identifier}.")
         image_base64 = ImageUtils.bytes_to_base64(image_bytes=image_bytes)
         return image_base64
 
@@ -357,9 +360,7 @@ class AbstractCalibrator(abc.ABC):
         """
         json_dict: dict
         load_success: bool
-        json_dict, load_success = self._load_dict_from_filepath(metadata.filepath)
-        if not load_success:
-            raise MCTIntrinsicCalibrationError(message=f"Failed to load result {metadata.identifier}.")
+        json_dict = self._load_dict_from_filepath(metadata.filepath)
         result: result_type = result_type(**json_dict)
         return result
 
@@ -368,8 +369,8 @@ class AbstractCalibrator(abc.ABC):
             filepath=self._data_ledger_filepath,
             json_dict=self._data_ledger.model_dump())
 
+    @staticmethod
     def _save_dict_to_filepath(
-        self,
         filepath: str,
         json_dict: dict,
         ignore_none: bool = False
@@ -379,15 +380,20 @@ class AbstractCalibrator(abc.ABC):
         :param json_dict: What to write to the file
         :param ignore_none: See IOUtils.json_write
         """
+        errors: dict[str, str] = dict()
         IOUtils.json_write(
             filepath=filepath,
             json_dict=json_dict,
-            on_error_for_user=lambda msg: self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=msg),
-            on_error_for_dev=logger.error,
+            on_error_for_user=lambda msg: errors.__setitem__(_PUBLIC_MESSAGE_KEY, msg),
+            on_error_for_dev=lambda msg: errors.__setitem__(_PRIVATE_MESSAGE_KEY, msg),
             ignore_none=ignore_none)
+        if len(errors) > 0:
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message="Error saving data; See local log for more details.",
+                private_message=errors[_PRIVATE_MESSAGE_KEY])
 
+    # noinspection DuplicatedCode
     def update_image_metadata(
         self,
         image_identifier: str,
@@ -395,24 +401,27 @@ class AbstractCalibrator(abc.ABC):
         image_label: str | None
     ) -> None:
         match_count: int = 0
-        for image in self._data_ledger.image_metadata_list:
-            if image.identifier == image_identifier:
-                image.state = image_state
-                if image_label is not None:
-                    image.image_label = image_label
+        matched_metadata: _ImageMetadata | None = None
+        for metadata in self._data_ledger.image_metadata_list:
+            if metadata.identifier == image_identifier:
                 match_count += 1
-                break
+                matched_metadata = metadata
         if match_count < 1:
-            raise MCTIntrinsicCalibrationError(
-                message=f"Identifier {image_identifier} is not associated with any image.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.DATA_NOT_FOUND,
+                private_message=f"Identifier {image_identifier} is not associated with any image.")
         elif match_count > 1:
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"Identifier {image_identifier} is associated with multiple images. "
-                        "This suggests that the data ledger is in an inconsistent state. "
-                        "It may be prudent to either manually correct it, or recreate it.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                private_message=f"Identifier {image_identifier} is associated with multiple images. "
+                                "This suggests that the data ledger is in an inconsistent state. "
+                                "It may be prudent to either manually correct it, or recreate it.")
+        matched_metadata.state = image_state
+        if image_label is not None:
+            matched_metadata.image_label = image_label
         self._save_data_ledger()
 
+    # noinspection DuplicatedCode
     def update_result_metadata(
         self,
         identifier: str,
@@ -420,24 +429,24 @@ class AbstractCalibrator(abc.ABC):
         result_label: str | None = None
     ) -> None:
         match_count: int = 0
-        for result in self._data_ledger.result_metadata_list:
-            if result.identifier == identifier:
-                result.state = state
-                if result_label is not None:
-                    result.result_label = result_label
+        matched_metadata: _ResultMetadata | None = None
+        for metadata in self._data_ledger.result_metadata_list:
+            if metadata.identifier == identifier:
                 match_count += 1
-                break
-
+                matched_metadata = metadata
         if match_count < 1:
-            raise MCTIntrinsicCalibrationError(
-                message=f"Identifier {identifier} is not associated with any result.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.DATA_NOT_FOUND,
+                private_message=f"Identifier {identifier} is not associated with any result.")
         elif match_count > 1:
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"Identifier {identifier} is associated with multiple results. "
-                        "This suggests that the data ledger is in an inconsistent state. "
-                        "It may be prudent to either manually correct it, or recreate it.")
-
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                private_message=f"Identifier {identifier} is associated with multiple results. "
+                                "This suggests that the data ledger is in an inconsistent state. "
+                                "Please manually correct it, or recreate it.")
+        matched_metadata.state = state
+        if result_label is not None:
+            matched_metadata.result_label = result_label
         self._save_data_ledger()
 
 
@@ -463,12 +472,11 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
     def __init__(
         self,
         configuration: Configuration,
-        status_message_source: StatusMessageSource
     ):
         super().__init__(
-            status_message_source=status_message_source,
             data_path=configuration.data_path)
 
+    # noinspection DuplicatedCode
     def add_image(
         self,
         image_base64: str,
@@ -507,16 +515,20 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
             if image_metadata.state != _ImageState.SELECT:
                 continue
             if not self._exists_on_filesystem(path=image_metadata.filepath, pathtype="filepath"):
-                self._status_message_source.enqueue_status_message(
-                    severity=SeverityLabel.ERROR,
-                    message=f"Image {image_metadata.identifier} was not found. "
-                            "This suggests that the data ledger is in an inconsistent state. "
-                            "It will be omitted from the calibration.")
-                continue
+                raise MCTCalibrationError(
+                    reason=CalibrationErrorReason.INVALID_STATE,
+                    public_message="An image failed to load. "
+                                   "suggesting that the data ledger is in an inconsistent state. "
+                                   "Please see the locaL log for details.",
+                    private_message=f"Image {image_metadata.identifier} was not found. "
+                                    "This suggests that the data ledger is in an inconsistent state. "
+                                    "Please correct the data ledger.")
             image_metadata_list.append(image_metadata)
 
         if len(image_metadata_list) == 0:
-            raise MCTIntrinsicCalibrationError(message=f"No images found for resolution {str(image_resolution)}.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.COMPUTATION_FAILURE,
+                public_message=f"No images found for resolution {str(image_resolution)}.")
 
         intrinsic_calibration, image_metadata_list = self._calculate_implementation(
             image_resolution=image_resolution,
@@ -568,17 +580,16 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
                 matched_metadata = result_metadata
 
         if match_count < 1:
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"No result metadata is active for resolution {str(image_resolution)}."
-                        "Returning latest result.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.DATA_NOT_FOUND,
+                public_message=f"No result metadata is active for resolution {str(image_resolution)}. "
+                               "Please ensure one has been selected, then try again.")
         if match_count > 1:
-            self._status_message_source.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"Multiple result metadata are active for resolution {str(image_resolution)}. "
-                        "Returning latest active result. "
-                        "To recover from this ambiguous state, it is strong recommended to explicitly set "
-                        "one of the results as \"active\", which will reset others to \"retain\".")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message=f"Multiple result metadata are active for resolution {str(image_resolution)}. "
+                               "To recover from this ambiguous state, explicitly set "
+                               "one of the results as \"active\", which will reset others to \"retain\".")
 
         if matched_metadata is None:
             return None
@@ -659,12 +670,13 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
     def __init__(
         self,
         configuration: Configuration,
-        status_message_source: StatusMessageSource
+        **kwargs
     ):
         super().__init__(
-            status_message_source=status_message_source,
-            data_path=configuration.data_path)
+            data_path=configuration.data_path,
+            **kwargs)
 
+    # noinspection DuplicatedCode
     def add_image(
         self,
         image_base64: str,
@@ -705,12 +717,14 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
             if image_metadata.state != _ImageState.SELECT:
                 continue
             if not self._exists_on_filesystem(path=image_metadata.filepath, pathtype="filepath"):
-                self._status_message_source.enqueue_status_message(
-                    severity=SeverityLabel.ERROR,
-                    message=f"Image {image_metadata.identifier} was not found. "
-                            "This suggests that the data ledger is in an inconsistent state. "
-                            "It will be omitted from the calibration.")
-                continue
+                raise MCTCalibrationError(
+                    reason=CalibrationErrorReason.INVALID_STATE,
+                    public_message="An image failed to load. "
+                                   "suggesting that the data ledger is in an inconsistent state. "
+                                   "Please see the locaL log for details.",
+                    private_message=f"Image {image_metadata.identifier} was not found. "
+                                    "This suggests that the data ledger is in an inconsistent state. "
+                                    "Please correct the data ledger.")
             image_metadata_list.append(image_metadata)
 
         # This is a check to make sure that there are no duplicates over any (timestamp, detector_label)
@@ -718,10 +732,14 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
             (metadata.timestamp_utc_iso8601, metadata.detector_label)
             for metadata in image_metadata_list]
         if len(identifiers) != len(set(identifiers)):
-            raise MCTExtrinsicCalibrationError(message="Duplicates were detected over (timestamp, detector_label).")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message="Duplicate data were detected over (timestamp, detector_label).")
 
         if len(image_metadata_list) == 0:
-            raise MCTIntrinsicCalibrationError(message=f"No images found for calibration.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.COMPUTATION_FAILURE,
+                public_message=f"No images found for calibration.")
 
         extrinsic_calibration, image_metadata_list = self._calculate_implementation(
             detector_intrinsics_by_label=detector_intrinsics_by_label,

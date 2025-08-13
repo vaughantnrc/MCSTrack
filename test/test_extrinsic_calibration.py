@@ -6,9 +6,7 @@ from src.common import \
     IntrinsicParameters, \
     IntrinsicCalibrator, \
     KeyValueSimpleAny, \
-    KeyValueSimpleString, \
-    SeverityLabel, \
-    StatusMessageSource
+    KeyValueSimpleString
 from src.implementations.common_aruco_opencv import \
     ArucoOpenCVCommon
 from src.implementations.extrinsic_charuco_opencv import \
@@ -35,10 +33,6 @@ MARKER_DETECTION_PARAMETERS: list[KeyValueSimpleAny] = [
 
 class TestPoseSolver(unittest.TestCase):
     def test(self):
-        status_message_source: StatusMessageSource = StatusMessageSource(
-            source_label="test",
-            send_to_logger=True)  # Python built-in logger
-
         # Organize ourselves with respect to the input data
         image_location: str = os.path.join("images", "simulated", "ideal")
         image_contents: list[str] = os.listdir(image_location)
@@ -74,10 +68,6 @@ class TestPoseSolver(unittest.TestCase):
                     + datetime.timedelta(seconds=image_count)).isoformat()
             image_filepaths_by_frame_camera[frame_id][camera_id] = image_filepath
             image_count += 1
-        message = f"Found {image_count} image files."
-        status_message_source.enqueue_status_message(
-            severity=SeverityLabel.INFO,
-            message=message)
 
         # All cameras have the same imaging parameters.
         # These were calculated by hand assuming lenses without any distortions
@@ -97,8 +87,7 @@ class TestPoseSolver(unittest.TestCase):
         extrinsic_calibration: ExtrinsicCalibration
         with TemporaryDirectory() as temppath:
             extrinsic_calibrator: CharucoOpenCVExtrinsicCalibrator = CharucoOpenCVExtrinsicCalibrator(
-                configuration=IntrinsicCalibrator.Configuration(data_path=temppath),
-                status_message_source=status_message_source)
+                configuration=IntrinsicCalibrator.Configuration(data_path=temppath))
             for frame_id, image_filepaths_by_camera_id in image_filepaths_by_frame_camera.items():
                 for camera_id, image_filepath in image_filepaths_by_camera_id.items():
                     image: numpy.ndarray = cv2.imread(image_filepath)

@@ -1,11 +1,11 @@
 from .common_aruco_opencv import ArucoOpenCVCommon
 from src.common import \
+    CalibrationErrorReason, \
     ImageResolution, \
     IntrinsicCalibration, \
     IntrinsicCalibrator, \
     IntrinsicParameters, \
-    MCTIntrinsicCalibrationError, \
-    SeverityLabel
+    MCTCalibrationError
 import cv2
 import cv2.aruco
 import datetime
@@ -41,10 +41,6 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
                 dictionary=charuco_spec.aruco_dictionary(),
                 parameters=aruco_detector_parameters)
             if len(marker_corners) <= 0:
-                self._status_message_source.enqueue_status_message(
-                    severity=SeverityLabel.WARNING,
-                    message=f"Image {metadata.identifier} did not appear to contain any identifiable markers. "
-                            f"It will be omitted from the calibration.")
                 continue
             used_image_metadata.append(metadata)
             # Note:
@@ -63,7 +59,9 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
                 all_charuco_ids.append(frame_charuco_ids)
 
         if len(all_charuco_corners) <= 0:
-            raise MCTIntrinsicCalibrationError(message="The input images did not contain visible markers.")
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.COMPUTATION_FAILURE,
+                public_message="The input images did not contain visible markers.")
 
         # outputs to be stored in these containers
         calibration_result = cv2.aruco.calibrateCameraCharucoExtended(

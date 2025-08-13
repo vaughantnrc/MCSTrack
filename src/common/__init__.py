@@ -15,13 +15,13 @@ from .api import \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
 from .calibration import \
+    CalibrationErrorReason, \
     ExtrinsicCalibration, \
     ExtrinsicCalibrationDetectorResult, \
     ExtrinsicCalibrator, \
     IntrinsicCalibration, \
     IntrinsicCalibrator, \
-    MCTExtrinsicCalibrationError, \
-    MCTIntrinsicCalibrationError
+    MCTCalibrationError
 from .camera import \
     Camera, \
     MCTCameraRuntimeError
