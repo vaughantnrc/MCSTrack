@@ -122,10 +122,9 @@ class AbstractCalibrator(abc.ABC):
 
     def __init__(
         self,
-        data_path: str,
-        **kwargs
+        configuration: _Configuration
     ):
-        self._data_path = data_path
+        self._data_path = configuration.data_path
         if not self._exists_on_filesystem(path=self._data_path, pathtype="path", create_path=True):
             raise MCTCalibrationError(
                 reason=CalibrationErrorReason.INITIALIZATION,
@@ -471,10 +470,11 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
     def __init__(
         self,
-        configuration: Configuration,
+        configuration: Configuration | dict[str, ...],
     ):
-        super().__init__(
-            data_path=configuration.data_path)
+        if isinstance(configuration, dict):
+            configuration = IntrinsicCalibrator.Configuration(**configuration)
+        super().__init__(configuration=configuration)
 
     # noinspection DuplicatedCode
     def add_image(
@@ -669,12 +669,11 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
     def __init__(
         self,
-        configuration: Configuration,
-        **kwargs
+        configuration: Configuration | dict
     ):
-        super().__init__(
-            data_path=configuration.data_path,
-            **kwargs)
+        if isinstance(configuration, dict):
+            configuration = ExtrinsicCalibrator.Configuration(**configuration)
+        super().__init__(configuration=configuration)
 
     # noinspection DuplicatedCode
     def add_image(

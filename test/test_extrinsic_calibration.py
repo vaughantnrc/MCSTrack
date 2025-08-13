@@ -87,7 +87,7 @@ class TestPoseSolver(unittest.TestCase):
         extrinsic_calibration: ExtrinsicCalibration
         with TemporaryDirectory() as temppath:
             extrinsic_calibrator: CharucoOpenCVExtrinsicCalibrator = CharucoOpenCVExtrinsicCalibrator(
-                configuration=IntrinsicCalibrator.Configuration(data_path=temppath))
+                configuration=CharucoOpenCVExtrinsicCalibrator.Configuration(data_path=temppath))
             for frame_id, image_filepaths_by_camera_id in image_filepaths_by_frame_camera.items():
                 for camera_id, image_filepath in image_filepaths_by_camera_id.items():
                     image: numpy.ndarray = cv2.imread(image_filepath)

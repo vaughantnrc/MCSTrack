@@ -16,17 +16,6 @@ import datetime
 import numpy
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
-import sys
-from typing import Final
-
-
-_EPSILON: Final[float] = 0.0001
-_MAX_FLOAT: Final[float] = sys.float_info.max
-_TERMINATION_ITERATION_COUNT: Final[int] = 500
-_TERMINATION_ROTATION_CHANGE_DEGREES: Final[float] = 0.05
-_TERMINATION_TRANSLATION_CHANGE: Final[float] = 0.5
-
-_DEBUG_ANNOTATIONS: Final[bool] = False
 
 
 class _ImageData(BaseModel):
@@ -122,7 +111,23 @@ class _CalibrationData(BaseModel):
         raise IndexError()
 
 
+class _Configuration(ExtrinsicCalibrator.Configuration):
+    termination_iteration_count: int = Field(default=500)
+    termination_rotation_change_degrees: int = Field(default=0.05)
+    termination_translation_change: int = Field(default=0.5)
+    ray_intersection_maximum_distance: float = Field(default=50.0)
+
+
 class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
+
+    Configuration: type[ExtrinsicCalibrator.Configuration] = _Configuration
+    configuration: _Configuration
+
+    def __init__(self, configuration: Configuration | dict):
+        if isinstance(configuration, dict):
+            configuration = _Configuration(**configuration)
+        self.configuration = configuration
+        super().__init__(configuration)
 
     @staticmethod
     def _annotate_image(
@@ -137,11 +142,6 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
             aruco_detector_parameters=aruco_detector_parameters,
             aruco_dictionary=aruco_dictionary,
             image_greyscale=image_greyscale)
-        if _DEBUG_ANNOTATIONS:
-            for annotation in annotations:
-                cv2.drawMarker(img=image_rgb, position=(int(annotation.x_px), int(annotation.y_px)), color=(0, 255, 0))
-            cv2.imshow("Test", image_rgb)
-            cv2.waitKey(0)
         return annotations
 
     def _calculate_implementation(
@@ -206,7 +206,7 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                 detector.initial_to_reference = initial_to_reference
                 detector.refined_to_reference = initial_to_reference
 
-        for i in range(0, _TERMINATION_ITERATION_COUNT):
+        for i in range(0, self.configuration.termination_iteration_count):
             # Update each ray based on the current pose
             for timestamp_data in data.timestamps:
                 for image_data in timestamp_data.images:
@@ -237,7 +237,7 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                                 ray_list.append(ray)
                     ray_intersection: MathUtils.RayIntersectionNOutput = MathUtils.closest_intersection_between_n_lines(
                         rays=ray_list,
-                        maximum_distance=_MAX_FLOAT)
+                        maximum_distance=self.configuration.ray_intersection_maximum_distance)
                     if ray_intersection.intersection_count() > 0:
                         position: numpy.ndarray = ray_intersection.centroid()
                         feature_data.position = Landmark(
@@ -286,8 +286,8 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                 rotation_change_degrees: float = \
                     numpy.linalg.norm(Rotation.from_matrix(old_to_refined[0:3, 0:3]).as_rotvec(degrees=True))
                 detector_data.refined_to_reference = refined_to_reference
-                if rotation_change_degrees > _TERMINATION_ROTATION_CHANGE_DEGREES or \
-                   translation_change > _TERMINATION_TRANSLATION_CHANGE:
+                if rotation_change_degrees > self.configuration.termination_rotation_change_degrees or \
+                   translation_change > self.configuration.termination_translation_change:
                     converged = False
             if converged:
                 break
