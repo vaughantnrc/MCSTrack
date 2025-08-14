@@ -166,6 +166,21 @@ class Matrix4x4(BaseModel):
         inv_numpy_array = numpy.linalg.inv(self.as_numpy_array())
         return Matrix4x4.from_numpy_array(inv_numpy_array)
 
+    # Note that these methods are not yet tested, and are disabled for now
+    # def set_rotation_from_quaternion(self, quaternion: list[float]) -> None:
+    #     if len(quaternion) < 4:
+    #         raise ValueError()
+    #     # noinspection PyArgumentList
+    #     rotation_matrix: numpy.ndarray = Rotation.from_quat(quaternion).as_matrix()
+    #     self.values[0:3] = rotation_matrix[0, 0:3]
+    #     self.values[4:7] = rotation_matrix[1, 0:3]
+    #     self.values[8:11] = rotation_matrix[2, 0:3]
+    # def set_translation(self, translation: list[float]) -> None:
+    #     if len(translation) < 3:
+    #         raise ValueError()
+    #     a = self.values
+    #     a[3], a[7], a[11] = translation[0], translation[1], translation[2]
+
     @staticmethod
     def from_raw_values(
         v00, v01, v02, v03,
