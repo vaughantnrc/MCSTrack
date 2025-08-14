@@ -18,7 +18,8 @@ class CharucoOpenCVIntrinsicCalibrator(IntrinsicCalibrator):
         image_resolution: ImageResolution,
         image_metadata_list: list[IntrinsicCalibrator.ImageMetadata]
     ) -> tuple[IntrinsicCalibration, list[IntrinsicCalibrator.ImageMetadata]]:
-        aruco_detector_parameters: ... = cv2.aruco.DetectorParameters()
+        aruco_detector_parameters: cv2.aruco.DetectorParameters = \
+            ArucoOpenCVCommon.standard_aruco_detection_parameters()
 
         # mismatched_keys: list[str] = ArucoOpenCVAnnotator.assign_key_value_list_to_aruco_detection_parameters(
         #     detection_parameters=aruco_detector_parameters,

@@ -34,8 +34,8 @@ class ArucoOpenCVAnnotator(Annotator):
             configuration=configuration,
             status_message_source=status_message_source)
 
-        self._aruco_dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
-        self._aruco_parameters = cv2.aruco.DetectorParameters()
+        self._aruco_dictionary = ArucoOpenCVCommon.standard_aruco_dictionary()
+        self._aruco_parameters = ArucoOpenCVCommon.standard_aruco_detection_parameters()
         self._snapshots_identified = list()
         self._snapshots_unidentified = list()
         self._update_timestamp_utc = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)

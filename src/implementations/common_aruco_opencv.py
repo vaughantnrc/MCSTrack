@@ -683,6 +683,20 @@ class ArucoOpenCVCommon:
         return mismatched_keys
 
     @staticmethod
+    def standard_aruco_dictionary() -> cv2.aruco.Dictionary:
+        return cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
+
+    @staticmethod
+    def standard_aruco_detection_parameters() -> cv2.aruco.DetectorParameters:
+        aruco_detector_parameters: cv2.aruco.DetectorParameters = cv2.aruco.DetectorParameters()
+        # TODO
+        #   Curiously and counterintuitively, at least in testing with extrinsic calibration,
+        #   it looks like no corner refinement may yield more accurate results than subpixel.
+        #   More investigation seems warranted.
+        # aruco_detector_parameters.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+        return aruco_detector_parameters
+
+    @staticmethod
     def target_from_marker_parameters(
         base_label : str,
         marker_size: float

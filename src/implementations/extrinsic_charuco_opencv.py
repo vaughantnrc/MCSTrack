@@ -150,8 +150,9 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
         image_metadata_list: list[ExtrinsicCalibrator.ImageMetadata]
     ) -> tuple[ExtrinsicCalibration, list[ExtrinsicCalibrator.ImageMetadata]]:
         charuco_spec: ArucoOpenCVCommon.CharucoBoard = ArucoOpenCVCommon.CharucoBoard()
-        aruco_detector_parameters: cv2.aruco.DetectorParameters = cv2.aruco.DetectorParameters()
-        aruco_dictionary: cv2.aruco.Dictionary = charuco_spec.aruco_dictionary()
+        aruco_detector_parameters: cv2.aruco.DetectorParameters = \
+            ArucoOpenCVCommon.standard_aruco_detection_parameters()
+        aruco_dictionary: cv2.aruco.Dictionary = ArucoOpenCVCommon.standard_aruco_dictionary()
         charuco_target: Target = charuco_spec.as_target(target_label="board")
 
         # Populate _CalibrationData structure, including detection of annotations
