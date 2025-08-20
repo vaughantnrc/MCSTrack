@@ -99,7 +99,11 @@ class TestPoseSolver(unittest.TestCase):
                         image_base64=image_base64,
                         detector_label=camera_id,
                         timestamp_utc_iso8601=timestamps_iso8601_by_frame[frame_id])
-            _, extrinsic_calibration = extrinsic_calibrator.calculate(detector_intrinsics_by_label=intrinsics_by_camera)
+            for camera_id, intrinsic_parameters in intrinsics_by_camera.items():
+                extrinsic_calibrator.intrinsic_parameters_update(
+                    detector_label=camera_id,
+                    intrinsic_parameters=intrinsic_parameters)
+            _, extrinsic_calibration = extrinsic_calibrator.calculate()
 
         # label, translation, rotation (as quaternion)
         ground_truth_detector_poses: dict[str, tuple[list[float], list[float]]] = {

@@ -20,13 +20,13 @@ from src.common import \
     ImageUtils, \
     Matrix4x4, \
     Pose, \
-    PoseSolverFrame, \
+    MixerFrame, \
     StatusMessageSource
 from src.controller import MCTController
 from src.detector.api import \
     CameraImageGetRequest, \
     CameraImageGetResponse, \
-    CalibrationResultGetActiveResponse
+    IntrinsicCalibrationResultGetActiveResponse
 from src.gui.panels.detector_panel import _CAPTURE_FORMAT
 import cv2
 import datetime
@@ -82,7 +82,7 @@ class BoardBuilderPanel(BasePanel):
 
     _tracked_target_poses: list[Pose]
     # This could maybe be added to the LiveDetectorPreview class
-    _latest_pose_solver_frames: dict[str, PoseSolverFrame]
+    _latest_pose_solver_frames: dict[str, MixerFrame]
     live_detector_previews: list[LiveDetectorPreview]
 
     def __init__(
@@ -345,7 +345,7 @@ class BoardBuilderPanel(BasePanel):
     ) -> None:
         response: MCTResponse
         for response in response_series.series:
-            if isinstance(response, CalibrationResultGetActiveResponse):
+            if isinstance(response, IntrinsicCalibrationResultGetActiveResponse):
                 self._handle_calibration_result_get_active_response(
                     response=response,
                     responder=response_series.responder)
@@ -421,7 +421,7 @@ class BoardBuilderPanel(BasePanel):
 
     def _handle_calibration_result_get_active_response(
             self,
-            response: CalibrationResultGetActiveResponse,
+            response: IntrinsicCalibrationResultGetActiveResponse,
             responder: str
     ) -> None:
         if response:
@@ -599,7 +599,7 @@ class BoardBuilderPanel(BasePanel):
         image_panel.paint()
 
     def _render_frame(self, detector_poses, target_poses):
-        pose_solver_frame = PoseSolverFrame(
+        pose_solver_frame = MixerFrame(
             detector_poses=detector_poses,
             target_poses=target_poses,
             timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat()

@@ -5,9 +5,9 @@ from .api import \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
     PoseSolverSetExtrinsicRequest, \
-    PoseSolverSetIntrinsicRequest, \
+    MixerUpdateIntrinsicParametersRequest, \
     PoseSolverSetReferenceRequest, \
     PoseSolverSetTargetsRequest, \
-    PoseSolverStartRequest, \
-    PoseSolverStopRequest
-from.pose_solver_api import PoseSolverAPI
+    MixerStartRequest, \
+    MixerStopRequest
+from.mixer import Mixer

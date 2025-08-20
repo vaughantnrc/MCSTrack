@@ -1,23 +1,23 @@
 from .api import \
-    CalibrationCalculateRequest, \
-    CalibrationCalculateResponse, \
-    CalibrationDeleteStagedRequest, \
-    CalibrationImageAddRequest, \
-    CalibrationImageAddResponse, \
-    CalibrationImageGetRequest, \
-    CalibrationImageGetResponse, \
-    CalibrationImageMetadataListRequest, \
-    CalibrationImageMetadataListResponse, \
-    CalibrationImageMetadataUpdateRequest, \
-    CalibrationResolutionListRequest, \
-    CalibrationResolutionListResponse, \
-    CalibrationResultGetRequest, \
-    CalibrationResultGetResponse, \
-    CalibrationResultGetActiveRequest, \
-    CalibrationResultGetActiveResponse, \
-    CalibrationResultMetadataListRequest, \
-    CalibrationResultMetadataListResponse, \
-    CalibrationResultMetadataUpdateRequest, \
+    IntrinsicCalibrationCalculateRequest, \
+    IntrinsicCalibrationCalculateResponse, \
+    IntrinsicCalibrationDeleteStagedRequest, \
+    IntrinsicCalibrationImageAddRequest, \
+    IntrinsicCalibrationImageAddResponse, \
+    IntrinsicCalibrationImageGetRequest, \
+    IntrinsicCalibrationImageGetResponse, \
+    IntrinsicCalibrationImageMetadataListRequest, \
+    IntrinsicCalibrationImageMetadataListResponse, \
+    IntrinsicCalibrationImageMetadataUpdateRequest, \
+    IntrinsicCalibrationResolutionListRequest, \
+    IntrinsicCalibrationResolutionListResponse, \
+    IntrinsicCalibrationResultGetRequest, \
+    IntrinsicCalibrationResultGetResponse, \
+    IntrinsicCalibrationResultGetActiveRequest, \
+    IntrinsicCalibrationResultGetActiveResponse, \
+    IntrinsicCalibrationResultMetadataListRequest, \
+    IntrinsicCalibrationResultMetadataListResponse, \
+    IntrinsicCalibrationResultMetadataUpdateRequest, \
     CameraImageGetRequest, \
     CameraImageGetResponse, \
     CameraParametersGetRequest, \
@@ -34,5 +34,4 @@ from .api import \
     AnnotatorParametersGetResponse, \
     AnnotatorParametersSetRequest
 from .detector import \
-    Detector, \
-    DetectorConfiguration
+    Detector

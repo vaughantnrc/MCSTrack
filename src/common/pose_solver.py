@@ -1,22 +1,19 @@
-from .structures import \
-    DetectorRecord, \
-    PoseSolverParameters
-from src.common import \
-    Annotation, \
-    DetectorFrame, \
+from .image_processing import Annotation
+from .math import \
     IntrinsicParameters, \
     IterativeClosestPointParameters, \
     MathUtils, \
     Matrix4x4, \
-    MCTError, \
     Pose, \
     Ray, \
     Target
+from .status import MCTError
 import cv2
 import cv2.aruco
 import datetime
 import itertools
 import numpy
+from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 from typing import Final, TypeVar
 
@@ -26,6 +23,76 @@ _CORNER_COUNT: Final[int] = 4
 
 KeyType = TypeVar("KeyType")
 ValueType = TypeVar("ValueType")
+
+
+class _DetectorRecord:
+    """
+    Class whose purpose is to keep track of the latest position of each landmark (in annotation form)
+    for a single detector.
+    """
+
+    class TimestampedAnnotation:
+        annotation: Annotation
+        timestamp_utc: datetime.datetime
+        def __init__(
+            self,
+            annotation: Annotation,
+            timestamp_utc: datetime.datetime
+        ):
+            self.annotation = annotation
+            self.timestamp_utc = timestamp_utc
+
+    _timestamped_annotations: dict[str, TimestampedAnnotation]
+
+    def __init__(self):
+        self._timestamped_annotations = dict()
+
+    def add_frame_record(
+        self,
+        frame_annotations: list[Annotation],
+        frame_timestamp_utc: datetime.datetime
+    ) -> None:
+        for annotation in frame_annotations:
+            if annotation.feature_label not in self._timestamped_annotations:
+                self._timestamped_annotations[annotation.feature_label] = _DetectorRecord.TimestampedAnnotation(
+                    annotation=annotation,
+                    timestamp_utc=frame_timestamp_utc)
+                continue
+            timestamped_annotation: _DetectorRecord.TimestampedAnnotation = \
+                self._timestamped_annotations[annotation.feature_label]
+            if frame_timestamp_utc > timestamped_annotation.timestamp_utc:
+                self._timestamped_annotations[annotation.feature_label] = _DetectorRecord.TimestampedAnnotation(
+                    annotation=annotation,
+                    timestamp_utc=frame_timestamp_utc)
+
+    def clear_frame_records(self):
+        self._timestamped_annotations.clear()
+
+    def clear_frame_records_older_than(
+        self,
+        timestamp_utc: datetime.datetime
+    ) -> bool:
+        """
+        returns True if any changes were made
+        """
+        feature_labels_to_remove: list[str] = list()
+        entry: _DetectorRecord.TimestampedAnnotation
+        for entry in self._timestamped_annotations.values():
+            if entry.timestamp_utc < timestamp_utc:
+                feature_labels_to_remove.append(entry.annotation.feature_label)
+        if len(feature_labels_to_remove) <= 0:
+            return False
+        for feature_label in feature_labels_to_remove:
+            del self._timestamped_annotations[feature_label]
+        return True
+
+    def get_annotations(
+        self,
+        deep_copy: bool = True
+    ) -> list[Annotation]:
+        if deep_copy:
+            return [entry.annotation.model_copy() for entry in self._timestamped_annotations.values()]
+        return [entry.annotation for entry in self._timestamped_annotations.values()]
 
 
 class PoseSolverException(MCTError):
@@ -41,20 +108,39 @@ class PoseSolver:
     Class containing the actual "solver" logic, kept separate from the API.
     """
 
+    class Configuration(BaseModel):
+        minimum_detector_count: int = Field(default=2)
+        ray_intersection_maximum_distance: float = Field(default=10.0, description="millimeters")
+        icp_termination_iteration_count: int = Field(default=50)
+        icp_termination_translation: float = Field(default=0.005, description="millimeters")
+        icp_termination_rotation_radians: float = Field(default=0.0005)
+        icp_termination_mean_point_distance: float = Field(default=0.1, description="millimeters")
+        icp_termination_rms_point_distance: float = Field(default=0.1, description="millimeters")
+
+        denoise_outlier_maximum_distance: float = Field(default=10.0)
+        denoise_outlier_maximum_angle_degrees: float = Field(default=5.0)
+        denoise_storage_size: int = Field(default=10)
+        denoise_filter_size: int = Field(default=7)
+        denoise_required_starting_streak: int = Field(default=3)
+
+        # aruco_pose_estimator_method: int
+        #   SOLVEPNP_ITERATIVE works okay but is susceptible to optical illusions (flipping)
+        #   SOLVEPNP_P3P appears to return nan's on rare occasion
+        #   SOLVEPNP_SQPNP appears to return nan's on rare occasion
+        #   SOLVEPNP_IPPE_SQUARE does not seem to work very well at all, translation is much smaller than expected
+
     # bookkeeping
     _last_change_timestamp_utc: datetime.datetime
     _last_updated_timestamp_utc: datetime.datetime
 
     # inputs
-    _parameters: PoseSolverParameters
+    _configuration: Configuration
     _intrinsics_by_detector_label: dict[str, IntrinsicParameters]
     _extrinsics_by_detector_label: dict[str, Matrix4x4]
     _targets: list[Target]  # First target is considered the "reference"
     # input per frame
-    _detector_records_by_detector_label: dict[str, DetectorRecord]
+    _detector_records_by_detector_label: dict[str, _DetectorRecord]
 
-    # internal threshold
-    _minimum_marker_age_before_removal_seconds: float
     # use this to make sure each marker is associated uniquely to a single target
     _landmark_target_map: dict[str, Target]  # Each marker shall be used at most once by a single target
 
@@ -68,18 +154,12 @@ class PoseSolver:
         self._last_change_timestamp_utc = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
         self._last_updated_timestamp_utc = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
-        self._parameters = PoseSolverParameters()
+        self._configuration = PoseSolver.Configuration()
         self._intrinsics_by_detector_label = dict()
         self._extrinsics_by_detector_label = dict()
         self._targets = list()
         self._detector_records_by_detector_label = dict()
 
-        self._minimum_marker_age_before_removal_seconds = max([
-            self._parameters.POSE_DETECTOR_DENOISE_LIMIT_AGE_SECONDS,
-            self._parameters.POSE_SINGLE_CAMERA_EXTRAPOLATION_LIMIT_RAY_AGE_SECONDS,
-            self._parameters.POSE_SINGLE_CAMERA_NEAREST_LIMIT_RAY_AGE_SECONDS,
-            self._parameters.POSE_SINGLE_CAMERA_DEPTH_LIMIT_AGE_SECONDS,
-            self._parameters.POSE_MULTI_CAMERA_LIMIT_RAY_AGE_SECONDS])
         self._landmark_target_map = dict()
 
         self._poses_by_target_label = dict()
@@ -88,12 +168,15 @@ class PoseSolver:
     def add_detector_frame(
         self,
         detector_label: str,
-        detector_frame: DetectorFrame
+        frame_annotations: list[Annotation],
+        frame_timestamp_utc: datetime.datetime
     ) -> None:
         if detector_label not in self._detector_records_by_detector_label:
-            self._detector_records_by_detector_label[detector_label] = DetectorRecord()
+            self._detector_records_by_detector_label[detector_label] = _DetectorRecord()
         self._detector_records_by_detector_label[detector_label].clear_frame_records()
-        self._detector_records_by_detector_label[detector_label].add_frame_record(detector_frame)
+        self._detector_records_by_detector_label[detector_label].add_frame_record(
+            frame_annotations=frame_annotations,
+            frame_timestamp_utc=frame_timestamp_utc)
         self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     def add_target(
@@ -200,6 +283,7 @@ class PoseSolver:
         object_to_reference_rotation_quaternion: list[float]
     ) -> float:
         object_to_reference_matrix = numpy.identity(4, dtype="float32")
+        # noinspection PyArgumentList
         object_to_reference_matrix[0:3, 0:3] = Rotation.from_quat(object_to_reference_rotation_quaternion).as_matrix()
         object_to_reference_matrix[0:3, 3] = object_to_reference_translation
         object_points_reference = numpy.empty((len(object_points_target), 3), dtype="float32")
@@ -211,6 +295,7 @@ class PoseSolver:
         detector_label: str = ray_set.detector_label
         reference_to_detector_matrix: Matrix4x4 = ray_set.detector_to_reference_matrix
         reference_to_detector: numpy.ndarray = reference_to_detector_matrix.as_numpy_array()
+        # noinspection PyArgumentList
         reference_to_detector_rotation_vector = \
             Rotation.as_rotvec(Rotation.from_matrix(reference_to_detector[0:3, 0:3]))
         reference_to_detector_translation = reference_to_detector[0:3, 3]
@@ -234,24 +319,24 @@ class PoseSolver:
         rms_reprojection_error = numpy.sqrt(mean_reprojection_errors_squared)
         return rms_reprojection_error
 
-    @staticmethod
     def _denoise_is_pose_pair_outlier(
+        self,
         pose_a_object_to_reference_matrix: numpy.ndarray,
-        pose_b_object_to_reference_matrix: numpy.ndarray,
-        parameters: PoseSolverParameters
+        pose_b_object_to_reference_matrix: numpy.ndarray
     ) -> bool:
 
         position_a = pose_a_object_to_reference_matrix[0:3, 3]
         position_b = pose_b_object_to_reference_matrix[0:3, 3]
         distance_millimeters = numpy.linalg.norm(position_a - position_b)
-        if distance_millimeters > parameters.DENOISE_OUTLIER_DISTANCE_MILLIMETERS:
+        if distance_millimeters > self._configuration.denoise_outlier_maximum_distance:
             return True
 
         orientation_a = pose_a_object_to_reference_matrix[0:3, 0:3]
         orientation_b = pose_b_object_to_reference_matrix[0:3, 0:3]
         rotation_a_to_b = numpy.matmul(orientation_a, numpy.linalg.inv(orientation_b))
+        # noinspection PyArgumentList
         angle_degrees = numpy.linalg.norm(Rotation.from_matrix(rotation_a_to_b).as_rotvec())
-        if angle_degrees > parameters.DENOISE_OUTLIER_DISTANCE_MILLIMETERS:
+        if angle_degrees > self._configuration.denoise_outlier_maximum_angle_degrees:
             return True
 
         return False
@@ -264,15 +349,15 @@ class PoseSolver:
         raw_poses: list[...]  # In order, oldest to newest
     ) -> ...:
         most_recent_pose = raw_poses[-1]
-        max_storage_size: int = self._parameters.DENOISE_STORAGE_SIZE
-        filter_size: int = self._parameters.DENOISE_FILTER_SIZE
+        max_storage_size: int = self._configuration.denoise_storage_size
+        filter_size: int = self._configuration.denoise_filter_size
         if filter_size <= 1 or max_storage_size <= 1:
             return most_recent_pose  # trivial case
 
         # find a consistent range of recent indices
         poses: list[...] = list(raw_poses)
         poses.reverse()  # now they are sorted so that the first element is most recent
-        required_starting_streak: int = self._parameters.DENOISE_REQUIRED_STARTING_STREAK
+        required_starting_streak: int = self._configuration.denoise_required_starting_streak
         starting_index: int = -1  # not yet known, we want to find this
         if required_starting_streak <= 1:
             starting_index = 0  # trivial case
@@ -304,11 +389,13 @@ class PoseSolver:
 
         translations = [list(pose.object_to_reference_matrix[0:3, 3])
                         for pose in poses_to_average]
+        # noinspection PyArgumentList
         orientations = [list(Rotation.from_matrix(pose.object_to_reference_matrix[0:3, 0:3]).as_quat(canonical=True))
                         for pose in poses_to_average]
         filtered_translation = MathUtils.average_vector(translations)
         filtered_orientation = MathUtils.average_quaternion(orientations)
         filtered_object_to_reference_matrix = numpy.identity(4, dtype="float32")
+        # noinspection PyArgumentList
         filtered_object_to_reference_matrix[0:3, 0:3] = Rotation.from_quat(filtered_orientation).as_matrix()
         filtered_object_to_reference_matrix[0:3, 3] = filtered_translation
         # return PoseData(
@@ -393,7 +480,7 @@ class PoseSolver:
         for feature_label, rays_by_detector_label in rays_by_feature_and_detector.items():
             intersection_result = MathUtils.closest_intersection_between_n_lines(
                 rays=list(rays_by_detector_label.values()),
-                maximum_distance=self._parameters.INTERSECTION_MAXIMUM_DISTANCE)
+                maximum_distance=self._configuration.ray_intersection_maximum_distance)
             if intersection_result.centroids.shape[0] == 0:
                 feature_labels_with_rays_only.append(feature_label)
                 break
@@ -420,7 +507,7 @@ class PoseSolver:
                 continue  # No information on which to base a pose
 
             detector_count_seeing_target: int = len(detector_labels_seeing_target)
-            if detector_count_seeing_target < self._parameters.minimum_detector_count or \
+            if detector_count_seeing_target < self._configuration.minimum_detector_count or \
                detector_count_seeing_target <= 0:
                 continue
 
@@ -452,11 +539,11 @@ class PoseSolver:
                     list(rays_by_feature_and_detector[feature_label].values())
                     for feature_label in target_feature_labels_with_rays]))
                 iterative_closest_point_parameters = IterativeClosestPointParameters(
-                    termination_iteration_count=self._parameters.icp_termination_iteration_count,
-                    termination_delta_translation=self._parameters.icp_termination_translation,
-                    termination_delta_rotation_radians=self._parameters.icp_termination_rotation_radians,
-                    termination_mean_point_distance=self._parameters.icp_termination_mean_point_distance,
-                    termination_rms_point_distance=self._parameters.icp_termination_rms_point_distance)
+                    termination_iteration_count=self._configuration.icp_termination_iteration_count,
+                    termination_delta_translation=self._configuration.icp_termination_translation,
+                    termination_delta_rotation_radians=self._configuration.icp_termination_rotation_radians,
+                    termination_mean_point_distance=self._configuration.icp_termination_mean_point_distance,
+                    termination_rms_point_distance=self._configuration.icp_termination_rms_point_distance)
                 if len(target_feature_labels_with_intersections) >= 1:
                     initial_detected_to_reference_matrix = MathUtils.register_corresponding_points(
                         point_set_from=detected_known_points,

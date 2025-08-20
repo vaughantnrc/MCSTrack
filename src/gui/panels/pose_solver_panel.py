@@ -16,7 +16,7 @@ from src.common import \
     StatusMessageSource, \
     SeverityLabel, \
     Pose, \
-    PoseSolverFrame
+    MixerFrame
 from src.controller import \
     MCTController
 import datetime
@@ -43,7 +43,7 @@ class PoseSolverPanel(BasePanel):
     _control_blocking_request_id: uuid.UUID | None
     _is_updating: bool
     _latest_detector_frames: dict[str, DetectorFrame]  # last frame for each detector
-    _latest_pose_solver_frames: dict[str, PoseSolverFrame]
+    _latest_pose_solver_frames: dict[str, MixerFrame]
     _target_id_to_label: dict[str, str]
     _tracked_target_poses: list[Pose]
 
@@ -214,11 +214,11 @@ class PoseSolverPanel(BasePanel):
             new_poses_available: bool = False
             pose_solver_labels: list[str] = self._controller.get_active_pose_solver_labels()
             for pose_solver_label in pose_solver_labels:
-                retrieved_pose_solver_frame: PoseSolverFrame = self._controller.get_live_pose_solver_frame(
+                retrieved_pose_solver_frame: MixerFrame = self._controller.get_live_pose_solver_frame(
                     pose_solver_label=pose_solver_label)
                 retrieved_pose_solver_frame_timestamp: datetime.datetime = retrieved_pose_solver_frame.timestamp_utc()
                 if pose_solver_label in self._latest_pose_solver_frames:
-                    latest_pose_solver_frame: PoseSolverFrame = self._latest_pose_solver_frames[pose_solver_label]
+                    latest_pose_solver_frame: MixerFrame = self._latest_pose_solver_frames[pose_solver_label]
                     latest_pose_solver_frame_timestamp: datetime.datetime = latest_pose_solver_frame.timestamp_utc()
                     if retrieved_pose_solver_frame_timestamp > latest_pose_solver_frame_timestamp:
                         self._latest_pose_solver_frames[pose_solver_label] = retrieved_pose_solver_frame

@@ -1,4 +1,4 @@
-from src.detector.detector_app import app
+from src.detector.app import app
 import logging
 import uvicorn
 

@@ -13,20 +13,20 @@ from src.common import \
     MCTResponse, \
     MCTResponseSeries, \
     Pose, \
-    PoseSolverFrame, \
+    MixerFrame, \
     SeverityLabel, \
     StatusMessage, \
     Target, \
     TimestampGetResponse
 from src.detector.api import \
-    CalibrationCalculateResponse, \
-    CalibrationImageAddResponse, \
-    CalibrationImageGetResponse, \
-    CalibrationImageMetadataListResponse, \
-    CalibrationResolutionListResponse, \
-    CalibrationResultGetResponse, \
-    CalibrationResultGetActiveResponse, \
-    CalibrationResultMetadataListResponse, \
+    IntrinsicCalibrationCalculateResponse, \
+    IntrinsicCalibrationImageAddResponse, \
+    IntrinsicCalibrationImageGetResponse, \
+    IntrinsicCalibrationImageMetadataListResponse, \
+    IntrinsicCalibrationResolutionListResponse, \
+    IntrinsicCalibrationResultGetResponse, \
+    IntrinsicCalibrationResultGetActiveResponse, \
+    IntrinsicCalibrationResultMetadataListResponse, \
     CameraImageGetResponse, \
     CameraParametersGetResponse, \
     CameraParametersSetRequest, \
@@ -645,14 +645,14 @@ class DetectorConnection(Connection):
 
     def supported_response_types(self) -> list[type[MCTResponse]]:
         return super().supported_response_types() + [
-            CalibrationCalculateResponse,
-            CalibrationImageAddResponse,
-            CalibrationImageGetResponse,
-            CalibrationImageMetadataListResponse,
-            CalibrationResolutionListResponse,
-            CalibrationResultGetResponse,
-            CalibrationResultGetActiveResponse,
-            CalibrationResultMetadataListResponse,
+            IntrinsicCalibrationCalculateResponse,
+            IntrinsicCalibrationImageAddResponse,
+            IntrinsicCalibrationImageGetResponse,
+            IntrinsicCalibrationImageMetadataListResponse,
+            IntrinsicCalibrationResolutionListResponse,
+            IntrinsicCalibrationResultGetResponse,
+            IntrinsicCalibrationResultGetActiveResponse,
+            IntrinsicCalibrationResultMetadataListResponse,
             CameraImageGetResponse,
             CameraParametersGetResponse,
             CameraParametersSetResponse,
@@ -673,7 +673,7 @@ class PoseSolverConnection(Connection):
     target_poses: list[Pose]
     detector_timestamps: dict[str, datetime.datetime]  # access by detector_label
     poses_timestamp: datetime.datetime
-    recording: list[PoseSolverFrame] | None
+    recording: list[MixerFrame] | None
 
     def __init__(
         self,

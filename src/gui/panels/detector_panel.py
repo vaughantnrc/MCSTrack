@@ -23,8 +23,8 @@ from src.common import \
 from src.controller import \
     MCTController
 from src.detector.api import \
-    CalibrationImageAddRequest, \
-    CalibrationImageAddResponse, \
+    IntrinsicCalibrationImageAddRequest, \
+    IntrinsicCalibrationImageAddResponse, \
     CameraImageGetRequest, \
     CameraImageGetResponse, \
     CameraParametersGetRequest, \
@@ -278,7 +278,7 @@ class DetectorPanel(BasePanel):
 
     def begin_capture_calibration(self) -> None:
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
-        request_series: MCTRequestSeries = MCTRequestSeries(series=[CalibrationImageAddRequest()])
+        request_series: MCTRequestSeries = MCTRequestSeries(series=[IntrinsicCalibrationImageAddRequest()])
         self._control_blocking_request_id = self._controller.request_series_push(
             connection_label=selected_detector_label,
             request_series=request_series)
@@ -338,7 +338,7 @@ class DetectorPanel(BasePanel):
     ) -> None:
         response: MCTResponse
         for response in response_series.series:
-            if isinstance(response, CalibrationImageAddResponse):
+            if isinstance(response, IntrinsicCalibrationImageAddResponse):
                 self._handle_add_calibration_image_response(response=response)
             elif isinstance(response, CameraImageGetResponse):
                 self._handle_capture_snapshot_response(response=response)
@@ -353,7 +353,7 @@ class DetectorPanel(BasePanel):
 
     def _handle_add_calibration_image_response(
         self,
-        response: CalibrationImageAddResponse
+        response: IntrinsicCalibrationImageAddResponse
     ):
         self.status_message_source.enqueue_status_message(
             severity="info",

@@ -17,7 +17,7 @@ from src.common import \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
-    PoseSolverFrame, \
+    MixerFrame, \
     SeverityLabel, \
     StatusMessageSource, \
     TimestampGetRequest, \
@@ -25,15 +25,15 @@ from src.common import \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
 from src.detector import \
-    CalibrationResultGetActiveRequest, \
-    CalibrationResultGetActiveResponse, \
+    IntrinsicCalibrationResultGetActiveRequest, \
+    IntrinsicCalibrationResultGetActiveResponse, \
     CameraResolutionGetRequest, \
     CameraResolutionGetResponse, \
     Detector, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse
 from src.pose_solver import \
-    PoseSolverAPI, \
+    MixerBackend, \
     PoseSolverAddDetectorFrameRequest, \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
@@ -58,7 +58,7 @@ ConnectionType = TypeVar('ConnectionType', bound=Connection)
 _ROLE_LABEL: Final[str] = "controller"
 _SUPPORTED_ROLES: Final[list[str]] = [
     Detector.get_role_label(),
-    PoseSolverAPI.get_role_label()]
+    MixerBackend.get_role_label()]
 _TIME_SYNC_SAMPLE_MAXIMUM_COUNT: Final[int] = 5
 
 
@@ -171,7 +171,7 @@ class MCTController(MCTComponent):
             return_value: DetectorConnection = DetectorConnection(component_address=component_address)
             self._connections[label] = return_value
             return return_value
-        elif component_address.role == PoseSolverAPI.get_role_label():
+        elif component_address.role == MixerBackend.get_role_label():
             return_value: PoseSolverConnection = PoseSolverConnection(component_address=component_address)
             self._connections[label] = return_value
             return return_value
@@ -226,7 +226,7 @@ class MCTController(MCTComponent):
                 request_series: MCTRequestSeries = MCTRequestSeries(
                     series=[
                         CameraResolutionGetRequest(),
-                        CalibrationResultGetActiveRequest()])
+                        IntrinsicCalibrationResultGetActiveRequest()])
                 self._pending_request_ids.append(self.request_series_push(
                     connection_label=detector_label,
                     request_series=request_series))
@@ -284,7 +284,7 @@ class MCTController(MCTComponent):
         """
         See get_component_labels.
         """
-        return self.get_component_labels(role=PoseSolverAPI.get_role_label(), active=True)
+        return self.get_component_labels(role=MixerBackend.get_role_label(), active=True)
 
     def get_component_labels(
         self,
@@ -356,7 +356,7 @@ class MCTController(MCTComponent):
     def get_live_pose_solver_frame(
         self,
         pose_solver_label: str
-    ) -> PoseSolverFrame | None:
+    ) -> MixerFrame | None:
         """
         returns None if the pose solver does not exist, or has not been started, or if it has not yet gotten frames.
         """
@@ -365,7 +365,7 @@ class MCTController(MCTComponent):
             connection_type=PoseSolverConnection)
         if pose_solver_connection is None:
             return None
-        return PoseSolverFrame(
+        return MixerFrame(
             detector_poses=pose_solver_connection.detector_poses,
             target_poses=pose_solver_connection.target_poses,
             timestamp_utc_iso8601=pose_solver_connection.poses_timestamp.isoformat())
@@ -387,7 +387,7 @@ class MCTController(MCTComponent):
 
     def handle_response_calibration_result_get_active(
         self,
-        response: CalibrationResultGetActiveResponse,
+        response: IntrinsicCalibrationResultGetActiveResponse,
         detector_label: str
     ) -> None:
         detector_connection: DetectorConnection = self._get_connection(
@@ -527,7 +527,7 @@ class MCTController(MCTComponent):
         success: bool = True
         response: MCTResponse
         for response in response_series.series:
-            if isinstance(response, CalibrationResultGetActiveResponse):
+            if isinstance(response, IntrinsicCalibrationResultGetActiveResponse):
                 self.handle_response_calibration_result_get_active(
                     response=response,
                     detector_label=response_series.responder)
@@ -589,7 +589,7 @@ class MCTController(MCTComponent):
             # Do not record if specified
             if report.role == Detector.get_role_label() and not self._recording_detector:
                 continue
-            if report.role == PoseSolverAPI.get_role_label() and not self._recording_pose_solver:
+            if report.role == MixerBackend.get_role_label() and not self._recording_pose_solver:
                 continue
 
             if self._recording_save_path is not None:
@@ -694,7 +694,7 @@ class MCTController(MCTComponent):
             raise RuntimeError("Cannot start up if controller isn't first stopped.")
         for connection in self._connections.values():
             if mode == StartupMode.DETECTING_ONLY and \
-               connection.get_role() == PoseSolverAPI.get_role_label():
+               connection.get_role() == MixerBackend.get_role_label():
                 continue
             connection.start_up()
 
@@ -732,7 +732,7 @@ class MCTController(MCTComponent):
             all_connected: bool = True
             for connection in connections:
                 if self._startup_mode == StartupMode.DETECTING_ONLY and \
-                   connection.get_role() == PoseSolverAPI.get_role_label():
+                   connection.get_role() == MixerBackend.get_role_label():
                     continue
                 if not connection.is_start_up_finished():
                     all_connected = False

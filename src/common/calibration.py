@@ -1,3 +1,5 @@
+from urllib import request
+
 from .image_processing import \
     ImageFormat, \
     ImageResolution, \
@@ -234,6 +236,12 @@ class AbstractCalibrator(abc.ABC):
                 private_message=errors[_PRIVATE_MESSAGE_KEY])
         return return_value
 
+    def get_image_by_identifier(
+        self,
+        identifier: str
+    ) -> str:
+        return self._load_image(identifier=identifier)
+
     # noinspection DuplicatedCode
     def _get_result_metadata_by_identifier(
         self,
@@ -306,7 +314,7 @@ class AbstractCalibrator(abc.ABC):
         return json_dict
 
     # noinspection DuplicatedCode
-    def load_image(
+    def _load_image(
         self,
         identifier: str
     ) -> str:  # image in base64
@@ -423,27 +431,27 @@ class AbstractCalibrator(abc.ABC):
     # noinspection DuplicatedCode
     def update_result_metadata(
         self,
-        identifier: str,
-        state: _ResultState,
+        result_identifier: str,
+        result_state: _ResultState,
         result_label: str | None = None
     ) -> None:
         match_count: int = 0
         matched_metadata: _ResultMetadata | None = None
         for metadata in self._data_ledger.result_metadata_list:
-            if metadata.identifier == identifier:
+            if metadata.identifier == result_identifier:
                 match_count += 1
                 matched_metadata = metadata
         if match_count < 1:
             raise MCTCalibrationError(
                 reason=CalibrationErrorReason.DATA_NOT_FOUND,
-                private_message=f"Identifier {identifier} is not associated with any result.")
+                private_message=f"Identifier {result_identifier} is not associated with any result.")
         elif match_count > 1:
             raise MCTCalibrationError(
                 reason=CalibrationErrorReason.INVALID_STATE,
-                private_message=f"Identifier {identifier} is associated with multiple results. "
+                private_message=f"Identifier {result_identifier} is associated with multiple results. "
                                 "This suggests that the data ledger is in an inconsistent state. "
                                 "Please manually correct it, or recreate it.")
-        matched_metadata.state = state
+        matched_metadata.state = result_state
         if result_label is not None:
             matched_metadata.result_label = result_label
         self._save_data_ledger()
@@ -548,8 +556,8 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
         # For now, assume that the user's intent is to set any new calibration to be the active one
         self.update_result_metadata(
-            identifier=result_metadata.identifier,
-            state=_ResultState.ACTIVE)
+            result_identifier=result_metadata.identifier,
+            result_state=_ResultState.ACTIVE)
 
         return result_identifier, intrinsic_calibration
 
@@ -578,6 +586,7 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
         for result_metadata in self._data_ledger.result_metadata_list:
             if result_metadata.state == _ResultState.ACTIVE and result_metadata.resolution == image_resolution:
                 matched_metadata = result_metadata
+                match_count += 1
 
         if match_count < 1:
             raise MCTCalibrationError(
@@ -590,9 +599,6 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
                 public_message=f"Multiple result metadata are active for resolution {str(image_resolution)}. "
                                "To recover from this ambiguous state, explicitly set "
                                "one of the results as \"active\", which will reset others to \"retain\".")
-
-        if matched_metadata is None:
-            return None
 
         return self._load_result_by_metadata(
             metadata=matched_metadata,
@@ -625,18 +631,18 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
     def update_result_metadata(
         self,
-        identifier: str,
-        state: ResultState,
+        result_identifier: str,
+        result_state: ResultState,
         result_label: str | None = None
     ) -> None:
         super().update_result_metadata(
-            identifier=identifier,
-            state=state,
+            result_identifier=result_identifier,
+            result_state=result_state,
             result_label=result_label)
 
         # Some cleanup as applicable
-        if state == _ResultState.ACTIVE:
-            matching_metadata: _ResultMetadata = self._get_result_metadata_by_identifier(identifier=identifier)
+        if result_state == _ResultState.ACTIVE:
+            matching_metadata: _ResultMetadata = self._get_result_metadata_by_identifier(identifier=result_identifier)
             for metadata in self._data_ledger.result_metadata_list:
                 if metadata.resolution == matching_metadata.resolution and \
                    metadata.identifier != matching_metadata.identifier:
@@ -667,12 +673,15 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
     ResultState: type[_ResultState] = _ResultState
     ResultMetadata: type[_ResultMetadata] = _ResultMetadata
 
+    detector_intrinsics_by_label: dict[str, IntrinsicParameters]
+
     def __init__(
         self,
         configuration: Configuration | dict
     ):
         if isinstance(configuration, dict):
             configuration = ExtrinsicCalibrator.Configuration(**configuration)
+        self.detector_intrinsics_by_label = dict()
         super().__init__(configuration=configuration)
 
     # noinspection DuplicatedCode
@@ -698,8 +707,7 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
         return metadata.identifier
 
     def calculate(
-        self,
-        detector_intrinsics_by_label: dict[str, IntrinsicParameters]
+        self
     ) -> tuple[str, ExtrinsicCalibration]:
         """
         :returns: a tuple containing a result identifier (GUID as string) and the ExtrinsicCalibration structure
@@ -741,7 +749,6 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
                 public_message=f"No images found for calibration.")
 
         extrinsic_calibration, image_metadata_list = self._calculate_implementation(
-            detector_intrinsics_by_label=detector_intrinsics_by_label,
             image_metadata_list=image_metadata_list)
 
         result_identifier: str = str(uuid.uuid4())
@@ -756,15 +763,21 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
         # For now, assume that the user's intent is to set any new calibration to be the active one
         self.update_result_metadata(
-            identifier=result_metadata.identifier,
-            state=_ResultState.ACTIVE)
+            result_identifier=result_metadata.identifier,
+            result_state=_ResultState.ACTIVE)
 
         return result_identifier, extrinsic_calibration
+
+    def intrinsic_parameters_update(
+        self,
+        detector_label: str,
+        intrinsic_parameters: IntrinsicParameters
+    ) -> None:
+        self.detector_intrinsics_by_label[detector_label] = intrinsic_parameters
 
     @abc.abstractmethod
     def _calculate_implementation(
         self,
-        detector_intrinsics_by_label: dict[str, IntrinsicParameters],
         image_metadata_list: list[ImageMetadata]
     ):
         pass
@@ -776,3 +789,29 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
         return self._load_result(
             identifier=result_identifier,
             result_type=ExtrinsicCalibration)
+
+    def get_result_active(
+        self
+    ) -> Optional[ExtrinsicCalibration]:
+        match_count: int = 0
+        matched_metadata: IntrinsicCalibrator.ResultMetadata | None = None
+        for result_metadata in self._data_ledger.result_metadata_list:
+            if result_metadata.state == _ResultState.ACTIVE:
+                matched_metadata = result_metadata
+                match_count += 1
+
+        if match_count < 1:
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.DATA_NOT_FOUND,
+                public_message=f"No result metadata is active. "
+                               "Please ensure one has been selected, then try again.")
+        if match_count > 1:
+            raise MCTCalibrationError(
+                reason=CalibrationErrorReason.INVALID_STATE,
+                public_message=f"Multiple result metadata are active. "
+                               "To recover from this ambiguous state, explicitly set "
+                               "one of the results as \"active\", which will reset others to \"retain\".")
+
+        return self._load_result_by_metadata(
+            metadata=matched_metadata,
+            result_type=IntrinsicCalibration)

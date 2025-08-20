@@ -43,7 +43,10 @@ from .math import \
 from .mct_component import \
     DetectorFrame, \
     MCTComponent, \
-    PoseSolverFrame
+    MixerFrame
+from .pose_solver import \
+    PoseSolver, \
+    PoseSolverException
 from .serialization import \
     IOUtils, \
     KeyValueSimpleAbstract, \

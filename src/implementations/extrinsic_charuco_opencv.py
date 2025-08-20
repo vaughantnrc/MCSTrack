@@ -146,7 +146,6 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
 
     def _calculate_implementation(
         self,
-        detector_intrinsics_by_label: dict[str, IntrinsicParameters],
         image_metadata_list: list[ExtrinsicCalibrator.ImageMetadata]
     ) -> tuple[ExtrinsicCalibration, list[ExtrinsicCalibrator.ImageMetadata]]:
         charuco_spec: ArucoOpenCVCommon.CharucoBoard = ArucoOpenCVCommon.CharucoBoard()
@@ -177,7 +176,7 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
             except IndexError:
                 detector: _DetectorData = _DetectorData(
                     detector_label=metadata.detector_label,
-                    intrinsic_parameters=detector_intrinsics_by_label[metadata.detector_label])
+                    intrinsic_parameters=self.detector_intrinsics_by_label[metadata.detector_label])
                 data.detectors.append(detector)
             for annotation in annotations:
                 try:
@@ -197,7 +196,7 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                 image_data: _ImageData = data.get_image_container(
                     timestamp_utc_iso8601=metadata.timestamp_utc_iso8601,
                     detector_label=metadata.detector_label)
-                intrinsic_parameters: IntrinsicParameters = detector_intrinsics_by_label[metadata.detector_label]
+                intrinsic_parameters: IntrinsicParameters = self.detector_intrinsics_by_label[metadata.detector_label]
                 reference_to_initial: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
                     annotations=image_data.annotations,
                     landmarks=charuco_target.landmarks,

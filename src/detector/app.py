@@ -1,5 +1,5 @@
 from .api import \
-    CalibrationResultGetActiveResponse, \
+    IntrinsicCalibrationResultGetActiveResponse, \
     CameraImageGetRequest, \
     CameraImageGetResponse, \
     CameraParametersGetResponse, \
@@ -9,8 +9,7 @@ from .api import \
     AnnotatorParametersGetResponse, \
     AnnotatorParametersSetRequest
 from .detector import \
-    Detector, \
-    DetectorConfiguration
+    Detector
 from src.common import \
     Camera, \
     Annotator, \
@@ -37,11 +36,11 @@ logger = logging.getLogger(__name__)
 def create_app() -> FastAPI:
     detector_configuration_filepath: str = \
         os.path.join(os.path.dirname(__file__), "..", "..", "data", "detector_config.json")
-    detector_configuration: DetectorConfiguration
+    detector_configuration: Detector.Configuration
     with open(detector_configuration_filepath, 'r') as infile:
         detector_configuration_file_contents: str = infile.read()
         detector_configuration_dict = hjson.loads(detector_configuration_file_contents)
-        detector_configuration = DetectorConfiguration(**detector_configuration_dict)
+        detector_configuration = Detector.Configuration(**detector_configuration_dict)
 
     # Eventually it would be preferable to put the initialization logic/mapping below into an abstract factory,
     # and allow end-users to register custom classes that are not necessarily shipped within this library.
@@ -77,6 +76,17 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"])
+
+    @detector_app.get("/annotator/get_parameters")
+    async def annotator_get_parameters() -> AnnotatorParametersGetResponse | ErrorResponse:
+        return detector.annotator_parameters_get()
+
+    @detector_app.post("/annotator/set_parameters")
+    async def annotator_set_parameters(
+        request: AnnotatorParametersSetRequest
+    ) -> EmptyResponse | ErrorResponse:
+        return detector.annotator_parameters_set(
+            request=request)
 
     @detector_app.head("/detector/start")
     async def detector_start() -> None:
@@ -114,7 +124,7 @@ def create_app() -> FastAPI:
         return detector.timestamp_get()
 
     @detector_app.get("/calibration/get_result_active")
-    async def calibration_get_result_active() -> CalibrationResultGetActiveResponse:
+    async def calibration_get_result_active() -> IntrinsicCalibrationResultGetActiveResponse:
         return detector.calibration_result_get_active()
 
     @detector_app.get("/camera/get_image")
@@ -134,17 +144,6 @@ def create_app() -> FastAPI:
     @detector_app.get("/camera/get_resolution")
     async def camera_get_resolution() -> CameraResolutionGetResponse:
         return detector.camera_resolution_get()
-
-    @detector_app.get("/marker/get_parameters")
-    async def marker_get_parameters() -> AnnotatorParametersGetResponse | ErrorResponse:
-        return detector.marker_parameters_get()
-
-    @detector_app.post("/marker/set_parameters")
-    async def marker_set_parameters(
-        request: AnnotatorParametersSetRequest
-    ) -> EmptyResponse | ErrorResponse:
-        return detector.marker_parameters_set(
-            request=request)
 
     @detector_app.websocket("/websocket")
     async def websocket_handler(websocket: WebSocket) -> None:
