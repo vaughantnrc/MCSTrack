@@ -32,13 +32,13 @@ from src.detector import \
     Detector, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse
-from src.pose_solver import \
-    MixerBackend, \
+from src.mixer import \
+    Mixer, \
+    MixerUpdateIntrinsicParametersRequest, \
     PoseSolverAddDetectorFrameRequest, \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
-    PoseSolverSetExtrinsicRequest, \
-    PoseSolverSetIntrinsicRequest
+    PoseSolverSetExtrinsicRequest
 import datetime
 from enum import IntEnum, StrEnum
 import hjson
@@ -58,7 +58,7 @@ ConnectionType = TypeVar('ConnectionType', bound=Connection)
 _ROLE_LABEL: Final[str] = "controller"
 _SUPPORTED_ROLES: Final[list[str]] = [
     Detector.get_role_label(),
-    MixerBackend.get_role_label()]
+    Mixer.get_role_label()]
 _TIME_SYNC_SAMPLE_MAXIMUM_COUNT: Final[int] = 5
 
 
@@ -171,7 +171,7 @@ class MCTController(MCTComponent):
             return_value: DetectorConnection = DetectorConnection(component_address=component_address)
             self._connections[label] = return_value
             return return_value
-        elif component_address.role == MixerBackend.get_role_label():
+        elif component_address.role == Mixer.get_role_label():
             return_value: PoseSolverConnection = PoseSolverConnection(component_address=component_address)
             self._connections[label] = return_value
             return return_value
@@ -252,7 +252,7 @@ class MCTController(MCTComponent):
                                 message=f"Failed to find DetectorConnection with label {detector_label}.")
                             continue
                         if detector_connection.current_intrinsic_parameters is not None:
-                            requests.append(PoseSolverSetIntrinsicRequest(
+                            requests.append(MixerUpdateIntrinsicParametersRequest(
                                 detector_label=detector_label,
                                 intrinsic_parameters=detector_connection.current_intrinsic_parameters))
                         if detector_connection.configured_transform_to_reference is not None:
@@ -284,7 +284,7 @@ class MCTController(MCTComponent):
         """
         See get_component_labels.
         """
-        return self.get_component_labels(role=MixerBackend.get_role_label(), active=True)
+        return self.get_component_labels(role=Mixer.get_role_label(), active=True)
 
     def get_component_labels(
         self,
@@ -589,11 +589,11 @@ class MCTController(MCTComponent):
             # Do not record if specified
             if report.role == Detector.get_role_label() and not self._recording_detector:
                 continue
-            if report.role == MixerBackend.get_role_label() and not self._recording_pose_solver:
+            if report.role == Mixer.get_role_label() and not self._recording_pose_solver:
                 continue
 
-            if self._recording_save_path is not None:
-                frames_dict = [frame.dict() for frame in connection.recording]
+            if isinstance(connection, DetectorConnection) and self._recording_save_path is not None:
+                frames_dict = [frame.model_dump() for frame in connection.recording]
                 frames_json = json.dumps(frames_dict)
                 with open(os.path.join(self._recording_save_path, report.role+"_log.json"), 'w') as f:
                     f.write(frames_json)
@@ -694,7 +694,7 @@ class MCTController(MCTComponent):
             raise RuntimeError("Cannot start up if controller isn't first stopped.")
         for connection in self._connections.values():
             if mode == StartupMode.DETECTING_ONLY and \
-               connection.get_role() == MixerBackend.get_role_label():
+               connection.get_role() == Mixer.get_role_label():
                 continue
             connection.start_up()
 
@@ -732,7 +732,7 @@ class MCTController(MCTComponent):
             all_connected: bool = True
             for connection in connections:
                 if self._startup_mode == StartupMode.DETECTING_ONLY and \
-                   connection.get_role() == MixerBackend.get_role_label():
+                   connection.get_role() == Mixer.get_role_label():
                     continue
                 if not connection.is_start_up_finished():
                     all_connected = False

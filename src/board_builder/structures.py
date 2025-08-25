@@ -1,63 +1,9 @@
-from src.common.util import MathUtils
-from src.common.structures import Matrix4x4, Pose
+from src.common import MathUtils, Matrix4x4, Pose
 import abc
 import datetime
 import numpy as np
 from pydantic import BaseModel, Field, PrivateAttr
 from scipy.spatial.transform import Rotation as R
-
-
-# TODO: Merge into a similar structure in common
-class MarkerCorners:
-    detector_label: str
-    marker_id: int
-    points: list[list[float]]
-    timestamp: datetime.datetime
-
-    def __init__(
-        self,
-        detector_label: str,
-        marker_id: int,
-        points: list[list[float]],
-        timestamp: datetime.datetime
-    ):
-        self.detector_label = detector_label
-        self.marker_id = marker_id
-        self.points = points
-        self.timestamp = timestamp
-
-
-class MarkerRaySet(BaseModel):
-    marker_id: int = Field()
-    image_points: list[list[float]] = Field()  # image positions of marker corners. Size 4.
-    image_timestamp: datetime.datetime = Field()
-    ray_origin_reference: list[float] = Field()  # Shared origin for all rays (same detector)
-    ray_directions_reference: list[list[float]] = Field()  # Size 4 (one for each image point)
-    detector_label: str = Field()
-    detector_to_reference_matrix: Matrix4x4 = Field()
-
-    @staticmethod
-    def age_seconds(
-        marker_ray_set,
-        query_timestamp: datetime.datetime
-    ):
-        return (query_timestamp - marker_ray_set.image_timestamp).total_seconds()
-
-    @staticmethod
-    def newest_timestamp_in_list(marker_ray_set_list: list) -> datetime.datetime:
-        return_value = datetime.datetime.now()
-        for ray_set in marker_ray_set_list:
-            if ray_set.image_timestamp > return_value:
-                return_value = ray_set.image_timestamp
-        return return_value
-
-    @staticmethod
-    def oldest_timestamp_in_list(marker_ray_set_list: list) -> datetime.datetime:
-        return_value = datetime.datetime.utcfromtimestamp(0)
-        for ray_set in marker_ray_set_list:
-            if ray_set.image_timestamp > return_value:
-                return_value = ray_set.image_timestamp
-        return return_value
 
 
 class MatrixNode:
@@ -69,26 +15,6 @@ class MatrixNode:
     def add_neighbour(self, neighbour_node, weight: int):
         self.neighbours.append(neighbour_node)
         self.weights[neighbour_node.id] = weight
-
-
-# TODO: Merge/replace this with pose under common data structures
-class PoseData(BaseModel):
-    target_id: str = Field()
-    object_to_reference_matrix: Matrix4x4 = Field()
-    ray_sets: list[MarkerRaySet]
-
-    def newest_timestamp(self) -> datetime.datetime:
-        return MarkerRaySet.newest_timestamp_in_list(self.ray_sets)
-
-    def oldest_timestamp(self) -> datetime.datetime:
-        return MarkerRaySet.oldest_timestamp_in_list(self.ray_sets)
-
-    @staticmethod
-    def age_seconds(
-        pose,
-        query_timestamp: datetime.datetime
-    ) -> float:
-        return (query_timestamp - pose.oldest_timestamp()).total_seconds()
 
 
 class PoseLocation:
@@ -189,19 +115,6 @@ class TargetBase(BaseModel, abc.ABC):
 
     @abc.abstractmethod
     def get_points(self) -> list[list[float]]: ...
-
-
-class TargetMarker(TargetBase, Marker):
-    def get_marker_ids(self) -> list[str]:
-        return [self.marker_id]
-
-    def get_points(self) -> list[list[float]]:
-        return self.get_points_internal()
-
-    def get_points_for_marker_id(self, marker_id: str) -> list[list[float]]:
-        if marker_id != self.marker_id:
-            raise IndexError(f"marker_id {marker_id} is not in target {self.label}")
-        return self.get_points_internal()
 
 
 class TargetBoard(TargetBase):

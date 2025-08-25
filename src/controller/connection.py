@@ -18,7 +18,7 @@ from src.common import \
     StatusMessage, \
     Target, \
     TimestampGetResponse
-from src.detector.api import \
+from src.detector import \
     IntrinsicCalibrationCalculateResponse, \
     IntrinsicCalibrationImageAddResponse, \
     IntrinsicCalibrationImageGetResponse, \
@@ -37,11 +37,11 @@ from src.detector.api import \
     DetectorStopRequest, \
     AnnotatorParametersGetResponse, \
     AnnotatorParametersSetRequest
-from src.pose_solver.api import \
+from src.mixer import \
     PoseSolverGetPosesResponse, \
     PoseSolverSetTargetsRequest, \
-    PoseSolverStartRequest, \
-    PoseSolverStopRequest
+    MixerStartRequest, \
+    MixerStopRequest
 import abc
 import datetime
 from enum import StrEnum
@@ -692,10 +692,10 @@ class PoseSolverConnection(Connection):
         self.recording = []
 
     def create_deinitialization_request_series(self) -> MCTRequestSeries:
-        return MCTRequestSeries(series=[PoseSolverStopRequest()])
+        return MCTRequestSeries(series=[MixerStopRequest()])
 
     def create_initialization_request_series(self) -> MCTRequestSeries:
-        series: list[MCTRequest] = [PoseSolverStartRequest()]
+        series: list[MCTRequest] = [MixerStartRequest()]
         if self.configured_targets is not None:
             series.append(PoseSolverSetTargetsRequest(targets=self.configured_targets))
         return MCTRequestSeries(series=series)

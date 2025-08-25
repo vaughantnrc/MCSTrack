@@ -1,6 +1,6 @@
-from .utils import BoardBuilderPoseSolver
-from .structures import PoseLocation, Marker, MarkerCorners, TargetBoard
-from src.common import Pose, Annotation, Matrix4x4
+from .structures import PoseLocation, Marker, TargetBoard
+from src.common import Annotation, Matrix4x4, Pose, PoseSolver
+from src.implementations.common_aruco_opencv import ArucoOpenCVCommon
 from collections import defaultdict
 import datetime
 import json
@@ -11,6 +11,7 @@ from typing import Final
 
 _HOMOGENEOUS_POINT_COORD: Final[int] = 4
 TESTED_BOARD_NAME: str = 'top_data.json'  # If collecting data for repeatability test, specify the file name. cube_data.json, planar_data.json, top_data.json
+MARKER_SIZE_MM: Final[float] = 10.0
 
 
 class BoardBuilder:
@@ -38,7 +39,7 @@ class BoardBuilder:
         self.marker_size = marker_size  # in mm
         self._index_to_marker_uuid = dict()
         self._index_to_marker_id = dict()
-        self.pose_solver = BoardBuilderPoseSolver()
+        self.pose_solver = PoseSolver()
 
         # matrix init
         self._matrix_id_index = 0
@@ -149,7 +150,9 @@ class BoardBuilder:
         for detector_name in detector_data:
             for marker_snapshot in detector_data[detector_name]:
                 if marker_snapshot.feature_label not in list(self._index_to_marker_id.values()):
-                    self.pose_solver.add_target_marker(int(marker_snapshot.feature_label))
+                    self.pose_solver.add_target(ArucoOpenCVCommon.target_from_marker_parameters(
+                        base_label=str(int(marker_snapshot.feature_label)),
+                        marker_size=MARKER_SIZE_MM))
                     self._expand_relative_pose_matrix()
                     self._index_to_marker_id[self._matrix_id_index] = marker_snapshot.feature_label
                     self._matrix_id_index += 1
@@ -157,19 +160,12 @@ class BoardBuilder:
         for detector_name in detector_data:
             # assumes 4 corners per marker
             for i in range(0, len(detector_data[detector_name]), 4):
-                corners_list: list[list[float]] = [  # Indexed as [point][coordinate]
-                    [detector_data[detector_name][i].x_px, detector_data[detector_name][i].y_px],
-                    [detector_data[detector_name][i+1].x_px, detector_data[detector_name][i+1].y_px],
-                    [detector_data[detector_name][i+2].x_px, detector_data[detector_name][i+2].y_px],
-                    [detector_data[detector_name][i+3].x_px, detector_data[detector_name][i+3].y_px]]
-                marker_corners = MarkerCorners(
+                self.pose_solver.add_detector_frame(
                     detector_label=detector_name,
-                    marker_id=int(detector_data[detector_name][i].feature_label),
-                    points=corners_list,
-                    timestamp=timestamp)
-                self.pose_solver.add_marker_corners([marker_corners])
+                    frame_annotations=detector_data[detector_name],
+                    frame_timestamp_utc=timestamp)
 
-        target_poses = self.pose_solver.get_target_poses()
+        _, target_poses = self.pose_solver.get_poses()
         self.target_poses = target_poses
         for pose in target_poses:
             if pose.target_id not in list(self._index_to_marker_uuid.values()):
@@ -249,19 +245,12 @@ class BoardBuilder:
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
         for detector_name in detector_data:
             for i in range(0, len(detector_data[detector_name]), 4):
-                corners_list: list[list[float]] = [  # Indexed as [point][coordinate]
-                    [detector_data[detector_name][i].x_px, detector_data[detector_name][i].y_px],
-                    [detector_data[detector_name][i+1].x_px, detector_data[detector_name][i+1].y_px],
-                    [detector_data[detector_name][i+2].x_px, detector_data[detector_name][i+2].y_px],
-                    [detector_data[detector_name][i+3].x_px, detector_data[detector_name][i+3].y_px]]
-                marker_corners = MarkerCorners(
+                self.pose_solver.add_detector_frame(
                     detector_label=detector_name,
-                    marker_id=int(detector_data[detector_name][i].feature_label),
-                    points=corners_list,
-                    timestamp=timestamp)
-                self.pose_solver.add_marker_corners([marker_corners])
+                    frame_annotations=detector_data[detector_name],
+                    frame_timestamp_utc=timestamp)
 
-        new_detector_poses = self.pose_solver.get_detector_poses()
+        new_detector_poses, _ = self.pose_solver.get_poses()
         for pose in new_detector_poses:
             if pose.target_id not in self._detector_poses_median:
                 self._detector_poses_median[pose.target_id] = PoseLocation(pose.target_id)
@@ -269,12 +258,15 @@ class BoardBuilder:
                 pose.object_to_reference_matrix.as_numpy_array(),
                 timestamp.isoformat())
         for label in self._detector_poses_median:
-            pose = Pose(
+            detector_to_reference: Matrix4x4 = \
+                self._detector_poses_median[label].get_median_pose().object_to_reference_matrix
+            self.pose_solver.set_extrinsic_matrix(
+                detector_label=label,
+                transform_to_reference=detector_to_reference)
+            self.detector_poses.append(Pose(
                 target_id=label,
-                object_to_reference_matrix=self._detector_poses_median[label].get_median_pose().object_to_reference_matrix,
-                solver_timestamp_utc_iso8601=timestamp.isoformat())
-            self.detector_poses.append(pose)
-        self.pose_solver.set_detector_poses(self.detector_poses)
+                object_to_reference_matrix=detector_to_reference,
+                solver_timestamp_utc_iso8601=timestamp.isoformat()))
 
     def collect_data(self, detector_data: dict[str, list[Annotation]]):
         """ Collects data of relative position and is entered in matrix. Returns a dictionary of its corners"""
