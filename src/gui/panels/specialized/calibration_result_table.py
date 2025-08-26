@@ -35,7 +35,7 @@ class CalibrationResultTable(RowSelectionTable[IntrinsicCalibrator.ResultMetadat
         self.table.SetCellValue(
             row=row_index,
             col=_COL_IDX_LABEL,
-            s=row_content.result_label)
+            s=row_content.label)
         self.table.SetCellValue(
             row=row_index,
             col=_COL_IDX_TIMESTAMP,

@@ -70,6 +70,7 @@ class CameraImageGetResponse(MCTResponse):
 
     format: ImageFormat = Field()
     image_base64: str = Field()
+    original_resolution: ImageResolution = Field()
 
 
 class CameraParametersGetRequest(MCTRequest):

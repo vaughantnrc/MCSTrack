@@ -1,7 +1,8 @@
 from src.gui.panels import \
     BasePanel, \
     BoardBuilderPanel, \
-    CalibratorPanel, \
+    IntrinsicsPanel, \
+    ExtrinsicsPanel, \
     ControllerPanel, \
     DetectorPanel, \
     PoseSolverPanel
@@ -14,7 +15,8 @@ from typing import Final
 
 CONTROLLER_LABEL: Final[str] = "Controller"
 DETECTOR_LABEL: Final[str] = "Detector"
-CALIBRATOR_LABEL: Final[str] = "Calibrator"
+INTRINSIC_CALIBRATOR_LABEL: Final[str] = "Intrinsic Calibrator"
+EXTRINSIC_CALIBRATOR_LABEL: Final[str] = "Extrinsic Calibrator"
 BOARD_BUILDER_LABEL: Final[str] = "Board Builder"
 POSE_SOLVER_LABEL: Final[str] = "Pose Solver"
 
@@ -28,7 +30,8 @@ class ControllerFrame(wx.Frame):
     _notebook: wx.Notebook
     _controller_panel: ControllerPanel
     _detector_panel: DetectorPanel
-    _calibrator_panel: CalibratorPanel
+    _intrinsics_panel: IntrinsicsPanel
+    _extrinsics_panel: ExtrinsicsPanel
     _board_builder_panel: BoardBuilderPanel
     _pose_solver_panel: PoseSolverPanel
 
@@ -74,13 +77,22 @@ class ControllerFrame(wx.Frame):
             text=DETECTOR_LABEL,
             select=False)
 
-        self._calibrator_panel = CalibratorPanel(
+        self._intrinsics_panel = IntrinsicsPanel(
             parent=self._notebook,
             controller=self._controller,
             status_message_source=self._status_message_source)
         self._notebook.AddPage(
-            page=self._calibrator_panel,
-            text=CALIBRATOR_LABEL,
+            page=self._intrinsics_panel,
+            text=INTRINSIC_CALIBRATOR_LABEL,
+            select=False)
+
+        self._extrinsics_panel = ExtrinsicsPanel(
+            parent=self._notebook,
+            controller=self._controller,
+            status_message_source=self._status_message_source)
+        self._notebook.AddPage(
+            page=self._extrinsics_panel,
+            text=EXTRINSIC_CALIBRATOR_LABEL,
             select=False)
 
         self._board_builder_panel = BoardBuilderPanel(
@@ -116,7 +128,8 @@ class ControllerFrame(wx.Frame):
         pages: list[BasePanel] = [
             self._controller_panel,
             self._detector_panel,
-            self._calibrator_panel,
+            self._intrinsics_panel,
+            self._extrinsics_panel,
             self._board_builder_panel,
             self._pose_solver_panel]
         for page in pages:

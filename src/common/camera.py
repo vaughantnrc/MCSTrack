@@ -71,8 +71,9 @@ class Camera(abc.ABC):
         self,
         image_format: ImageFormat,
         requested_resolution: ImageResolution | None  # None means to not alter the image dimensions
-    ) -> str:
+    ) -> tuple[str, ImageResolution]:  # ID, original_resolution
         image: numpy.ndarray = self.get_image()
+        original_resolution: ImageResolution = ImageResolution(x_px=image.shape[1], y_px=image.shape[0])
         if requested_resolution is not None:
             image = cv2.resize(src=image, dsize=(requested_resolution.x_px, requested_resolution.y_px))
         encoded_frame: bool
@@ -81,7 +82,7 @@ class Camera(abc.ABC):
         encoded_image_rgb_bytes: bytes = encoded_image_rgb_single_row.tobytes()
         # noinspection PyTypeChecker
         encoded_image_rgb_base64: str = base64.b64encode(encoded_image_rgb_bytes)
-        return encoded_image_rgb_base64
+        return encoded_image_rgb_base64, original_resolution
 
     def get_status(self) -> Status:
         return self._status

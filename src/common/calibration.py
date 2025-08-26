@@ -1,5 +1,3 @@
-from urllib import request
-
 from .image_processing import \
     ImageFormat, \
     ImageResolution, \
@@ -80,7 +78,7 @@ class _ImageMetadata(BaseModel):
     filepath: str = Field()
     detector_label: str = Field()
     resolution: ImageResolution = Field()
-    image_label: str = Field(default_factory=str)  # human-readable label
+    label: str = Field(default_factory=str)  # human-readable label
     timestamp_utc_iso8601: str = Field(
         default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
     state: _ImageState = Field(default=_ImageState.SELECT)
@@ -99,7 +97,7 @@ class _ResultMetadata(BaseModel):
     identifier: str = Field()
     filepath: str = Field()
     resolution: ImageResolution | None = Field(default=None)  # Used in intrinsic, not currently used in extrinsic
-    result_label: str = Field(default_factory=str)
+    label: str = Field(default_factory=str)
     timestamp_utc_iso8601: str = Field(
         default_factory=lambda: datetime.datetime.now(tz=datetime.timezone.utc).isoformat())
     image_identifiers: list[str] = Field(default_factory=list)
@@ -425,7 +423,7 @@ class AbstractCalibrator(abc.ABC):
                                 "It may be prudent to either manually correct it, or recreate it.")
         matched_metadata.state = image_state
         if image_label is not None:
-            matched_metadata.image_label = image_label
+            matched_metadata.label = image_label
         self._save_data_ledger()
 
     # noinspection DuplicatedCode
@@ -453,7 +451,7 @@ class AbstractCalibrator(abc.ABC):
                                 "Please manually correct it, or recreate it.")
         matched_metadata.state = result_state
         if result_label is not None:
-            matched_metadata.result_label = result_label
+            matched_metadata.label = result_label
         self._save_data_ledger()
 
 

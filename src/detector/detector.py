@@ -165,7 +165,8 @@ class Detector(MCTComponent):
         **_kwargs
     ) -> IntrinsicCalibrationImageAddResponse | ErrorResponse:
         try:
-            image_base64: str = self._camera.get_encoded_image(
+            image_base64: str
+            image_base64, _ = self._camera.get_encoded_image(
                 image_format=ImageFormat.FORMAT_PNG,
                 requested_resolution=None)
             image_identifier: str = self._calibrator.add_image(image_base64=image_base64)
@@ -310,15 +311,17 @@ class Detector(MCTComponent):
             key="request",
             arg_type=CameraImageGetRequest)
         encoded_image_base64: str
+        original_resolution: ImageResolution
         try:
-            encoded_image_base64 = self._camera.get_encoded_image(
+            encoded_image_base64, original_resolution = self._camera.get_encoded_image(
                 image_format=request.format,
                 requested_resolution=request.requested_resolution)
         except MCTCameraRuntimeError as e:
             return ErrorResponse(message=e.message)
         return CameraImageGetResponse(
             format=request.format,
-            image_base64=encoded_image_base64)
+            image_base64=encoded_image_base64,
+            original_resolution=original_resolution)
 
     def camera_parameters_get(
         self,

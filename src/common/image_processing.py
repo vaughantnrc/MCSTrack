@@ -175,6 +175,38 @@ class ImageUtils:
         return encoded_image_rgb_bytes
 
     @staticmethod
+    def partition_rect(
+        available_size_px: tuple[int, int],  # x, y
+        partition_count: int
+    ) -> tuple[tuple[int, int], list[tuple[int, int]]]:  # ((width_px, height_px), [(x_px, y_px)])
+        """
+        Partition a rectangular area into a grid, and return the rectangle definitions corresponding to the cells.
+        """
+        width_cells: int = 1
+        height_cells: int = 1
+        cell_count: int = width_cells * height_cells
+        max_cell_count: int = 1000  # I don't think we'll ever get this high, but I want a theoretical iteration limit
+        while cell_count <= max_cell_count:
+            width_cells += 1
+            cell_count = width_cells * height_cells
+            if cell_count >= partition_count:
+                break
+            height_cells += 1
+            cell_count = width_cells * height_cells
+            if cell_count >= partition_count:
+                break
+        width_px: int = available_size_px[0] // width_cells
+        height_px: int = available_size_px[1] // width_cells
+        positions_px: list[tuple[int, int]] = list()
+        for cell_index in range(0, partition_count):
+            y_cell = cell_index // height_cells
+            x_cell = cell_index % width_cells
+            y_px = y_cell * height_px
+            x_px = x_cell * width_px
+            positions_px.append((x_px, y_px))
+        return (width_px, height_px), positions_px
+
+    @staticmethod
     def scale_factor_for_available_space_px(
         source_resolution_px: tuple[int, int],
         available_size_px: tuple[int, int]
