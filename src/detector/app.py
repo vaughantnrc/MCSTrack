@@ -11,11 +11,12 @@ from .api import \
 from .detector import \
     Detector
 from src.common import \
-    Camera, \
     Annotator, \
+    Camera, \
     EmptyResponse, \
     ErrorResponse, \
     ImageFormat, \
+    IntrinsicCalibrator, \
     TimestampGetRequest, \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     detector_configuration_filepath: str = \
-        os.path.join(os.path.dirname(__file__), "..", "..", "data", "detector_config.json")
+        os.path.join(os.path.dirname(__file__), "..", "..", "data", "configuration", "detector_config.json")
     detector_configuration: Detector.Configuration
     with open(detector_configuration_filepath, 'r') as infile:
         detector_configuration_file_contents: str = infile.read()
@@ -46,26 +47,30 @@ def create_app() -> FastAPI:
     # and allow end-users to register custom classes that are not necessarily shipped within this library.
 
     camera_type: type[Camera]
-    if detector_configuration.camera_configuration.driver == "opencv_capture_device":
+    if detector_configuration.camera.implementation == "opencv_capture_device":
         from src.implementations.camera_opencv_capture_device import OpenCVCaptureDeviceCamera
         camera_type = OpenCVCaptureDeviceCamera
-    elif detector_configuration.camera_configuration.driver == "picamera2":
+    elif detector_configuration.camera.implementation == "picamera2":
         from src.implementations.camera_picamera2 import Picamera2Camera
         camera_type = Picamera2Camera
     else:
         raise RuntimeError(f"Unsupported camera driver {detector_configuration.camera_configuration.driver}.")
 
     marker_type: type[Annotator]
-    if detector_configuration.annotator_configuration.method == "aruco_opencv":
+    if detector_configuration.annotator.implementation == "aruco_opencv":
         from src.implementations.annotator_aruco_opencv import ArucoOpenCVAnnotator
         marker_type = ArucoOpenCVAnnotator
     else:
         raise RuntimeError(f"Unsupported marker method {detector_configuration.annotator_configuration.method}.")
 
+    from src.implementations.intrinsic_charuco_opencv import CharucoOpenCVIntrinsicCalibrator
+    intrinsic_calibrator_type: type[IntrinsicCalibrator] = CharucoOpenCVIntrinsicCalibrator
+
     detector = Detector(
         detector_configuration=detector_configuration,
         camera_type=camera_type,
-        annotator_type=marker_type)
+        annotator_type=marker_type,
+        intrinsic_calibrator_type=intrinsic_calibrator_type)
     detector_app = FastAPI()
 
     # CORS Middleware

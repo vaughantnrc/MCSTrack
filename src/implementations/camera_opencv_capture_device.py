@@ -20,6 +20,7 @@ import datetime
 import logging
 import numpy
 import os
+from pydantic import Field
 from typing import Final
 
 
@@ -66,7 +67,13 @@ _CAMERA_GAMMA_RANGE_MINIMUM: Final[int] = 80
 _CAMERA_GAMMA_RANGE_MAXIMUM: Final[int] = 300
 
 
+class _Configuration(Camera.Configuration):
+    capture_device: int = Field()  # Not used by all drivers (notably it IS used by OpenCV)
+
+
 class OpenCVCaptureDeviceCamera(Camera):
+
+    Configuration: type[_Configuration] = _Configuration
 
     _capture: cv2.VideoCapture | None
     _capture_device_id: str | int
@@ -83,7 +90,7 @@ class OpenCVCaptureDeviceCamera(Camera):
             configuration=configuration,
             status_message_source=status_message_source)
         self._image = None
-        self._image_timestamp_utc = datetime.datetime.min
+        self._image_timestamp_utc = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
         self._capture = None
         self._capture_device_id = configuration.capture_device
         self.set_status(Camera.Status.STOPPED)

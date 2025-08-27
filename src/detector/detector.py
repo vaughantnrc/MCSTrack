@@ -62,6 +62,11 @@ logger = logging.getLogger(__name__)
 _ROLE_LABEL: Final[str] = "detector"
 
 
+class _ConfigurationSection(BaseModel):
+    implementation: str = Field()
+    configuration: dict = Field()
+
+
 # noinspection DuplicatedCode
 class Detector(MCTComponent):
 
@@ -69,9 +74,10 @@ class Detector(MCTComponent):
         """
         Top-level schema for Detector initialization data
         """
-        calibrator_configuration: IntrinsicCalibrator.Configuration = Field()
-        camera_configuration: Camera.Configuration = Field()
-        annotator_configuration: Annotator.Configuration = Field()
+        detector_label: str = Field()
+        intrinsic_calibrator: _ConfigurationSection = Field()
+        camera: _ConfigurationSection = Field()
+        annotator: _ConfigurationSection = Field()
 
     _configuration: Configuration
 
@@ -85,20 +91,27 @@ class Detector(MCTComponent):
         self,
         detector_configuration: Configuration,
         camera_type: type[Camera],
-        annotator_type: type[Annotator]
+        annotator_type: type[Annotator],
+        intrinsic_calibrator_type: type[IntrinsicCalibrator]
     ):
         super().__init__(
             status_source_label="detector",
             send_status_messages_to_logger=True)
         
         self._configuration = detector_configuration
-        self._calibrator = IntrinsicCalibrator(
-            configuration=detector_configuration.calibrator_configuration)
+        # noinspection PyArgumentList
+        self._calibrator = intrinsic_calibrator_type(
+            configuration=intrinsic_calibrator_type.Configuration(
+                **detector_configuration.intrinsic_calibrator.configuration))
+        # noinspection PyArgumentList
         self._camera = camera_type(
-            configuration=detector_configuration.camera_configuration,
+            configuration=camera_type.Configuration(
+                **detector_configuration.camera.configuration),
             status_message_source=self.get_status_message_source())
+        # noinspection PyArgumentList
         self._annotator = annotator_type(
-            configuration=detector_configuration.annotator_configuration,
+            configuration=annotator_type.Configuration(
+                **detector_configuration.annotator.configuration),
             status_message_source=self.get_status_message_source())
         self._frame_count = 0
 

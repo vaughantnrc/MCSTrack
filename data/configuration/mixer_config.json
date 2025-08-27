@@ -1,0 +1,9 @@
+{
+  "mixer_label": "mixer_01",
+  "extrinsic_calibrator": {
+    "implementation": "charuco_opencv",
+    "configuration": {
+      "data_path": "./calibration/intrinsic/"
+    }
+  }
+}

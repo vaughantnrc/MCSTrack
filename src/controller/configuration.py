@@ -31,4 +31,4 @@ class PoseSolverConfig(MCTComponentConfig):
 class MCTConfiguration(BaseModel):
     startup_mode: StartupMode = Field()
     detectors: list[DetectorComponentConfig] = Field(default_factory=list)
-    pose_solvers: list[PoseSolverConfig] = Field(default_factory=list)
+    mixers: list[PoseSolverConfig] = Field(default_factory=list)

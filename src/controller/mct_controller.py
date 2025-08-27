@@ -146,7 +146,7 @@ class MCTController(MCTComponent):
                 detector_connection.configured_camera_parameters = detector.camera_parameters
             if detector.marker_parameters is not None:
                 detector_connection.configured_marker_parameters = detector.marker_parameters
-        for pose_solver in configuration.pose_solvers:
+        for pose_solver in configuration.mixers:
             if not is_valid_ip_address(pose_solver):
                 continue
             component_address: Connection.ComponentAddress = Connection.ComponentAddress(

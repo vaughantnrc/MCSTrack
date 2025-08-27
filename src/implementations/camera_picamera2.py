@@ -90,7 +90,7 @@ class Picamera2Camera(Camera):
             configuration=configuration,
             status_message_source=status_message_source)
         self._image = None
-        self._image_timestamp_utc = datetime.datetime.min
+        self._image_timestamp_utc = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
         self._camera = Picamera2()
         self._camera_configuration = self._camera.create_video_configuration()
         self.set_status(Camera.Status.STOPPED)

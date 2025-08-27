@@ -1,10 +1,11 @@
+from src.mixer.app import app
 import logging
 import uvicorn
 
 
 def main():
     uvicorn.run(
-        "src.pose_solver.pose_solver_app:app",
+        app,
         reload=False,
         port=8000,
         log_level=logging.INFO)

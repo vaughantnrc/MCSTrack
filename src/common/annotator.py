@@ -11,11 +11,10 @@ import abc
 import datetime
 from enum import StrEnum
 import numpy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
-class _Configuration(BaseModel):
-    method: str = Field()
+class _Configuration(BaseModel):  pass
 
 
 class _Status(StrEnum):

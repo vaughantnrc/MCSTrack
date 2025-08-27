@@ -50,11 +50,17 @@ logger = logging.getLogger(__name__)
 _ROLE_LABEL: Final[str] = "mixer"
 
 
+class _ConfigurationSection(BaseModel):
+    implementation: str = Field()
+    configuration: dict = Field()
+
+
 # noinspection DuplicatedCode
 class Mixer(MCTComponent):
 
     class Configuration(BaseModel):
-        serial_identifier: str = Field()
+        mixer_label: str = Field()
+        extrinsic_calibrator: _ConfigurationSection = Field()
 
     class Status(StrEnum):
         STOPPED = "stopped"
@@ -70,16 +76,17 @@ class Mixer(MCTComponent):
     def __init__(
         self,
         configuration: Configuration,
-        pose_solver: PoseSolver,
-        extrinsic_calibrator: ExtrinsicCalibrator
+        extrinsic_calibrator_type: type[ExtrinsicCalibrator]
     ):
         super().__init__(
-            status_source_label=configuration.serial_identifier,
+            status_source_label=configuration.mixer_label,
             send_status_messages_to_logger=True)
 
         self._configuration = configuration
-        self._pose_solver = pose_solver
-        self._extrinsic_calibrator = extrinsic_calibrator
+        self._pose_solver = PoseSolver()
+        self._extrinsic_calibrator = extrinsic_calibrator_type(
+            configuration=extrinsic_calibrator_type.Configuration(
+                **self._configuration.extrinsic_calibrator.configuration))
 
         self._status = Mixer.Status.STOPPED
 

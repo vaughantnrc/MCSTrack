@@ -14,13 +14,10 @@ import cv2
 import datetime
 from enum import StrEnum
 import numpy
-from pydantic import BaseModel, Field
-from typing import Union
+from pydantic import BaseModel
 
 
-class _Configuration(BaseModel):
-    driver: str = Field()
-    capture_device: Union[str, int] = Field()  # Not used by all drivers (notably it IS used by OpenCV)
+class _Configuration(BaseModel):  pass
 
 
 class _Status(StrEnum):

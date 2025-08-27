@@ -7,5 +7,5 @@
       "port": 8001
     }
   ],
-  "pose_solvers": []
+  "mixers": []
 }

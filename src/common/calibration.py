@@ -476,10 +476,8 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
     def __init__(
         self,
-        configuration: Configuration | dict[str, ...],
+        configuration: Configuration,
     ):
-        if isinstance(configuration, dict):
-            configuration = IntrinsicCalibrator.Configuration(**configuration)
         super().__init__(configuration=configuration)
 
     # noinspection DuplicatedCode
