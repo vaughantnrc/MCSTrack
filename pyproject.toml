@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=65.5"]
+
+[project]
+name = "mcstrack"
+version = "0.0.0"
+authors = [
+  { name="Thomas Vaughan", email="thomas.vanghan@cnrc-nrc.gc.ca" },
+  { name="Keiran Barr", email="keiranbarr7@gmail.com" },
+  { name="David Zhou", email="david.zhou.0110@gmail.com" },
+  { name="Andras Lasso", email="lasso@queensu.ca" }
+]
+description = "Multi camera spatial tracking."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: MIT"
+]
+dependencies = [
+    "fastapi~=0.115",
+    "hjson~=3.1",
+    "numpy~=2.3",
+    "numpy-stl~=3.2",
+    "opencv-contrib-python~=4.11",
+    "pydantic~=2.11",
+    "scipy~=1.15",
+    "websockets~=15.0"
+]
+
+[project.optional-dependencies]
+gui = [
+    "PyOpenGL~=3.1.7",
+    "wxpython~=4.2"
+]
+component = [
+    "uvicorn[standard]~=0.35"
+]
+
+[tool.setuptools]
+py-modules = ["mcstrack"]

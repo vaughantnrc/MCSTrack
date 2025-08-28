@@ -1,6 +1,6 @@
-.idea/*
-.vscode/*
-venv/*
+.idea
+.venv
+.vscode
+mcstrack.egg-info
+venv
 *.pyc
-.venv/*
-

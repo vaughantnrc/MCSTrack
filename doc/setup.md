@@ -53,11 +53,11 @@ Please install a recent version of Visual Studio Build Tools: https://visualstud
 You may need to manually modify the installation and ensure the C++ workload is selected.
 
 ```
-py -3.11 -m venv venv
+py -3.11 -m venv .venv
 cd venv/Scripts
 activate
 cd ../..
-pip install -r requirements.txt
+pip install .[gui,component]
 ```
 
 ### Linux
@@ -70,9 +70,9 @@ You may need to install additional packages depending on your distribution. The 
 - python3.11-dev
 
 ```
-py -3.11 -m venv venv
+py -3.11 -m venv .venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install .[gui,component]
 ```
 
 ### Troubleshooting

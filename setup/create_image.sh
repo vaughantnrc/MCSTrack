@@ -69,9 +69,7 @@ chmod 777 MCSTrack
 pushd MCSTrack
 python3 -m venv .venv --system-site-packages
 source .venv/bin/activate
-# Exclude the following packages from this install, because the detector doesn't need it
-grep -ivE "wxasync|wxpython|PyOpenGL==3.1.7|PyOpenGL-accelerate==3.1.7" requirements.txt> edited_requirements.txt
-pip3 install --break-system-packages -r edited_requirements.txt
+pip3 install --break-system-packages .[component]
 popd
 
 # Create startup script
