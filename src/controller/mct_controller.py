@@ -19,6 +19,7 @@ from src.common import \
     MCTResponseSeries, \
     MixerFrame, \
     SeverityLabel, \
+    StatusMessage, \
     StatusMessageSource, \
     TimestampGetRequest, \
     TimestampGetResponse, \
@@ -701,9 +702,9 @@ class MCTController(MCTComponent):
         self._startup_state = MCTController.StartupState.CONNECTING
         self._status = MCTController.Status.STARTING
 
-        self.recording_start(save_path="/home/adminpi5",
-                             record_pose_solver=True,
-                             record_detector=True)
+        # self.recording_start(save_path="/home/adminpi5",
+        #                      record_pose_solver=True,
+        #                      record_detector=True)
 
     def shut_down(self) -> None:
         if self._status != MCTController.Status.RUNNING:
@@ -726,6 +727,13 @@ class MCTController(MCTComponent):
         connections = list(self._connections.values())
         for connection in connections:
             connection.update()
+            status_messages: list[StatusMessage] = connection.dequeue_status_messages()
+            for status_message in status_messages:
+                self._status_message_source.enqueue_status_message(
+                    severity=status_message.severity,
+                    message=status_message.message,
+                    source_label=status_message.source_label,
+                    timestamp_utc_iso8601=status_message.timestamp_utc_iso8601)
 
         if self._status == MCTController.Status.STARTING and \
            self._startup_state == MCTController.StartupState.CONNECTING:
