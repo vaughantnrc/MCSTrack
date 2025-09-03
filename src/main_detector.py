@@ -8,6 +8,7 @@ def main():
         app,
         reload=False,
         port=8001,
+        host="0.0.0.0",
         log_level=logging.INFO)
 
 
