@@ -406,14 +406,14 @@ class DetectorPanel(BasePanel):
         if len(marker_snapshot_list) <= 0:
             return numpy.asarray([], dtype=numpy.int32)
         return_value: list[list[list[(float, float)]]] = list()
-        current_base_label: str = marker_snapshot_list[0].base_feature_label()
-        current_shape_points: list[list[(float, float)]] = [[
-            marker_snapshot_list[0].x_px * scale,
-            marker_snapshot_list[0].y_px * scale]]
+        current_base_label: str | None = None
+        current_shape_points: list[list[(float, float)]] | None = None
         for marker_snapshot in marker_snapshot_list:
             annotation_base_label = marker_snapshot.base_feature_label()
             if annotation_base_label != current_base_label:
-                return_value.append(current_shape_points)
+                if current_shape_points is not None:
+                    return_value.append(current_shape_points)
+                current_shape_points = list()
                 current_base_label = annotation_base_label
             current_shape_points.append([
                 marker_snapshot.x_px * scale,
