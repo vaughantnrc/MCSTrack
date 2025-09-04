@@ -717,8 +717,8 @@ class MCTController(MCTComponent):
 
         self.recording_stop()
 
-    def supported_request_types(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
-        return super().supported_request_types()
+    def supported_request_methods(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
+        return super().supported_request_methods()
 
     # Right now this function doesn't update on its own - must be called externally and regularly
     def update(

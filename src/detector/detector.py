@@ -420,8 +420,8 @@ class Detector(MCTComponent):
     def get_role_label():
         return _ROLE_LABEL
 
-    def supported_request_types(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
-        return_value: dict[type[MCTRequest], Callable[[dict], MCTResponse]] = super().supported_request_types()
+    def supported_request_methods(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
+        return_value: dict[type[MCTRequest], Callable[[dict], MCTResponse]] = super().supported_request_methods()
         return_value.update({
             DetectorFrameGetRequest: self.detector_frame_get,
             DetectorStartRequest: self.detector_start,
@@ -455,7 +455,7 @@ class Detector(MCTComponent):
             except MCTCameraRuntimeError as e:
                 self.add_status_message(
                     severity=SeverityLabel.ERROR,
-                    message=e.message)
+                    message=f"Exception occurred in Camera update: {e.message}")
         if self._annotator.get_status() == Annotator.Status.RUNNING and \
            self._camera.get_changed_timestamp() > self._annotator.get_changed_timestamp():
             try:
@@ -463,7 +463,7 @@ class Detector(MCTComponent):
             except MCTAnnotatorRuntimeError as e:
                 self.add_status_message(
                     severity=SeverityLabel.ERROR,
-                    message=e.message)
-        self._frame_count += 1
-        if self._frame_count % 1000 == 0:
-            print(f"Update count: {self._frame_count}")
+                    message=f"Exception occurred in Annotator update: {e.message}")
+        # self._frame_count += 1
+        # if self._frame_count % 1000 == 0:
+        #     print(f"Update count: {self._frame_count}")

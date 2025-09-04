@@ -133,7 +133,7 @@ KeyValueMetaAny = Union[
     KeyValueMetaInt]
 
 
-DeserializableT = TypeVar('DeserializableT', bound='MCTParsable')
+DeserializableT = TypeVar('DeserializableT', bound='MCTDeserializable')
 
 
 class MCTSerializationError(MCTError):
@@ -154,7 +154,7 @@ class MCTDeserializable(abc.ABC):
     @staticmethod
     def deserialize_series_list(
         series_dict: dict,
-        supported_types: list[type[DeserializableT]]
+        supported_types: dict[str, type[DeserializableT]]
     ) -> list[DeserializableT]:
         if "series" not in series_dict or not isinstance(series_dict["series"], list):
             message: str = "parsable_series_dict did not contain field series. Input is improperly formatted."
@@ -174,23 +174,25 @@ class MCTDeserializable(abc.ABC):
     @staticmethod
     def deserialize_single(
         single_dict: dict,
-        supported_types: list[type[DeserializableT]]
+        supported_types: dict[str, type[DeserializableT]]
     ) -> DeserializableT:
         if "parsable_type" not in single_dict or not isinstance(single_dict["parsable_type"], str):
             message: str = "parsable_dict did not contain parsable_type. Input is improperly formatted."
             raise MCTSerializationError(message) from None
 
-        for supported_type in supported_types:
-            if single_dict["parsable_type"] == supported_type.parsable_type_identifier():
-                request: DeserializableT
-                try:
-                    request = supported_type(**single_dict)
-                except ValidationError as e:
-                    raise MCTSerializationError(f"A request of type {supported_type} was ill-formed: {str(e)}") from None
-                return request
+        parsable_type: str = single_dict["parsable_type"]
+        if parsable_type not in supported_types:
+            message: str = "parsable_type did not match any expected value. Input is improperly formatted."
+            raise MCTSerializationError(message)
 
-        message: str = "parsable_type did not match any expected value. Input is improperly formatted."
-        raise MCTSerializationError(message)
+        supported_type: type[DeserializableT] = supported_types[parsable_type]
+        deserializable: DeserializableT
+        try:
+            deserializable = supported_type(**single_dict)
+        except ValidationError as e:
+            raise MCTSerializationError(
+                f"A deserializable of type {supported_type} was ill-formed: {str(e)}") from None
+        return deserializable
 
 
 class IOUtils:

@@ -2,7 +2,6 @@ from .serialization import MCTDeserializable
 from .status import StatusMessage
 import abc
 from pydantic import BaseModel, Field, SerializeAsAny
-from typing import Final, Literal
 
 
 class MCTRequest(BaseModel, MCTDeserializable, abc.ABC):
@@ -23,97 +22,81 @@ class MCTResponseSeries(BaseModel):
 
 
 class EmptyResponse(MCTResponse):
-    _TYPE_IDENTIFIER: Final[str] = "empty"
-
     @staticmethod
     def type_identifier() -> str:
-        return EmptyResponse._TYPE_IDENTIFIER
+        return "empty"
 
     # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+    parsable_type: str = Field(default=type_identifier())
 
 
 class ErrorResponse(MCTResponse):
-    _TYPE_IDENTIFIER: Final[str] = "error"
-
     @staticmethod
     def type_identifier() -> str:
-        return ErrorResponse._TYPE_IDENTIFIER
+        return "error"
 
     # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+    parsable_type: str = Field(default=type_identifier())
 
     message: str = Field()
 
 
 class DequeueStatusMessagesRequest(MCTRequest):
-    _TYPE_IDENTIFIER: Final[str] = "dequeue_status_messages"
-
     @staticmethod
     def type_identifier() -> str:
-        return DequeueStatusMessagesRequest._TYPE_IDENTIFIER
+        return "dequeue_status_messages"
 
     # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+    parsable_type: str = Field(default=type_identifier())
 
 
 class DequeueStatusMessagesResponse(MCTResponse):
-    _TYPE_IDENTIFIER: Final[str] = "dequeue_status_messages"
-
     @staticmethod
     def type_identifier() -> str:
-        return DequeueStatusMessagesResponse._TYPE_IDENTIFIER
+        return "dequeue_status_messages"
 
     # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+    parsable_type: str = Field(default=type_identifier())
 
     status_messages: list[StatusMessage] = Field()
 
 
 class TimeSyncStartRequest(MCTRequest):
-    _TYPE_IDENTIFIER: Final[str] = "time_sync_start_request"
-
     @staticmethod
     def type_identifier() -> str:
-        return TimeSyncStartRequest._TYPE_IDENTIFIER
+        return "time_sync_start_request"
 
     # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+    parsable_type: str = Field(default=type_identifier())
 
 
 class TimeSyncStopRequest(MCTRequest):
-    _TYPE_IDENTIFIER: Final[str] = "time_sync_stop_request"
-
     @staticmethod
     def type_identifier() -> str:
-        return TimeSyncStopRequest._TYPE_IDENTIFIER
+        return "time_sync_stop_request"
 
     # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+    parsable_type: str = Field(default=type_identifier())
 
 
 class TimestampGetRequest(MCTRequest):
-    _TYPE_IDENTIFIER: Final[str] = "timestamp_get_request"
-
     @staticmethod
     def type_identifier() -> str:
-        return TimestampGetRequest._TYPE_IDENTIFIER
+        return "timestamp_get_request"
 
     # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+    parsable_type: str = Field(default=type_identifier())
 
     requester_timestamp_utc_iso8601: str = Field()
 
 
 class TimestampGetResponse(MCTResponse):
-    _TYPE_IDENTIFIER: Final[str] = "timestamp_get_response"
-
     @staticmethod
     def type_identifier() -> str:
-        return TimestampGetResponse._TYPE_IDENTIFIER
+        return "timestamp_get_response"
 
     # noinspection PyTypeHints
-    parsable_type: Literal[_TYPE_IDENTIFIER] = Field(default=_TYPE_IDENTIFIER)
+    parsable_type: str = Field(default=type_identifier())
 
     requester_timestamp_utc_iso8601: str = Field()
     responder_timestamp_utc_iso8601: str = Field()

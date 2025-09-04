@@ -108,7 +108,7 @@ class MCTComponent(abc.ABC):
     def parse_dynamic_series_list(
         self,
         parsable_series_dict: dict,
-        supported_types: list[type[SerializableSingle]]
+        supported_types: dict[str, type[SerializableSingle]]
     ) -> list[SerializableSingle]:
         try:
             return MCTDeserializable.deserialize_series_list(
@@ -168,8 +168,13 @@ class MCTComponent(abc.ABC):
     def get_status_message_source(self):
         return self._status_message_source
 
+    def supported_request_types(self) -> dict[str, list[MCTRequest]]:
+        return {
+            request_type.type_identifier(): request_type
+            for request_type in self.supported_request_methods().keys()}
+
     @abc.abstractmethod
-    def supported_request_types(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
+    def supported_request_methods(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
         """
         All subclasses are expected to implement this method, even if it is simply a call to super().
         :return:
@@ -213,7 +218,7 @@ class MCTComponent(abc.ABC):
                 try:
                     request_series_list: list[MCTRequest] = self.parse_dynamic_series_list(
                         parsable_series_dict=request_series_dict,
-                        supported_types=list(self.supported_request_types().keys()))
+                        supported_types=self.supported_request_types())
                 except MCTSerializationError as e:
                     logger.exception(str(e))
                     await websocket.send_json(MCTResponseSeries().model_dump())
@@ -231,7 +236,7 @@ class MCTComponent(abc.ABC):
         client_identifier: str,
         request_series: MCTRequestSeries
     ) -> MCTResponseSeries:
-        request_map: dict[type[MCTRequest], Callable] = self.supported_request_types()
+        request_map: dict[type[MCTRequest], Callable] = self.supported_request_methods()
         response_series: list[MCTResponse] = list()
         for request in request_series.series:
             # noinspection PyBroadException

@@ -338,8 +338,8 @@ class Mixer(MCTComponent):
             return ErrorResponse(message=e.message)
         return EmptyResponse()
 
-    def supported_request_types(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
-        return_value: dict[type[MCTRequest], Callable[[dict], MCTResponse]] = super().supported_request_types()
+    def supported_request_methods(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
+        return_value: dict[type[MCTRequest], Callable[[dict], MCTResponse]] = super().supported_request_methods()
         return_value.update({
             ExtrinsicCalibrationCalculateRequest: self.extrinsic_calibrator_calculate,
             ExtrinsicCalibrationDeleteStagedRequest: self.extrinsic_calibrator_delete_staged,

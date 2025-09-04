@@ -38,6 +38,14 @@ from src.detector import \
     AnnotatorParametersGetResponse, \
     AnnotatorParametersSetRequest
 from src.mixer import \
+    ExtrinsicCalibrationCalculateResponse, \
+    ExtrinsicCalibrationImageAddResponse, \
+    ExtrinsicCalibrationImageGetResponse, \
+    ExtrinsicCalibrationImageMetadataListResponse, \
+    ExtrinsicCalibrationResultGetResponse, \
+    ExtrinsicCalibrationResultGetActiveResponse, \
+    ExtrinsicCalibrationResultMetadataListResponse, \
+    PoseSolverAddTargetResponse, \
     PoseSolverGetPosesResponse, \
     PoseSolverSetTargetsRequest, \
     MixerStartRequest, \
@@ -398,12 +406,16 @@ class Connection(abc.ABC):
         self._next_attempt_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
     @abc.abstractmethod
-    def supported_response_types(self) -> list[type[MCTResponse]]:
-        return [
+    def supported_response_types(self) -> dict[str, type[MCTResponse]]:
+        type_list: list[MCTResponse] = [
             DequeueStatusMessagesResponse,
             EmptyResponse,
             ErrorResponse,
             TimestampGetResponse]
+        type_dict: dict[str, type[MCTResponse]] = {
+            type_single.type_identifier(): type_single
+            for type_single in type_list}
+        return type_dict
 
     def _try_connect(self) -> ConnectionResult:
         uri: str = f"ws://{self._component_address.ip_address}:{self._component_address.port}/websocket"
@@ -643,8 +655,15 @@ class DetectorConnection(Connection):
                 message=f"The initialization response was not of the expected type EmptyResponse.")
         return Connection.InitializationResult.SUCCESS
 
-    def supported_response_types(self) -> list[type[MCTResponse]]:
-        return super().supported_response_types() + [
+    def supported_response_types(self) -> dict[str, type[MCTResponse]]:
+        type_dict: dict[str, type[MCTResponse]] = super().supported_response_types()
+        type_list: list[MCTResponse] = [
+            AnnotatorParametersGetResponse,
+            CameraImageGetResponse,
+            CameraParametersGetResponse,
+            CameraParametersSetResponse,
+            CameraResolutionGetResponse,
+            DetectorFrameGetResponse,
             IntrinsicCalibrationCalculateResponse,
             IntrinsicCalibrationImageAddResponse,
             IntrinsicCalibrationImageGetResponse,
@@ -652,13 +671,11 @@ class DetectorConnection(Connection):
             IntrinsicCalibrationResolutionListResponse,
             IntrinsicCalibrationResultGetResponse,
             IntrinsicCalibrationResultGetActiveResponse,
-            IntrinsicCalibrationResultMetadataListResponse,
-            CameraImageGetResponse,
-            CameraParametersGetResponse,
-            CameraParametersSetResponse,
-            CameraResolutionGetResponse,
-            DetectorFrameGetResponse,
-            AnnotatorParametersGetResponse]
+            IntrinsicCalibrationResultMetadataListResponse]
+        type_dict.update({
+            type_single.type_identifier(): type_single
+            for type_single in type_list})
+        return type_dict
 
 
 class PoseSolverConnection(Connection):
@@ -730,6 +747,19 @@ class PoseSolverConnection(Connection):
                 message=f"The initialization response was not of the expected type EmptyResponse.")
         return Connection.InitializationResult.SUCCESS
 
-    def supported_response_types(self) -> list[type[MCTResponse]]:
-        return super().supported_response_types() + [
+    def supported_response_types(self) -> dict[str, type[MCTResponse]]:
+        type_dict: dict[str, type[MCTResponse]] = super().supported_response_types()
+        type_list: list[MCTResponse] = [
+            ExtrinsicCalibrationCalculateResponse,
+            ExtrinsicCalibrationImageAddResponse,
+            ExtrinsicCalibrationImageGetResponse,
+            ExtrinsicCalibrationImageMetadataListResponse,
+            ExtrinsicCalibrationResultGetResponse,
+            ExtrinsicCalibrationResultGetActiveResponse,
+            ExtrinsicCalibrationResultMetadataListResponse,
+            PoseSolverAddTargetResponse,
             PoseSolverGetPosesResponse]
+        type_dict.update({
+            type_single.type_identifier(): type_single
+            for type_single in type_list})
+        return type_dict
