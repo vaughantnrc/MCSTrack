@@ -1,0 +1,4 @@
+#!/bin/bash
+cd /home/admin/MCSTrack
+source .venv/bin/activate
+python -m src.main_detector
