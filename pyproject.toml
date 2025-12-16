@@ -19,23 +19,23 @@ classifiers = [
     "License :: MIT"
 ]
 dependencies = [
-    "fastapi~=0.115",
-    "hjson~=3.1",
-    "numpy~=2.3",
-    "numpy-stl~=3.2",
-    "opencv-contrib-python~=4.11",
-    "pydantic~=2.11",
-    "scipy~=1.15",
-    "websockets~=15.0"
+    "fastapi~=0.115.13",
+    "hjson~=3.1.0",
+    "numpy~=2.3.2",
+    "numpy-stl~=3.2.0",
+    "opencv-contrib-python~=4.11.0.86",
+    "pydantic~=2.11.7",
+    "scipy~=1.15.3",
+    "websockets~=15.0.1"
 ]
 
 [project.optional-dependencies]
 gui = [
     "PyOpenGL~=3.1.7",
-    "wxpython~=4.2"
+    "wxpython~=4.2.3"
 ]
 component = [
-    "uvicorn[standard]~=0.35"
+    "uvicorn[standard]~=0.35.0"
 ]
 
 [tool.setuptools]

@@ -2,6 +2,9 @@
 sudo apt update
 sudo apt upgrade -y
 
+# Environment variables
+export MCSTRACK_DETECTOR_CONFIGURATION_FILEPATH="/home/admin/MCSTrack/data/configuration/detector/rpicam_aruco.json"
+
 # Firewall setup
 sudo ufw enable
 sudo ufw allow 8001

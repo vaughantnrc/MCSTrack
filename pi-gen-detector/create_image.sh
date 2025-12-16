@@ -25,7 +25,7 @@ cp -r ../stage6 stage6
 chmod +x build.sh
 chmod +x stage6/prerun.sh
 chmod +x stage6/00_custom/01-run.sh
-chmod +x stage6/00_custom/01-run-chroot.sh
+chmod +x stage6/00_custom/02-run-chroot.sh
 
 
 echo "Building image..."
