@@ -2,9 +2,6 @@
 sudo apt update
 sudo apt upgrade -y
 
-# Environment variables
-export MCSTRACK_DETECTOR_CONFIGURATION_FILEPATH="/home/admin/MCSTrack/data/configuration/detector/rpicam_aruco.json"
-
 # Firewall setup
 sudo ufw enable
 sudo ufw allow 8001
@@ -17,4 +14,4 @@ pip install --break-system-packages .[component]
 deactivate
 
 # Run startup script on boot
-sudo echo "@reboot root /usr/local/bin/mcstrack_startup >> mcstrack_log.log" > /etc/cron.d/startup
+sudo echo "@reboot root /usr/local/bin/mcstrack_startup >> /home/admin/mcstrack_log.log" > /etc/cron.d/startup

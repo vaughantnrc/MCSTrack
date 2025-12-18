@@ -7,10 +7,8 @@
     }
   },
   "camera": {
-    "implementation": "opencv_capture_device",
-    "configuration": {
-      "capture_device": 0
-    }
+    "implementation": "picamera2",
+    "configuration": {}
   },
   "annotator": {
     "implementation": "aruco_opencv",
