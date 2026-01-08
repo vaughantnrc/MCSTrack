@@ -163,7 +163,7 @@ class PoseSolverPanel(BasePanel):
     def on_page_select(self) -> None:
         super().on_page_select()
         selected_pose_solver_label: str = self._pose_solver_selector.selector.GetStringSelection()
-        available_pose_solver_labels: list[str] = self._controller.get_active_pose_solver_labels()
+        available_pose_solver_labels: list[str] = self._controller.get_active_mixer_labels()
         self._pose_solver_selector.set_options(option_list=available_pose_solver_labels)
         if selected_pose_solver_label in available_pose_solver_labels:
             self._pose_solver_selector.selector.SetStringSelection(selected_pose_solver_label)
@@ -212,7 +212,7 @@ class PoseSolverPanel(BasePanel):
                     self._latest_detector_frames[detector_label] = retrieved_detector_frame
 
             new_poses_available: bool = False
-            pose_solver_labels: list[str] = self._controller.get_active_pose_solver_labels()
+            pose_solver_labels: list[str] = self._controller.get_active_mixer_labels()
             for pose_solver_label in pose_solver_labels:
                 retrieved_pose_solver_frame: MixerFrame = self._controller.get_live_pose_solver_frame(
                     pose_solver_label=pose_solver_label)

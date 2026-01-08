@@ -431,13 +431,16 @@ class PoseSolver:
                 self._poses_by_detector_label[detector_label] = self._extrinsics_by_detector_label[detector_label]
             else:
                 intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
-                reference_to_detector: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
+                estimated: bool
+                reference_to_detector: Matrix4x4 | None
+                estimated, reference_to_detector = MathUtils.estimate_matrix_transform_to_detector(
                     annotations=annotation_list_by_detector_label[detector_label],
                     landmarks=reference_target.landmarks,
                     detector_intrinsics=intrinsics)
-                detector_to_reference: Matrix4x4 = Matrix4x4.from_numpy_array(
-                    numpy.linalg.inv(reference_to_detector.as_numpy_array()))
-                self._poses_by_detector_label[detector_label] = detector_to_reference
+                if estimated:
+                    detector_to_reference: Matrix4x4 = Matrix4x4.from_numpy_array(
+                        numpy.linalg.inv(reference_to_detector.as_numpy_array()))
+                    self._poses_by_detector_label[detector_label] = detector_to_reference
 
         # At the time of writing, each feature label can be used only by one target.
         # So we can remove annotations whose feature labels match those of the reference_target
@@ -454,6 +457,8 @@ class PoseSolver:
         # Convert annotations to rays
         rays_by_feature_and_detector: dict[str, dict[str, Ray]] = dict()  # indexed as [feature_label][detector_label]
         for detector_label in detector_labels:
+            if detector_label not in self._poses_by_detector_label:
+                continue
             annotations: list[Annotation] = annotation_list_by_detector_label[detector_label]
             annotation_points: list[list[float]] = [[annotation.x_px, annotation.y_px] for annotation in annotations]
             detector_to_reference: Matrix4x4 = self._poses_by_detector_label[detector_label]
@@ -516,14 +521,17 @@ class PoseSolver:
                 # Note: there cannot be any intersections in this case
                 detector_label: str = next(iter(detector_labels_seeing_target))
                 intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
-                detected_to_detector_matrix4x4: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
+                estimated: bool
+                detected_to_detector_matrix4x4: Matrix4x4
+                estimated, detected_to_detector_matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
                     annotations=annotation_list_by_detector_label[detector_label],
                     landmarks=target.landmarks,
                     detector_intrinsics=intrinsics)
-                detected_to_detector: numpy.ndarray = detected_to_detector_matrix4x4.as_numpy_array()
-                detector_to_reference: numpy.ndarray = self._poses_by_detector_label[detector_label].as_numpy_array()
-                detected_to_reference: numpy.ndarray = detector_to_reference @ detected_to_detector
-                self._poses_by_target_label[target.label] = Matrix4x4.from_numpy_array(detected_to_reference)
+                if estimated:
+                    detected_to_detector: numpy.ndarray = detected_to_detector_matrix4x4.as_numpy_array()
+                    detector_to_reference: numpy.ndarray = self._poses_by_detector_label[detector_label].as_numpy_array()
+                    detected_to_reference: numpy.ndarray = detector_to_reference @ detected_to_detector
+                    self._poses_by_target_label[target.label] = Matrix4x4.from_numpy_array(detected_to_reference)
             else:
                 # Fill in the required variables for the customized iterative closest point
                 detected_known_points: list[list[float]] = [

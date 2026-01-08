@@ -534,6 +534,7 @@ class DetectorPanel(BasePanel):
                 display_image: numpy.ndarray = ImageUtils.image_resize_to_fit(
                     opencv_image=opencv_image,
                     available_size=self._image_panel.GetSize())
+                cv2.cvtColor(display_image, cv2.COLOR_RGB2BGR, display_image)
                 scale: float = self._preview_scale_factor.get_value() * display_image.shape[0] / opencv_image.shape[0]
             else:
                 display_image = ImageUtils.black_image(resolution_px=self._image_panel.GetSize())

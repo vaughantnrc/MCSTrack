@@ -196,10 +196,10 @@ class ImageUtils:
             if cell_count >= partition_count:
                 break
         width_px: int = available_size_px[0] // width_cells
-        height_px: int = available_size_px[1] // width_cells
+        height_px: int = available_size_px[1] // height_cells
         positions_px: list[tuple[int, int]] = list()
         for cell_index in range(0, partition_count):
-            y_cell = cell_index // height_cells
+            y_cell = cell_index // width_cells
             x_cell = cell_index % width_cells
             y_px = y_cell * height_px
             x_px = x_cell * width_px

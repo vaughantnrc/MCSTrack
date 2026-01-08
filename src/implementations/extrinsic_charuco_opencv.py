@@ -197,14 +197,17 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                     timestamp_utc_iso8601=metadata.timestamp_utc_iso8601,
                     detector_label=metadata.detector_label)
                 intrinsic_parameters: IntrinsicParameters = self.detector_intrinsics_by_label[metadata.detector_label]
-                reference_to_initial: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
+                estimated: bool
+                reference_to_initial: Matrix4x4
+                estimated, reference_to_initial = MathUtils.estimate_matrix_transform_to_detector(
                     annotations=image_data.annotations,
                     landmarks=charuco_target.landmarks,
                     detector_intrinsics=intrinsic_parameters)
-                initial_to_reference: Matrix4x4 = reference_to_initial.inverse()
-                detector: _DetectorData = data.get_detector_container(detector_label=image_data.detector_label)
-                detector.initial_to_reference = initial_to_reference
-                detector.refined_to_reference = initial_to_reference
+                if estimated:
+                    initial_to_reference: Matrix4x4 = reference_to_initial.inverse()
+                    detector: _DetectorData = data.get_detector_container(detector_label=image_data.detector_label)
+                    detector.initial_to_reference = initial_to_reference
+                    detector.refined_to_reference = initial_to_reference
 
         for i in range(0, self.configuration.termination_iteration_count):
             # Update each ray based on the current pose
@@ -212,7 +215,11 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                 for image_data in timestamp_data.images:
                     if len(image_data.annotations) == 0:
                         continue
-                    detector_data: _DetectorData = data.get_detector_container(detector_label=image_data.detector_label)
+                    detector_data: _DetectorData
+                    try:
+                        detector_data = data.get_detector_container(detector_label=image_data.detector_label)
+                    except IndexError:
+                        continue  # Indicates that it was not possible to estimate the detector pose
                     feature_labels: list[str] = [annotation.feature_label for annotation in image_data.annotations]
                     ray_directions: list[list[float]] = MathUtils.convert_detector_points_to_vectors(
                         points=image_data.annotations_as_points(),
@@ -271,10 +278,17 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                                         feature_label=timestamped_feature_label,
                                         x_px=annotation.x_px,
                                         y_px=annotation.y_px))
-                reference_to_refined: Matrix4x4 = MathUtils.estimate_matrix_transform_to_detector(
+                estimated: bool
+                reference_to_refined: Matrix4x4
+                estimated, reference_to_refined = MathUtils.estimate_matrix_transform_to_detector(
                     annotations=annotations,
                     landmarks=landmarks,
                     detector_intrinsics=detector_data.intrinsic_parameters)
+                if not estimated:
+                    raise NotImplemented(
+                        "extrinsic_charuco_opencv: A detector pose was unable to get estimated. "
+                        "This is not expected to occur and is not presently handled. "
+                        "If you are seeing this, then please report that you are seeing this message.")
                 refined_to_reference: Matrix4x4 = reference_to_refined.inverse()
                 translation_change: float = numpy.linalg.norm(
                     numpy.asarray(refined_to_reference.get_translation()) -

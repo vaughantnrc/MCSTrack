@@ -69,12 +69,12 @@ def create_app() -> FastAPI:
     ) -> EmptyResponse | ErrorResponse:
         return mixer.mixer_update_intrinsic_parameters(request=request)
 
-    @mixer_app.head("/start_capture")
-    async def start_capture() -> None:
+    @mixer_app.head("/start")
+    async def start() -> None:
         mixer.mixer_start()
 
-    @mixer_app.head("/stop_capture")
-    async def stop_capture() -> None:
+    @mixer_app.head("/stop")
+    async def stop() -> None:
         mixer.mixer_stop()
 
     @mixer_app.websocket("/websocket")

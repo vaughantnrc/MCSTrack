@@ -13,6 +13,7 @@ from src.common import \
     EmptyResponse, \
     ExtrinsicCalibrator, \
     ImageFormat, \
+    ImageResolution, \
     ImageUtils, \
     IntrinsicCalibrator, \
     MCTRequestSeries, \
@@ -54,6 +55,7 @@ import wx.grid
 
 
 logger = logging.getLogger(__name__)
+_PREVIEW_CAPTURE_FORMAT: ImageFormat = ImageFormat.FORMAT_JPG
 
 
 class ExtrinsicsPanel(BasePanel):
@@ -79,7 +81,7 @@ class ExtrinsicsPanel(BasePanel):
 
     _control_blocking_request_ids: set[uuid.UUID]
     _is_updating: bool  # Some things should only trigger during explicit user events
-    _preview_request_ids: set[uuid.UUID]
+    _preview_request_ids_by_detector_label: dict[str, uuid.UUID]
     _preview_images_by_detector_label: dict[str, numpy.ndarray]
     _extrinsic_image: numpy.ndarray | None
     _current_capture_timestamp: datetime.datetime | None  # None indicates no capture in progress
@@ -102,7 +104,7 @@ class ExtrinsicsPanel(BasePanel):
 
         self._control_blocking_request_ids = set()
         self._is_updating = False
-        self._preview_request_ids = set()
+        self._preview_request_ids_by_detector_label = dict()
         self._preview_images_by_detector_label = dict()
         self._extrinsic_image = None
         self._current_capture_timestamp = None
@@ -323,6 +325,8 @@ class ExtrinsicsPanel(BasePanel):
 
     def on_page_select(self) -> None:
         super().on_page_select()
+        available_mixer_labels: list[str] = self._controller.get_active_mixer_labels()
+        self._mixer_selector.set_options(option_list=available_mixer_labels)
         self._update_ui_controls()
 
     def update_loop(self) -> None:
@@ -330,23 +334,43 @@ class ExtrinsicsPanel(BasePanel):
         self._is_updating = True
 
         response_series: MCTResponseSeries | None
+        responded_request_ids: list[tuple[uuid.UUID, MCTResponseSeries]] = list()
         for request_id in self._control_blocking_request_ids:
             _, response_series = self._controller.response_series_pop(request_series_id=request_id)
             if response_series is not None:
+                responded_request_ids.append((request_id, response_series))
+        if len(responded_request_ids) > 0:
+            # Clean up the request id list first
+            for request_id, response_series in responded_request_ids:
                 self._control_blocking_request_ids.remove(request_id)
+            # THEN handle the responses. This order of ops is assumed in calibration handling.
+            for request_id, response_series in responded_request_ids:
                 self.handle_response_series(response_series)
-                self._update_ui_controls()
+            self._update_ui_controls()
 
         if self._preview_toggle_button.GetValue():
-            for request_id in self._preview_request_ids:
+            detector_labels_with_responses: set[str] = set()
+            for detector_label, request_id in self._preview_request_ids_by_detector_label.items():
                 _, response_series = self._controller.response_series_pop(request_series_id=request_id)
                 if response_series is not None and \
                    len(response_series.series) > 0 and \
                    isinstance(response_series.series[0], CameraImageGetResponse):
                     response: CameraImageGetResponse = response_series.series[0]
-                    detector_label: str = response_series.responder
                     self._preview_images_by_detector_label[detector_label] = \
                         ImageUtils.base64_to_image(response.image_base64)
+                    detector_labels_with_responses.add(detector_label)
+            detector_labels: list[str] = self._controller.get_active_detector_labels()
+            for detector_label in detector_labels:
+                if detector_label in detector_labels_with_responses or \
+                   detector_label not in self._preview_request_ids_by_detector_label:
+                    request_series: MCTRequestSeries = MCTRequestSeries(
+                        series=[CameraImageGetRequest(
+                            format=_PREVIEW_CAPTURE_FORMAT,
+                            requested_resolution=ImageResolution(x_px=800, y_px=480))])  # TODO: Parameterize
+                    preview_request_id = self._controller.request_series_push(
+                        connection_label=detector_label,
+                        request_series=request_series)
+                    self._preview_request_ids_by_detector_label[detector_label] = preview_request_id
 
         self._update_ui_image()
 
@@ -633,25 +657,27 @@ class ExtrinsicsPanel(BasePanel):
             image_dimensions, image_positions = ImageUtils.partition_rect(
                 available_size_px=available_size_px,
                 partition_count=len(detector_labels))
-            for detector_label, detector_index in enumerate(detector_labels):
+            for detector_index, detector_label in enumerate(detector_labels):
                 if detector_label in self._preview_images_by_detector_label:
                     detector_image: numpy.ndarray = self._preview_images_by_detector_label[detector_label]
                     detector_image = ImageUtils.image_resize_to_fit(
                         opencv_image=detector_image,
                         available_size=image_dimensions)
+                    offset_y_px: int = image_positions[detector_index][1] + (image_dimensions[1] - detector_image.shape[0]) // 2
+                    offset_x_px: int = image_positions[detector_index][0] + (image_dimensions[0] - detector_image.shape[1]) // 2
                     display_image[
-                        image_positions[detector_index][0]:image_positions[detector_index][0] + image_dimensions[0],
-                        image_positions[detector_index][1]:image_positions[detector_index][1] + image_dimensions[1]
+                        offset_y_px:offset_y_px + detector_image.shape[0],
+                        offset_x_px:offset_x_px + detector_image.shape[1]
                     ] = detector_image
         elif self._extrinsic_image is not None:
             extrinsic_image: numpy.ndarray = ImageUtils.image_resize_to_fit(
                 opencv_image=self._extrinsic_image,
                 available_size=available_size_px)
-            offset_x_px: int = (display_image.shape[0] - self._extrinsic_image.shape[0]) // 2
-            offset_y_px: int = (display_image.shape[1] - self._extrinsic_image.shape[1]) // 2
+            offset_y_px: int = (display_image.shape[0] - extrinsic_image.shape[0]) // 2
+            offset_x_px: int = (display_image.shape[1] - extrinsic_image.shape[1]) // 2
             display_image[
-                offset_x_px:offset_x_px + self._extrinsic_image.shape[1],
-                offset_y_px:offset_y_px + self._extrinsic_image.shape[0],
+                offset_y_px:offset_y_px + extrinsic_image.shape[0],
+                offset_x_px:offset_x_px + extrinsic_image.shape[1],
             ] = extrinsic_image
 
         image_buffer: bytes = ImageUtils.image_to_bytes(image_data=display_image, image_format=".jpg")

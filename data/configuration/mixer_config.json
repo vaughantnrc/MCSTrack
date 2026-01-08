@@ -3,7 +3,7 @@
   "extrinsic_calibrator": {
     "implementation": "charuco_opencv",
     "configuration": {
-      "data_path": "./calibration/intrinsic/"
+      "data_path": "./calibration/extrinsic/"
     }
   }
 }

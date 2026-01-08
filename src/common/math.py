@@ -454,7 +454,7 @@ class MathUtils:
         """
         distorted_points: numpy.ndarray = numpy.asarray(points)
         distorted_points = numpy.reshape(
-            a=distorted_points,
+            distorted_points,
             newshape=(1, len(points), 2))
         undistorted_points: numpy.ndarray = cv2.undistortPoints(
             src=distorted_points,
@@ -527,7 +527,13 @@ class MathUtils:
         annotations: list[Annotation],
         landmarks: list[Landmark],
         detector_intrinsics: IntrinsicParameters
-    ) -> Matrix4x4:
+    ) -> tuple[bool, Matrix4x4 | None]:
+        """
+        returns: Tuple containing:
+            0: 'estimated' bool indicating whether it was possible to make an estimate.
+               Could be false if e.g. no annotations correspond to the provided landmarks
+            1: If 'estimated' is True, the matrix transform that was calculated. Otherwise None.
+        """
         target_points: list[list[float]] = list()    # ordered points [point_index][x/y/z]
         detector_points: list[list[float]] = list()  # ordered points [point_index][x/y]
         annotations_dict: dict[str, Annotation] = {annotation.feature_label: annotation for annotation in annotations}
@@ -536,6 +542,8 @@ class MathUtils:
                 annotation = annotations_dict[landmark.feature_label]
                 target_points.append([landmark.x, landmark.y, landmark.z])
                 detector_points.append([annotation.x_px, annotation.y_px])
+        if len(detector_points) <= 4:
+            return False, None
         rotation_vector: numpy.ndarray
         translation_vector: numpy.ndarray
         _, rotation_vector, translation_vector = cv2.solvePnP(
@@ -726,7 +734,7 @@ class MathUtils:
         collinearity_do_check: bool = True,
         collinearity_zero_threshold: float = 0.0001,
         use_oomori_mirror_fix: bool = True
-    ) -> numpy.array:  # 4x4 transformation matrix, indexed by [row,col]
+    ) -> numpy.ndarray:  # 4x4 transformation matrix, indexed by [row,col]
         """
         Solution based on: Arun et al. Least square fitting of two 3D point sets (1987)
         https://stackoverflow.com/questions/66923224/rigid-registration-of-two-point-clouds-with-known-correspondence

@@ -152,7 +152,7 @@ class MCTController(MCTComponent):
                 continue
             component_address: Connection.ComponentAddress = Connection.ComponentAddress(
                 label=pose_solver.label,
-                role="pose_solver",
+                role="mixer",
                 ip_address=IPv4Address(pose_solver.ip_address),
                 port=pose_solver.port)
             pose_solver_connection: PoseSolverConnection = self.add_connection(component_address=component_address)
@@ -240,7 +240,7 @@ class MCTController(MCTComponent):
                 self._startup_state = MCTController.StartupState.INITIAL
                 self._status = MCTController.Status.RUNNING  # We're done
             else:
-                pose_solver_labels: list[str] = self.get_active_pose_solver_labels()
+                pose_solver_labels: list[str] = self.get_active_mixer_labels()
                 for pose_solver_label in pose_solver_labels:
                     requests: list[MCTRequest] = list()
                     for detector_label in self.get_active_detector_labels():
@@ -281,7 +281,7 @@ class MCTController(MCTComponent):
         """
         return self.get_component_labels(role=Detector.get_role_label(), active=True)
 
-    def get_active_pose_solver_labels(self) -> list[str]:
+    def get_active_mixer_labels(self) -> list[str]:
         """
         See get_component_labels.
         """
@@ -773,7 +773,7 @@ class MCTController(MCTComponent):
                     detector_connection.request_id = self.request_series_push(
                         connection_label=detector_label,
                         request_series=MCTRequestSeries(series=[DetectorFrameGetRequest()]))
-            for pose_solver_label in self.get_active_pose_solver_labels():
+            for pose_solver_label in self.get_active_mixer_labels():
                 pose_solver_connection: PoseSolverConnection = self._get_connection(
                     connection_label=pose_solver_label,
                     connection_type=PoseSolverConnection)
