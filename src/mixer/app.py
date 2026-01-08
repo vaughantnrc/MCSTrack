@@ -15,6 +15,7 @@ from fastapi.websockets import WebSocket
 import hjson
 import logging
 import os
+from typing import Final
 
 
 # Note: This is the only implementation, currently.
@@ -23,10 +24,13 @@ from src.implementations.extrinsic_charuco_opencv import CharucoOpenCVExtrinsicC
 
 logger = logging.getLogger(__name__)
 
+CONFIGURATION_FILEPATH_ENV_VAR: Final[str] = "MCSTRACK_MIXER_CONFIGURATION_FILEPATH"
+
 
 def create_app() -> FastAPI:
     configuration_filepath: str = os.path.join(
-        os.path.dirname(__file__), "..", "..", "data", "configuration", "mixer_config.json")
+        os.path.dirname(__file__), "..", "..", "data", "configuration", "mixer", "aruco.json")
+    configuration_filepath = os.getenv(CONFIGURATION_FILEPATH_ENV_VAR, configuration_filepath)
     configuration: Mixer.Configuration
     with open(configuration_filepath, 'r') as infile:
         file_contents: str = infile.read()

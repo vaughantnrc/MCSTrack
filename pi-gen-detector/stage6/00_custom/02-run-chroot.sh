@@ -14,4 +14,4 @@ pip install --break-system-packages .[component]
 deactivate
 
 # Run startup script on boot
-sudo echo "@reboot root /usr/local/bin/mcstrack_startup >> mcstrack_log.log" > /etc/cron.d/startup
+sudo echo "@reboot root /usr/local/bin/mcstrack_startup >> /home/admin/mcstrack_log.log" > /etc/cron.d/startup

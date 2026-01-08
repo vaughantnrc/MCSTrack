@@ -29,14 +29,18 @@ from fastapi.websockets import WebSocket
 import hjson
 import logging
 import os
+from typing import Final
 
 
 logger = logging.getLogger(__name__)
 
+CONFIGURATION_FILEPATH_ENV_VAR: Final[str] = "MCSTRACK_DETECTOR_CONFIGURATION_FILEPATH"
+
 
 def create_app() -> FastAPI:
-    detector_configuration_filepath: str = \
-        os.path.join(os.path.dirname(__file__), "..", "..", "data", "configuration", "detector_config.json")
+    detector_configuration_filepath: str = os.path.join(
+        os.path.dirname(__file__), "..", "..", "data", "configuration", "detector", "opencv_aruco.json")
+    detector_configuration_filepath = os.getenv(CONFIGURATION_FILEPATH_ENV_VAR, detector_configuration_filepath)
     detector_configuration: Detector.Configuration
     with open(detector_configuration_filepath, 'r') as infile:
         detector_configuration_file_contents: str = infile.read()

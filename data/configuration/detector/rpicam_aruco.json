@@ -1,0 +1,17 @@
+{
+  "detector_label": "detector_01",
+  "intrinsic_calibrator": {
+    "implementation": "charuco_opencv",
+    "configuration": {
+      "data_path": "./calibration/intrinsic/"
+    }
+  },
+  "camera": {
+    "implementation": "picamera2",
+    "configuration": {}
+  },
+  "annotator": {
+    "implementation": "aruco_opencv",
+    "configuration": {}
+  }
+}
