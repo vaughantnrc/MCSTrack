@@ -452,6 +452,8 @@ class MathUtils:
         Given a detector's matrix transform and its intrinsic properties,
         convert pixel coordinates to ray directions (with origin at the detector).
         """
+        if len(points) == 0:
+            return list()
         distorted_points: numpy.ndarray = numpy.asarray(points)
         distorted_points = numpy.reshape(
             distorted_points,
@@ -557,7 +559,7 @@ class MathUtils:
         object_to_camera_matrix[0:3, 0:3] = Rotation.from_rotvec(rotation_vector).as_matrix()
         object_to_camera_matrix[0:3, 3] = translation_vector[0:3]
         object_to_detector_matrix = MathUtils.image_to_opengl_transformation_matrix(object_to_camera_matrix)
-        return Matrix4x4.from_numpy_array(object_to_detector_matrix)
+        return True, Matrix4x4.from_numpy_array(object_to_detector_matrix)
 
     class IterativeClosestPointOutput:
         source_to_target_matrix: Matrix4x4

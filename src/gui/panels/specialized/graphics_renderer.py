@@ -345,7 +345,6 @@ class GraphicsRenderer(GLCanvas, wx.Window):
             return  # appears to happen somewhat frequently in Windows, perhaps multiple events handled back-to-back?
 
         delta_wheel: int = event.GetWheelRotation()
-        print(delta_wheel)
         velocity_units_per_second: float = delta_wheel / delta_time_seconds
         velocity_units_per_second = float(numpy.clip(
             a=velocity_units_per_second,
