@@ -1,4 +1,37 @@
-# Hardware Setup
+
+## SD Card Preparation
+
+1. Gather necessary materials. You will need:
+    - Workstation computer (computer other than the one you are preparing)
+    - Mouse & Keyboard
+    - MicroSD cards, Blank (min. 16 GB)
+    - You may also need a MicroSD card adapter for your workstation (if your workstation does not have a MicroSD card slot)
+2. On the workstation computer, download and install Raspberry Pi Imager ([link](https://www.raspberrypi.com/software/)).
+3. Raspberry Pi OS will be helpful for previewing camera images and focusing lenses. The following steps describe how to flash Raspberry Pi OS to a MicroSD card.
+    a. Connect a blank MicroSD card, using an adapter if necessary
+    b. Run Raspberry Pi Imager
+    c. When asked to select a Device, choose "Raspberry Pi 5" and click "Next"
+    d. When asked to select an operating system, select "Raspberry Pi OS (64-bit)" and click "Next"
+    e. When asked to select a storage device, choose the blank MicroSD card and click "Next"
+    f. When asked to enter customization options, you may enter fields as you see fit
+    g. When asked to confirm writing, review the information and proceed through the prompts
+    h. When the software indicates that it is safe to eject the MicroSD card, remove it and close Raspberry Pi Imager.
+4. The Detector software must be flashed to MicroSD cards, one for each Detector. The following steps describe how to flash the detector software to a MicroSD card.
+    - TODO
+
+## Router and Power over Ethernet Setup
+
+1. Gather materials. You will need:
+    - Power over Ethernet Switch
+1. Set up the Power over Ethernet Switch 
+
+## Detector Setup
+
+1. Gather necessary materials. For each Detector will need:
+    - Raspberry Pi 5
+    - Global Shutter Camera and cable
+
+# (Old) Hardware Setup
 
 (Let D be the number of detectors you wish you have)
 
