@@ -47,17 +47,17 @@ To Do:
     - You may also need a MicroSD card adapter for your workstation (if your workstation does not have a MicroSD card slot)
 1. On the workstation computer, download and install Raspberry Pi Imager ([link](https://www.raspberrypi.com/software/)).
 1. Raspberry Pi OS will be helpful for previewing camera images and focusing lenses. The following steps describe how to flash Raspberry Pi OS to a MicroSD card.
-    a. Connect a blank MicroSD card, using an adapter if necessary
-    a. Run Raspberry Pi Imager
-    a. When asked to select a Device, choose "Raspberry Pi 5" and click "Next"
-    a. When asked to select an operating system, select "Raspberry Pi OS (64-bit)" and click "Next"
-    a. When asked to select a storage device, choose the blank MicroSD card and click "Next"
-    a. When asked to enter customization options, you may enter fields as you see fit
-    a. When asked to confirm writing, review the information and proceed through the prompts
-    a. When the software indicates that it is safe to eject the MicroSD card, remove it and close Raspberry Pi Imager.
+    1. Connect a blank MicroSD card, using an adapter if necessary
+    1. Run Raspberry Pi Imager
+    1. When asked to select a Device, choose "Raspberry Pi 5" and click "Next"
+    1. When asked to select an operating system, select "Raspberry Pi OS (64-bit)" and click "Next"
+    1. When asked to select a storage device, choose the blank MicroSD card and click "Next"
+    1. When asked to enter customization options, you may enter fields as you see fit
+    1. When asked to confirm writing, review the information and proceed through the prompts
+    1. When the software indicates that it is safe to eject the MicroSD card, remove it and close Raspberry Pi Imager.
 1. The Detector software must be flashed to MicroSD cards, one for each Detector.
-    a. Download the latest Detector software image from XXXXDetSoftLinkXXXX
-    a. Follow the same procedure as above for flashing Raspberry Pi OS, except when asked to select an operating system, scroll down and select "custom image" and select the image file you just downloaded
+    1. Download the latest Detector software image from XXXXDetSoftLinkXXXX
+    1. Follow the same procedure as above for flashing Raspberry Pi OS, except when asked to select an operating system, scroll down and select "custom image" and select the image file you just downloaded
 
 ## Mounting Frame Preparation
 
@@ -93,14 +93,14 @@ To Do:
 1. Connect the Raspberry Pi 5 Global Shutter Camera to the Mounting Frame
 1. Connect the Raspberry Pi 5 to the Raspberry Pi 5 Global Shutter Camera using the Raspberry Pi Camera Cable
 1. Focus the Camera Lens
-    a. Place the assembled Detector such that the camera is directed toward a full-page Siemens Star, and is at a distance similar to that of markers in the intended use case
-    a. Insert the Raspberry Pi OS MicroSD Card into the Raspberry Pi 5.
-    a. Connect the Rasperry Pi 5 to a keyboard, mouse, display, and lastly power
-    a. Wait for Raspberry Pi 5 to start up and for Raspberry Pi OS to become visible on the display
-    a. Open a command line interface and run the command `rpicam-hello -t 1000000`. This is expected to show a live camera image, though it will likely be out of focus.
-    a. Turn the shutter ring all the way open
-    a. Turn the focus ring such that the star pattern is in maximal focus (lines and boundaries appear as sharp as possible)
-    a. Power down the Raspberry Pi 5, and disconnect keyboard, mouse, display, and power.
+    1. Place the assembled Detector such that the camera is directed toward a full-page Siemens Star, and is at a distance similar to that of markers in the intended use case
+    1. Insert the Raspberry Pi OS MicroSD Card into the Raspberry Pi 5.
+    1. Connect the Rasperry Pi 5 to a keyboard, mouse, display, and lastly power
+    1. Wait for Raspberry Pi 5 to start up and for Raspberry Pi OS to become visible on the display
+    1. Open a command line interface and run the command `rpicam-hello -t 1000000`. This is expected to show a live camera image, though it will likely be out of focus.
+    1. Turn the shutter ring all the way open
+    1. Turn the focus ring such that the star pattern is in maximal focus (lines and boundaries appear as sharp as possible)
+    1. Power down the Raspberry Pi 5, and disconnect keyboard, mouse, display, and power.
 1. Insert the Detector software image
 
 ## Router and PoE Setup
@@ -112,10 +112,10 @@ To Do:
 1. Place the PoE Switch as desired, and connect to power with an appropriate power cable or AC adapter.
 1. Place the router as desired, connect to the PoE switch with an Ethernet cable, and connect to power with an appropriate cable and AC adapter.
 1. Use your workstation to configure the router
-    a. Connect your workstation to the PoE Switch with an Ethernet cable.
-    a. If your workstation is on any network, th
-    a. Open an Internet browser on your workstation and navigate to your router's configuration page (consult your router's documentation)
-    a. 
+    1. Connect your workstation to the PoE Switch with an Ethernet cable.
+    1. If your workstation is on any network, th
+    1. Open an Internet browser on your workstation and navigate to your router's configuration page (consult your router's documentation)
+    1. 
 
 # Detector Setup
 
