@@ -456,7 +456,7 @@ class PoseSolver:
                 for annotation_index in reversed(indices_to_remove):
                     annotation_list_by_detector_label[detector_label].pop(annotation_index)
         else:
-            self._poses_by_detector_label = self._extrinsics_by_detector_label
+            self._poses_by_detector_label = dict(self._extrinsics_by_detector_label)
 
         # Convert annotations to rays
         rays_by_feature_and_detector: dict[str, dict[str, Ray]] = dict()  # indexed as [feature_label][detector_label]
@@ -492,7 +492,7 @@ class PoseSolver:
                 maximum_distance=self._configuration.ray_intersection_maximum_distance)
             if intersection_result.centroids.shape[0] == 0:
                 feature_labels_with_rays_only.append(feature_label)
-                break
+                continue
             intersections_by_feature_label[feature_label] = list(intersection_result.centroid().flatten())
 
         # We estimate the pose of each target based on the calculated intersections
@@ -513,8 +513,8 @@ class PoseSolver:
                 if target_feature_label in rays_by_feature_and_detector:
                     detector_labels_seeing_target |= set(rays_by_feature_and_detector[target_feature_label].keys())
 
-            if len(target_feature_labels_with_intersections) <= 0 and len(target_feature_labels_with_rays) <= 0:
-                continue  # No information on which to base a pose
+            if len(intersections_by_feature_label) + len(feature_labels_with_rays_only) < 3:  # Estimation not possible
+                continue
 
             detector_count_seeing_target: int = len(detector_labels_seeing_target)
             if detector_count_seeing_target < self._configuration.minimum_detector_count or \
@@ -545,19 +545,20 @@ class PoseSolver:
                 reference_known_points: list[list[float]] = [
                     intersections_by_feature_label[feature_label]
                     for feature_label in target_feature_labels_with_intersections]
-                detected_ray_points: list[list[float]] = [
-                    target.get_landmark_point(feature_label)
-                    for feature_label in target_feature_labels_with_rays]
-                reference_rays: list[Ray] = list(itertools.chain.from_iterable([
-                    list(rays_by_feature_and_detector[feature_label].values())
-                    for feature_label in target_feature_labels_with_rays]))
+                detected_ray_points: list[list[float]] = list()
+                reference_rays: list[Ray] = list()
+                for feature_label in target_feature_labels_with_rays:
+                    detected_ray_point: list[float] = target.get_landmark_point(feature_label)
+                    for _detector_label, ray in rays_by_feature_and_detector[feature_label].items():
+                        detected_ray_points.append(detected_ray_point)
+                        reference_rays.append(ray)
                 iterative_closest_point_parameters = IterativeClosestPointParameters(
                     termination_iteration_count=self._configuration.icp_termination_iteration_count,
                     termination_delta_translation=self._configuration.icp_termination_translation,
                     termination_delta_rotation_radians=self._configuration.icp_termination_rotation_radians,
                     termination_mean_point_distance=self._configuration.icp_termination_mean_point_distance,
                     termination_rms_point_distance=self._configuration.icp_termination_rms_point_distance)
-                if len(target_feature_labels_with_intersections) >= 1:
+                if len(target_feature_labels_with_intersections) >= 3:  # Minimum no. points for initial pose estimation
                     initial_detected_to_reference_matrix = MathUtils.register_corresponding_points(
                         point_set_from=detected_known_points,
                         point_set_to=reference_known_points,

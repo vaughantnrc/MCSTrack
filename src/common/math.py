@@ -616,7 +616,7 @@ class MathUtils:
             raise ValueError(
                 "source_known_points and target_known_points must be of equal length (1:1 correspondence).")
 
-        if len(source_known_points) != len(target_known_points):
+        if len(source_ray_points) != len(target_rays):
             raise ValueError("source_ray_points and target_rays must be of equal length (1:1 correspondence).")
 
         # Initial transformation
