@@ -510,7 +510,8 @@ class PoseSolver:
                     target_feature_labels_with_intersections.append(target_feature_label)
                 if target_feature_label in feature_labels_with_rays_only:
                     target_feature_labels_with_rays.append(target_feature_label)
-                detector_labels_seeing_target |= set(rays_by_feature_and_detector[target_feature_label].keys())
+                if target_feature_label in rays_by_feature_and_detector:
+                    detector_labels_seeing_target |= set(rays_by_feature_and_detector[target_feature_label].keys())
 
             if len(target_feature_labels_with_intersections) <= 0 and len(target_feature_labels_with_rays) <= 0:
                 continue  # No information on which to base a pose
