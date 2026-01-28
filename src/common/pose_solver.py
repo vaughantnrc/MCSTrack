@@ -425,34 +425,38 @@ class PoseSolver:
                 # TODO: Output a suitable warning that no intrinsics have been received, but don't do it every frame
                 del annotation_list_by_detector_label[detector_label]
 
-        reference_target: Target = self._targets[0]
-        for detector_label in detector_labels:
-            if detector_label in self._extrinsics_by_detector_label:
-                self._poses_by_detector_label[detector_label] = self._extrinsics_by_detector_label[detector_label]
-            else:
-                intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
-                estimated: bool
-                reference_to_detector: Matrix4x4 | None
-                estimated, reference_to_detector = MathUtils.estimate_matrix_transform_to_detector(
-                    annotations=annotation_list_by_detector_label[detector_label],
-                    landmarks=reference_target.landmarks,
-                    detector_intrinsics=intrinsics)
-                if estimated:
-                    detector_to_reference: Matrix4x4 = Matrix4x4.from_numpy_array(
-                        numpy.linalg.inv(reference_to_detector.as_numpy_array()))
-                    self._poses_by_detector_label[detector_label] = detector_to_reference
+        reference_target: Target | None = None
+        if len(self._extrinsics_by_detector_label) <= 0:
+            reference_target: Target = self._targets[0]
+            for detector_label in detector_labels:
+                if detector_label in self._extrinsics_by_detector_label:
+                    self._poses_by_detector_label[detector_label] = self._extrinsics_by_detector_label[detector_label]
+                else:
+                    intrinsics: IntrinsicParameters = self._intrinsics_by_detector_label[detector_label]
+                    estimated: bool
+                    reference_to_detector: Matrix4x4 | None
+                    estimated, reference_to_detector = MathUtils.estimate_matrix_transform_to_detector(
+                        annotations=annotation_list_by_detector_label[detector_label],
+                        landmarks=reference_target.landmarks,
+                        detector_intrinsics=intrinsics)
+                    if estimated:
+                        detector_to_reference: Matrix4x4 = Matrix4x4.from_numpy_array(
+                            numpy.linalg.inv(reference_to_detector.as_numpy_array()))
+                        self._poses_by_detector_label[detector_label] = detector_to_reference
 
-        # At the time of writing, each feature label can be used only by one target.
-        # So we can remove annotations whose feature labels match those of the reference_target
-        # to avoid unnecessary processing.
-        reference_feature_labels: set[str] = set([landmark.feature_label for landmark in reference_target.landmarks])
-        for detector_label in detector_labels:
-            indices_to_remove: list[int] = list()
-            for annotation_index, annotation in enumerate(annotation_list_by_detector_label[detector_label]):
-                if annotation.feature_label in reference_feature_labels:
-                    indices_to_remove.append(annotation_index)
-            for annotation_index in reversed(indices_to_remove):
-                annotation_list_by_detector_label[detector_label].pop(annotation_index)
+            # At the time of writing, each feature label can be used only by one target.
+            # So we can remove annotations whose feature labels match those of the reference_target
+            # to avoid unnecessary processing.
+            reference_feature_labels: set[str] = set([landmark.feature_label for landmark in reference_target.landmarks])
+            for detector_label in detector_labels:
+                indices_to_remove: list[int] = list()
+                for annotation_index, annotation in enumerate(annotation_list_by_detector_label[detector_label]):
+                    if annotation.feature_label in reference_feature_labels:
+                        indices_to_remove.append(annotation_index)
+                for annotation_index in reversed(indices_to_remove):
+                    annotation_list_by_detector_label[detector_label].pop(annotation_index)
+        else:
+            self._poses_by_detector_label = self._extrinsics_by_detector_label
 
         # Convert annotations to rays
         rays_by_feature_and_detector: dict[str, dict[str, Ray]] = dict()  # indexed as [feature_label][detector_label]
@@ -494,7 +498,7 @@ class PoseSolver:
         # We estimate the pose of each target based on the calculated intersections
         # and the rays projected from each detector
         for target in self._targets:
-            if target.label == str(reference_target.label):
+            if reference_target is not None and target.label == str(reference_target.label):
                 continue  # everything is expressed relative to the reference, so it's a "known" coordinate system
             feature_labels_in_target: list[str] = [landmark.feature_label for landmark in target.landmarks]
 
