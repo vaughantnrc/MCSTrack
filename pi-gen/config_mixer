@@ -1,4 +1,4 @@
-export IMG_NAME=mcstrack-mixer
+export IMG_NAME=mcstrack
 export LOCALE_DEFAULT=en_US.UTF-8
 export TIMEZONE_DEFAULT=America/Toronto
 export DISABLE_FIRST_BOOT_USER_RENAME=1
