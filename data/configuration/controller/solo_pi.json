@@ -1,0 +1,18 @@
+{
+  "startup_mode": "detecting_and_solving",
+  "detectors": [
+    {
+      "label": "detector",
+      "ip_address": "192.168.0.101",
+      "port": 8001,
+      "camera_parameters": [],
+      "marker_parameters": [
+        {
+          "key": "cornerRefinementMethod",
+          "value": "SUBPIX"
+        }
+      ]
+    }
+  ],
+  "mixers": []
+}

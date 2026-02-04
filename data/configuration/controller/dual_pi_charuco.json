@@ -29,7 +29,7 @@
   "mixers": [
     {
       "label": "sol",
-      "ip_address": "192.168.0.103",
+      "ip_address": "192.168.0.100",
       "port": 8000,
       "targets": [
         {
