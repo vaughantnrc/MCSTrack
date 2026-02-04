@@ -1,22 +1,58 @@
-
-To Do:
-- Add instructions for Mixer software MicroSD card flash
+## To Do
 - Replace XXXXDetSoftLinkXXXX
 - Add images showing how to attach the Raspberry Pi 5 to the Mounting Frame
 
+## Component Overview
+
+MCSTrack uses multiple smart cameras to spatially track moving objects in real-time.
+The system contains three custom components: Detectors, Mixers, and a Controller.
+They are connected by Ethernet to a PoE (Power over Ethernet) source and a router.
+An overview of components is presented in the figure below and then described in more detail.
+
+![](/doc/images/mcs_component_overview.png)
+
+A **Detector** is a microprocessor that is integrated with a configurable camera.
+Camera data is processed by the Detector and converted to a set of intermediate data for later use by the Mixer(s).
+Detectors are Raspberry Pi 5 units that each run an image.
+
+A **Mixer** is a computing unit that takes the data from various Detectors and synthesizes the output tracking data.
+The Mixer may be either a Raspberry Pi 5 microprocessor, or a Desktop computer.
+
+The **Controller** is the computing unit responsible for coordinating communications between Detectors and Mixers,
+allowing a user to access data, and allowing a user to change settings in Detectors and Mixers.
+The Controller may be a Linux or Windows device.
+It is expected that the Controller will most often be running on a user's computer
+alongside other application-specific software
+
+A dedicated Raspberry Pi 5 for the Mixer is optional (hence why it has a dotted outline in the figure above),
+but may result in better performance if the computer running the Controller
+is also running other computionally-demanding software
+
+The components are connected via Ethernet on a local network.
+A PoE switch serves both as a power source and as a communications hub.
+The router is required for communications routing and for assigning static IP addresses within the local network.
+Ethernet is preferred over a wireless solution due to higher reliability and speed within a local network.
+
+If you have a router capable of supplying PoE to all Detectors with a sufficient number of ports and power budget
+(check the documentation from the manufacturer), then a PoE switch may not be needed.
+
 ## List of Materials
 
-(Let D be the number of detectors you wish you have)
+Let D be the number of Detectors you wish you have.
+Let M be the number of dedicated Mixers you wish to have (1 or 0).
 
-- D x Raspberry Pi 5 - https://www.pishop.ca/product/raspberry-pi-5-8gb/
+- (D + M) x Raspberry Pi 5 - https://www.pishop.ca/product/raspberry-pi-5-8gb/
+- (D + M + 1) x Raspberry Pi SD Card (OS Drive) - https://www.pishop.ca/product/microsd-card-16-gb-class-10-blank/
+- (D + M) x PoE hat for Raspberry Pi 5 - https://www.waveshare.com/poe-hat-f.htm
+- (D + M) x Ethernet Cable - https://www.cdw.ca/product/tripp-lite-7ft-cat6-gigabit-molded-patch-cable-rj45-m-m-550mhz-24awg-yellow/5991672
 - D x Raspberry Pi Global Shutter Camera - https://www.pishop.ca/product/raspberry-pi-global-shutter-camera/
 - D x Camera Lens - https://www.pishop.ca/product/6mm-wide-angle-lens-for-raspberry-pi-hq-camera-cs/
-- D x Raspberry Pi "Drive" - https://www.pishop.ca/product/microsd-card-16-gb-class-10-blank/
 - D x Raspberry Pi Camera Cable - https://www.pishop.ca/product/camera-cable-for-raspberry-pi-5 (200 mm, alternate link https://www.canakit.com/raspberry-pi-5-camera-cable.html)
-- D x PoE hat for Raspberry Pi 5 - https://www.waveshare.com/poe-hat-f.htm
 - D x Gooseneck clamps (choose SCP-BH, SCP-GN18HDB, SCP-TC) - https://snakeclamp.com/collections/camera
-- D x Ethernet Cable - https://www.cdw.ca/product/tripp-lite-7ft-cat6-gigabit-molded-patch-cable-rj45-m-m-550mhz-24awg-yellow/5991672
-- D x 8 x Mounting Screws, 4-40 threading, 1/4 inch length, pan head phillips & stainless steel preferred - https://www.digikey.com/en/products/detail/fix-supply/0404MPP188/21635254
+- (D x 8) x Mounting Screws, 4-40 threading, 1/4 inch length, pan head phillips & stainless steel preferred - https://www.digikey.com/en/products/detail/fix-supply/0404MPP188/21635254
+- 1 x Raspberry Pi power supply - https://www.pishop.ca/product/raspberry-pi-27w-usb-c-power-supply-white-us/
+- 1 x Raspberry Pi display cable - https://www.pishop.ca/product/micro-hdmi-to-hdmi-cable-for-pi-4-3ft-black/
+- A means of labelling individual Raspberry Pi 5 units
 - 1 x 3D Printer capable of printing in CPE (co-polyester)
 - 1 x CPE filament
 - 1 x drill
@@ -27,15 +63,12 @@ To Do:
 - White Printer Paper
 - White Printer Cardstock
 - White Printer Full Page Labels
-- A means of labelling individual Raspberry Pi 5 units
 - 1 x Switch with PoE support* - https://www.cdw.ca/product/netgear-gs516pp-ethernet-switch/6252835
 - 1 x suitable Router*
-- 1 x laptop or other computing device on which to run the pose solver
-- 2 x Ethernet cables to connect router, switch, and laptop - https://www.cdw.ca/product/tripp-lite-cat6-gigabit-snagless-molded-patch-cable-rj45-m-m-blue-7ft/622270
-- 1 x Raspberry Pi display cable - https://www.pishop.ca/product/micro-hdmi-to-hdmi-cable-for-pi-4-3ft-black/
-- (Optional, but recommended) 1 x Raspberry Pi power supply - https://www.pishop.ca/product/raspberry-pi-27w-usb-c-power-supply-white-us/
+- 1 x laptop or other computing device on which to run the Controller software
+- 2 x Ethernet cables to connect router, switch, and laptop - https://www.cdw.ca/product/tripp-lite-cat6-gigabit-snagless-molded-patch-cable-rj45-m-m-blue-7ft/622270v
 
-* Alternatively, if you do not anticipate needing many detectors, then you may be able to use a router with sufficient PoE support (power budget and ethernet ports)
+*Alternatively, if you do not anticipate needing many Detectors, then you may be able to use a router with sufficient PoE support (power budget and ethernet ports)
 
 ## Paper Tools
 
@@ -61,7 +94,10 @@ To Do:
    1. When the software indicates that it is safe to eject the MicroSD card, remove it and close Raspberry Pi Imager.
 1. The Detector software must be flashed to MicroSD cards, one for each Detector.
    1. Download the latest Detector software image from XXXXDetSoftLinkXXXX
-   1. Follow the same procedure as above for flashing Raspberry Pi OS, except when asked to select an operating system, scroll down and select "custom image" and select the image file you just downloaded
+   1. Follow the same procedure as above for flashing Raspberry Pi OS, except when asked to select an operating system, scroll down to select "custom image" and select the image file you just downloaded
+1. If you are using a dedicated Mixer on its own Raspberry Pi, then Mixer software must be flashed to a MicroSD card.
+   1. Download the latest Mixer software image from XXXXDetSoftLinkXXXX
+   1. Follow the same procedure as above for flashing Raspberry Pi OS, except when asked to select an operating system, scroll down to select "custom image" and select the image file you just downloaded
 
 ## Updating Raspberry Pi's and Recording MAC Addresses
 
@@ -93,8 +129,7 @@ To Do:
    - 1 x #4-40 UNC screw tap
    - 1 x Screw tap wrench
 1. Download the [Mounting Frame STL File](data/plastic/detector_mount.stl)
-1. Use the 3D printer to print the Mounting Frame
-   - Print one Mounting Frame for each Detector
+1. Use the 3D printer to print one Mounting Frame for each Detector
    - It is recommended to print one Mounting Frame at a time
    - It is recommended to print in CPE due to its toughness and resistance to heat
 1. Use a drill with a #43 drill bit to widen the existing holes
@@ -120,7 +155,7 @@ To Do:
       - Camera Lens
       - PoE HAT for Raspberry Pi 5
       - Mounting Frame prepared as per instructions above
-      - MicroSD card flashed with detector software
+      - MicroSD Card flashed with Detector software
 1. Install the PoE HAT on the Raspberry Pi 5 as per product instructions
 1. Install the Camera Lens on the Raspberry Pi 5 Global Shutter Camera
 1. Connect the Raspberry Pi 5 to the Mounting Frame
@@ -136,7 +171,30 @@ To Do:
    1. Turn the focus ring such that the star pattern is in maximal focus (lines and boundaries appear as sharp as possible). Close the preview window when done.
    1. If you do not already have it, use the command `ifconfig` to find the Ethernet MAC address.
    1. Power down the Raspberry Pi 5, and disconnect keyboard, mouse, display, and power.
-1. Insert the Detector software image
+1. Insert the MicroSD Card flashed with the Detector software
+
+## Mixer Setup
+
+### Dedicated Raspberry Pi
+
+These instructions apply only if you use a dedicated Mixer on its own Raspberry Pi 5.
+
+1. Gather necessary materials.
+   - Raspberry Pi 5
+   - PoE HAT for Raspberry Pi 5
+   - MicroSD Card flashed with Mixer software
+1. Install the PoE HAT on the Raspberry Pi 5 as per product instructions
+1. Insert the MicroSD Card flashed with the Mixer software
+
+### Other computer
+
+1. Clone the MCSTrack repository
+TODO
+
+## Controller Setup
+
+1. Clone the MCSTrack repository
+TODO
 
 ## Router and PoE Setup
 
@@ -152,7 +210,7 @@ To Do:
    1. Connect your workstation to the PoE Switch with an Ethernet cable.
    1. Open an Internet browser on your workstation and navigate to your router's configuration page.
    1. For each Raspberry Pi 5, reserve a dedicated IP Address based on MAC Address
-      - For example, in a system with two detectors and one mixer, the detectors may have IP addresses `192.168.0.101` and `192.168.0.102`, and the mixer `192.168.0.100`
+      - For example, in a system with two detectors and one Mixer, the Detectors may have IP addresses `192.168.0.101` and `192.168.0.102`, and the Mixer `192.168.0.100`
    1. Configure the router to deny external attempts to connect to any of the Raspberry Pi's.
 
 ## GUI Installation
