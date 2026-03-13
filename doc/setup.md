@@ -186,15 +186,43 @@ These instructions apply only if you use a dedicated Mixer on its own Raspberry 
 1. Install the PoE HAT on the Raspberry Pi 5 as per product instructions
 1. Insert the MicroSD Card flashed with the Mixer software
 
-### Other computer
+### Other computer (Windows)
 
 1. Clone the MCSTrack repository
-TODO
+1. Install dependencies via the following commands:
+   ```
+   python3 -m venv .venv
+   cd .venv/Scripts
+   activate
+   cd ../..
+   pip install .[component]
+   ```
+1. To run:
+   ```
+   cd .venv/Scripts
+   activate
+   cd ../..
+   python -m src.main_detector
+   ```
 
 ## Controller Setup
 
 1. Clone the MCSTrack repository
-TODO
+1. Install dependencies via the following commands:
+   ```
+   python3 -m venv .venv
+   cd .venv/Scripts
+   activate
+   cd ../..
+   pip install .[gui]
+   ```
+1. To run:
+   ```
+   cd .venv/Scripts
+   activate
+   cd ../..
+   python -m src.gui.gui
+   ```
 
 ## Router and PoE Setup
 
@@ -213,11 +241,7 @@ TODO
       - For example, in a system with two detectors and one Mixer, the Detectors may have IP addresses `192.168.0.101` and `192.168.0.102`, and the Mixer `192.168.0.100`
    1. Configure the router to deny external attempts to connect to any of the Raspberry Pi's.
 
-## GUI Installation
-
-Todo
-
-## GUI Usage
+## Usage
 
 On the host machine, with the python virtualenv activated (see platform-specific instructions), run the ```src.gui.gui``` module. 
 
