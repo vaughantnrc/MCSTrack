@@ -1,16 +1,20 @@
 from .configuration import \
     MCTComponentConfig, \
-    MCTConfiguration, \
-    StartupMode
+    MCTConfiguration
 from .connection import \
-    Connection, \
-    DetectorConnection, \
-    PoseSolverConnection
+    Connection
+from .router import Router
 from src.common import \
+    BaseSink, \
+    CSVPoseSink, \
+    DequeueStatusMessagesResponse, \
     DetectorFrame, \
     EmptyResponse, \
     ErrorResponse, \
+    ImageResolution, \
     IntrinsicParameters, \
+    KeyValueSimpleAny, \
+    Matrix4x4, \
     MCTComponent, \
     MCTError, \
     MCTRequest, \
@@ -19,24 +23,41 @@ from src.common import \
     MCTResponseSeries, \
     MixerFrame, \
     SeverityLabel, \
-    StatusMessage, \
     StatusMessageSource, \
+    Target, \
     TimestampGetRequest, \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
 from src.detector import \
-    IntrinsicCalibrationResultGetActiveRequest, \
-    IntrinsicCalibrationResultGetActiveResponse, \
+    AnnotatorParametersGetResponse, \
+    CameraImageGetResponse, \
+    CameraParametersGetResponse, \
+    CameraParametersSetResponse, \
     CameraResolutionGetRequest, \
     CameraResolutionGetResponse, \
-    Detector, \
     DetectorFrameGetRequest, \
-    DetectorFrameGetResponse
+    DetectorFrameGetResponse, \
+    IntrinsicCalibrationCalculateResponse, \
+    IntrinsicCalibrationImageAddResponse, \
+    IntrinsicCalibrationImageGetResponse, \
+    IntrinsicCalibrationImageMetadataListResponse, \
+    IntrinsicCalibrationResolutionListResponse, \
+    IntrinsicCalibrationResultGetResponse, \
+    IntrinsicCalibrationResultGetActiveRequest, \
+    IntrinsicCalibrationResultGetActiveResponse, \
+    IntrinsicCalibrationResultMetadataListResponse
 from src.mixer import \
-    Mixer, \
+    ExtrinsicCalibrationCalculateResponse, \
+    ExtrinsicCalibrationImageAddResponse, \
+    ExtrinsicCalibrationImageGetResponse, \
+    ExtrinsicCalibrationImageMetadataListResponse, \
+    ExtrinsicCalibrationResultGetResponse, \
+    ExtrinsicCalibrationResultGetActiveResponse, \
+    ExtrinsicCalibrationResultMetadataListResponse, \
     MixerUpdateIntrinsicParametersRequest, \
     PoseSolverAddDetectorFrameRequest, \
+    PoseSolverAddTargetResponse, \
     PoseSolverGetPosesRequest, \
     PoseSolverGetPosesResponse, \
     PoseSolverSetExtrinsicRequest
@@ -44,7 +65,6 @@ import datetime
 from enum import IntEnum, StrEnum
 import hjson
 from ipaddress import IPv4Address
-import json
 import logging
 import numpy
 import os
@@ -57,9 +77,6 @@ ConnectionType = TypeVar('ConnectionType', bound=Connection)
 
 
 _ROLE_LABEL: Final[str] = "controller"
-_SUPPORTED_ROLES: Final[list[str]] = [
-    Detector.get_role_label(),
-    Mixer.get_role_label()]
 _TIME_SYNC_SAMPLE_MAXIMUM_COUNT: Final[int] = 5
 
 
@@ -67,7 +84,59 @@ class ResponseSeriesNotExpected(MCTError):
     pass
 
 
-class MCTController(MCTComponent):
+class BaseCache:
+    request_id: uuid.UUID | None  # TODO: ???
+    init_request_id: uuid.UUID | None
+    deinit_request_id: uuid.UUID | None
+    network_latency_samples_seconds: list[float]
+    network_latency_seconds: float
+    network_plus_offset_samples_seconds: list[float]
+    controller_offset_samples_seconds: list[float]
+    controller_offset_seconds: float  # how much time to be ADDED to go from controller time to component
+    def __init__(self):
+        self.request_id = None
+        self.init_request_id = None
+        self.deinit_request_id = None
+        self.reset_time_sync_stats()
+    def reset_time_sync_stats(self):
+        self.network_latency_samples_seconds = list()
+        self.network_latency_seconds = 0.0
+        self.network_plus_offset_samples_seconds = list()
+        self.controller_offset_samples_seconds = list()
+        self.controller_offset_seconds = 0.0
+
+
+class DetectorCache(BaseCache):
+    configured_transform_to_reference: Matrix4x4 | None
+    configured_camera_parameters: list[KeyValueSimpleAny] | None
+    configured_marker_parameters: list[KeyValueSimpleAny] | None
+    current_resolution: ImageResolution | None
+    current_intrinsic_parameters: IntrinsicParameters | None
+    latest_frame: DetectorFrame | None
+    def __init__(self):
+        super().__init__()
+        self.configured_transform_to_reference = None
+        self.configured_camera_parameters = None
+        self.configured_marker_parameters = None
+        self.current_resolution = None
+        self.current_intrinsic_parameters = None
+        self.latest_frame = None
+
+
+class MixerCache(BaseCache):
+    configured_solver_parameters: list[KeyValueSimpleAny] | None
+    configured_targets: list[Target] | None
+    detector_timestamps: dict[str, datetime.datetime]
+    latest_frame: MixerFrame | None
+    def __init__(self):
+        super().__init__()
+        self.configured_solver_parameters = None
+        self.configured_targets = None
+        self.detector_timestamps = dict()
+        self.latest_frame = None
+
+
+class MCTController:
 
     class Status(StrEnum):
         STOPPED = "Idle"
@@ -80,17 +149,21 @@ class MCTController(MCTComponent):
         CONNECTING = 1
         TIME_SYNC_START = 2
         TIME_SYNC_STOP = 3
+        # TODO: Here: Start, send params, etc
         GET_INTRINSICS = 4
         SET_INTRINSICS = 5
 
     _status_message_source: StatusMessageSource
     _status: Status
-    _startup_mode: StartupMode
     _startup_state: StartupState
 
-    _connections: dict[str, Connection]
+    _router: Router
+    _detector_caches: dict[str, DetectorCache]
+    _mixer_caches: dict[str, MixerCache]
     _pending_request_ids: list[uuid.UUID]
 
+    _sinks: list[BaseSink]
+    _sink_type_registry: dict[str, type[BaseSink]]
     _recording_detector: bool
     _recording_pose_solver: bool
     _recording_save_path: str | None
@@ -108,6 +181,10 @@ class MCTController(MCTComponent):
         self.status_message_source = StatusMessageSource(
             source_label="controller",
             send_to_logger=True)
+
+        self._router = Router()
+        self._sink_type_registry = {"csv": CSVPoseSink}
+
         # _reset is responsible for creating and restoring the initial state; __init__ calls it to avoid duplication
         self._reset()
 
@@ -132,6 +209,38 @@ class MCTController(MCTComponent):
                 return False
             return True
 
+        response_type_list: list[MCTResponse] = [
+            AnnotatorParametersGetResponse,
+            CameraImageGetResponse,
+            CameraParametersGetResponse,
+            CameraParametersSetResponse,
+            CameraResolutionGetResponse,
+            DetectorFrameGetResponse,
+            DequeueStatusMessagesResponse,
+            EmptyResponse,
+            ErrorResponse,
+            ExtrinsicCalibrationCalculateResponse,
+            ExtrinsicCalibrationImageAddResponse,
+            ExtrinsicCalibrationImageGetResponse,
+            ExtrinsicCalibrationImageMetadataListResponse,
+            ExtrinsicCalibrationResultGetResponse,
+            ExtrinsicCalibrationResultGetActiveResponse,
+            ExtrinsicCalibrationResultMetadataListResponse,
+            IntrinsicCalibrationCalculateResponse,
+            IntrinsicCalibrationImageAddResponse,
+            IntrinsicCalibrationImageGetResponse,
+            IntrinsicCalibrationImageMetadataListResponse,
+            IntrinsicCalibrationResolutionListResponse,
+            IntrinsicCalibrationResultGetResponse,
+            IntrinsicCalibrationResultGetActiveResponse,
+            IntrinsicCalibrationResultMetadataListResponse,
+            PoseSolverAddTargetResponse,
+            PoseSolverGetPosesResponse,
+            TimestampGetResponse]
+        response_type_dict: dict[str, type[MCTResponse]] = {
+            response_type.type_identifier(): response_type
+            for response_type in response_type_list}
+
         for detector in configuration.detectors:
             if not is_valid_ip_address(detector):
                 continue
@@ -140,57 +249,44 @@ class MCTController(MCTComponent):
                 role="detector",
                 ip_address=IPv4Address(detector.ip_address),
                 port=detector.port)
-            detector_connection: DetectorConnection = self.add_connection(component_address=component_address)
-            if detector.fixed_transform_to_reference is not None:
-                detector_connection.configured_transform_to_reference = detector.fixed_transform_to_reference
-            if detector.camera_parameters is not None:
-                detector_connection.configured_camera_parameters = detector.camera_parameters
-            if detector.marker_parameters is not None:
-                detector_connection.configured_marker_parameters = detector.marker_parameters
-        for pose_solver in configuration.mixers:
-            if not is_valid_ip_address(pose_solver):
+            self._router.add_connection(
+                component_address=component_address,
+                supported_response_types=response_type_dict)
+            self._detector_caches[component_address.label] = DetectorCache()
+            self._detector_caches[component_address.label].configured_transform_to_reference = \
+                detector.fixed_transform_to_reference
+            self._detector_caches[component_address.label].configured_camera_parameters = detector.camera_parameters
+            self._detector_caches[component_address.label].configured_marker_parameters = detector.marker_parameters
+        for mixer in configuration.mixers:
+            if not is_valid_ip_address(mixer):
                 continue
             component_address: Connection.ComponentAddress = Connection.ComponentAddress(
-                label=pose_solver.label,
+                label=mixer.label,
                 role="mixer",
-                ip_address=IPv4Address(pose_solver.ip_address),
-                port=pose_solver.port)
-            pose_solver_connection: PoseSolverConnection = self.add_connection(component_address=component_address)
-            if pose_solver.solver_parameters is not None:
-                pose_solver_connection.configured_solver_parameters = pose_solver.solver_parameters
-            if pose_solver.targets is not None:
-                pose_solver_connection.configured_targets = pose_solver.targets
-
-    def add_connection(
-        self,
-        component_address: Connection.ComponentAddress
-    ) -> DetectorConnection | PoseSolverConnection:
-        label = component_address.label
-        if label in self._connections:
-            raise RuntimeError(f"Connection associated with {label} already exists.")
-        if component_address.role == Detector.get_role_label():
-            return_value: DetectorConnection = DetectorConnection(component_address=component_address)
-            self._connections[label] = return_value
-            return return_value
-        elif component_address.role == Mixer.get_role_label():
-            return_value: PoseSolverConnection = PoseSolverConnection(component_address=component_address)
-            self._connections[label] = return_value
-            return return_value
-        else:
-            raise ValueError(f"Unrecognized component role {component_address.role}.")
+                ip_address=IPv4Address(mixer.ip_address),
+                port=mixer.port)
+            self._router.add_connection(
+                component_address=component_address,
+                supported_response_types=response_type_dict)
+            self._mixer_caches[component_address.label] = MixerCache()
+            self._mixer_caches[component_address.label].configured_solver_parameters = mixer.solver_parameters
+            self._mixer_caches[component_address.label].configured_targets = mixer.targets
 
     def _advance_startup_state(self) -> None:
         if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.CONNECTING:
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.DEBUG,
                 message="CONNECTING complete")
-            component_labels: list[str] = self.get_component_labels(active=True)
+            detector_labels: list[str] = self.get_active_detector_labels()
+            mixer_labels: list[str] = self.get_active_mixer_labels()
+            component_caches: list[BaseCache] = \
+                [self._detector_caches[label] for label in detector_labels] + \
+                [self._mixer_caches[label] for label in mixer_labels]
+            for component_cache in component_caches:
+                component_cache.reset_time_sync_stats()
+            component_labels: list[str] = detector_labels + mixer_labels
             request_series: MCTRequestSeries = MCTRequestSeries(series=[TimeSyncStartRequest()])
             for component_label in component_labels:
-                connection = self._get_connection(
-                    connection_label=component_label,
-                    connection_type=Connection)
-                connection.reset_time_sync_stats()
                 self._pending_request_ids.append(
                     self.request_series_push(
                         connection_label=component_label,
@@ -201,7 +297,7 @@ class MCTController(MCTComponent):
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.DEBUG,
                 message="TIME_SYNC complete")
-            component_labels: list[str] = self.get_component_labels(active=True)
+            component_labels: list[str] = self.get_active_detector_labels() + self.get_active_mixer_labels()
             request_series: MCTRequestSeries = MCTRequestSeries(series=[
                 TimestampGetRequest(requester_timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat())])
             for component_label in component_labels:
@@ -236,35 +332,24 @@ class MCTController(MCTComponent):
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.DEBUG,
                 message="GET_INTRINSICS complete")
-            if self._startup_mode == StartupMode.DETECTING_ONLY:
-                self._startup_state = MCTController.StartupState.INITIAL
-                self._status = MCTController.Status.RUNNING  # We're done
-            else:
-                pose_solver_labels: list[str] = self.get_active_mixer_labels()
-                for pose_solver_label in pose_solver_labels:
-                    requests: list[MCTRequest] = list()
-                    for detector_label in self.get_active_detector_labels():
-                        detector_connection: DetectorConnection = self._get_connection(
-                            connection_label=detector_label,
-                            connection_type=DetectorConnection)
-                        if detector_connection is None:
-                            self.status_message_source.enqueue_status_message(
-                                severity=SeverityLabel.ERROR,
-                                message=f"Failed to find DetectorConnection with label {detector_label}.")
-                            continue
-                        if detector_connection.current_intrinsic_parameters is not None:
-                            requests.append(MixerUpdateIntrinsicParametersRequest(
-                                detector_label=detector_label,
-                                intrinsic_parameters=detector_connection.current_intrinsic_parameters))
-                        if detector_connection.configured_transform_to_reference is not None:
-                            requests.append(PoseSolverSetExtrinsicRequest(
-                                detector_label=detector_label,
-                                transform_to_reference=detector_connection.configured_transform_to_reference))
-                    request_series: MCTRequestSeries = MCTRequestSeries(series=requests)
-                    self._pending_request_ids.append(self.request_series_push(
-                        connection_label=pose_solver_label,
-                        request_series=request_series))
-                self._startup_state = MCTController.StartupState.SET_INTRINSICS
+            mixer_labels: list[str] = self.get_active_mixer_labels()
+            for pose_solver_label in mixer_labels:
+                requests: list[MCTRequest] = list()
+                for detector_label in self.get_active_detector_labels():
+                    detector_cache: DetectorCache = self._detector_caches[detector_label]
+                    if detector_cache.current_intrinsic_parameters is not None:
+                        requests.append(MixerUpdateIntrinsicParametersRequest(
+                            detector_label=detector_label,
+                            intrinsic_parameters=detector_cache.current_intrinsic_parameters))
+                    if detector_cache.configured_transform_to_reference is not None:
+                        requests.append(PoseSolverSetExtrinsicRequest(
+                            detector_label=detector_label,
+                            transform_to_reference=detector_cache.configured_transform_to_reference))
+                request_series: MCTRequestSeries = MCTRequestSeries(series=requests)
+                self._pending_request_ids.append(self.request_series_push(
+                    connection_label=pose_solver_label,
+                    request_series=request_series))
+            self._startup_state = MCTController.StartupState.SET_INTRINSICS
         if len(self._pending_request_ids) <= 0 and self._startup_state == MCTController.StartupState.SET_INTRINSICS:
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.DEBUG,
@@ -272,59 +357,20 @@ class MCTController(MCTComponent):
             self._startup_state = MCTController.StartupState.INITIAL
             self._status = MCTController.Status.RUNNING
 
-    def contains_connection_label(self, label: str) -> bool:
-        return label in self._connections
-
     def get_active_detector_labels(self) -> list[str]:
-        """
-        See get_component_labels.
-        """
-        return self.get_component_labels(role=Detector.get_role_label(), active=True)
+        return [
+            component_label
+            for component_label in self._detector_caches.keys()
+            if self._router.get_connection(label=component_label).is_active()]
 
     def get_active_mixer_labels(self) -> list[str]:
-        """
-        See get_component_labels.
-        """
-        return self.get_component_labels(role=Mixer.get_role_label(), active=True)
-
-    def get_component_labels(
-        self,
-        role: str | None = None,
-        active: bool | None = None
-    ) -> list[str]:
-        """
-        Return the list of all labels corresponding to components of the given `role`, and given `active` state.
-        None provided to `role` or `active` is treated as a wildcard (i.e. not filtered on that criteria).
-        """
-        if role is not None:
-            if role not in _SUPPORTED_ROLES:
-                raise ValueError(f"role must be among the valid values for ComponentRoleLabel")
-        return_value: list[str] = list()
-        for connection_label, connection in self._connections.items():
-            if role is not None and connection.get_role() != role:
-                continue
-            if active is not None and connection.is_active() != active:
-                continue
-            return_value.append(connection_label)
-        return return_value
+        return [
+            component_label
+            for component_label in self._mixer_caches.keys()
+            if self._router.get_connection(label=component_label).is_active()]
 
     def get_connection_reports(self) -> list[Connection.Report]:
-        return_value: list[Connection.Report] = list()
-        for connection in self._connections.values():
-            return_value.append(connection.get_report())
-        return return_value
-
-    def _get_connection(
-        self,
-        connection_label: str,
-        connection_type: type[ConnectionType]
-    ) -> ConnectionType | None:
-        if connection_label not in self._connections:
-            return None
-        connection: ConnectionType = self._connections[connection_label]
-        if not isinstance(connection, connection_type):
-            return None
-        return connection
+        return self._router.get_connection_reports()
 
     def get_live_detector_intrinsics(
         self,
@@ -333,12 +379,9 @@ class MCTController(MCTComponent):
         """
         returns None if the detector does not exist, or if it has not been started.
         """
-        detector_connection: DetectorConnection = self._get_connection(
-            connection_label=detector_label,
-            connection_type=DetectorConnection)
-        if detector_connection is None:
+        if detector_label not in self._detector_caches:
             return None
-        return detector_connection.current_intrinsic_parameters
+        return self._detector_caches[detector_label].current_intrinsic_parameters
 
     def get_live_detector_frame(
         self,
@@ -347,159 +390,147 @@ class MCTController(MCTComponent):
         """
         returns None if the detector does not exist, or has not been started, or if it has not yet gotten frames.
         """
-        detector_connection: DetectorConnection = self._get_connection(
-            connection_label=detector_label,
-            connection_type=DetectorConnection)
-        if detector_connection is None:
+        if detector_label not in self._detector_caches:
             return None
-        return detector_connection.latest_frame
+        return self._detector_caches[detector_label].latest_frame
 
     def get_live_pose_solver_frame(
         self,
-        pose_solver_label: str
+        mixer_label: str
     ) -> MixerFrame | None:
         """
         returns None if the pose solver does not exist, or has not been started, or if it has not yet gotten frames.
         """
-        pose_solver_connection: PoseSolverConnection = self._get_connection(
-            connection_label=pose_solver_label,
-            connection_type=PoseSolverConnection)
-        if pose_solver_connection is None:
+        if mixer_label not in self._mixer_caches:
             return None
-        return MixerFrame(
-            detector_poses=pose_solver_connection.detector_poses,
-            target_poses=pose_solver_connection.target_poses,
-            timestamp_utc_iso8601=pose_solver_connection.poses_timestamp.isoformat())
-
-    @staticmethod
-    def get_role_label():
-        return _ROLE_LABEL
+        return self._mixer_caches[mixer_label].latest_frame
 
     def get_status(self) -> Status:
         return self._status
 
     def handle_error_response(
         self,
-        response: ErrorResponse
+        response: ErrorResponse,
+        component_label: str
     ):
         self.status_message_source.enqueue_status_message(
             severity=SeverityLabel.ERROR,
-            message=f"Received error: {response.message}")
+            message=f"Received error from {component_label}: {response.message}")
 
     def handle_response_calibration_result_get_active(
         self,
         response: IntrinsicCalibrationResultGetActiveResponse,
-        detector_label: str
+        component_label: str
     ) -> None:
-        detector_connection: DetectorConnection = self._get_connection(
-            connection_label=detector_label,
-            connection_type=DetectorConnection)
-        if detector_connection is None:
+        if component_label not in self._detector_caches:
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
-                message=f"Failed to find DetectorConnection with label {detector_label}.")
+                message=f"Failed to find DetectorCache associated with label {component_label}.")
             return
+        detector_cache: DetectorCache = self._detector_caches[component_label]
         if response.intrinsic_calibration is None:
-            if detector_connection.current_resolution is None:
+            if detector_cache.current_resolution is None:
                 self.status_message_source.enqueue_status_message(
                     severity=SeverityLabel.ERROR,
-                    message=f"No calibration was found for detector {detector_label}, and failed to get resolution.")
+                    message=f"No calibration was found for detector {component_label}, and failed to get resolution.")
                 return
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.WARNING,
-                message=f"No calibration was found for detector {detector_label}. "
-                        f"Zero parameters for active resolution {detector_connection.current_resolution} will be used.")
-            detector_connection.current_intrinsic_parameters = IntrinsicParameters.generate_zero_parameters(
-                resolution_x_px=detector_connection.current_resolution.x_px,
-                resolution_y_px=detector_connection.current_resolution.y_px)
+                message=f"No calibration was found for detector {component_label}. "
+                        f"Zero parameters for active resolution {detector_cache.current_resolution} will be used.")
+            detector_cache.current_intrinsic_parameters = IntrinsicParameters.generate_zero_parameters(
+                resolution_x_px=detector_cache.current_resolution.x_px,
+                resolution_y_px=detector_cache.current_resolution.y_px)
             return
-        detector_connection.current_intrinsic_parameters = response.intrinsic_calibration.calibrated_values
+        detector_cache.current_intrinsic_parameters = response.intrinsic_calibration.calibrated_values
 
     def handle_response_camera_resolution_get(
         self,
         response: CameraResolutionGetResponse,
-        detector_label: str
+        component_label: str
     ) -> None:
-        detector_connection: DetectorConnection = self._get_connection(
-            connection_label=detector_label,
-            connection_type=DetectorConnection)
-        if detector_connection is None:
+        if component_label not in self._detector_caches:
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
-                message=f"Failed to find DetectorConnection with label {detector_label}.")
+                message=f"Failed to find DetectorCache associated with label {component_label}.")
             return
-        detector_connection.current_resolution = response.resolution
+        detector_cache: DetectorCache = self._detector_caches[component_label]
+        detector_cache.current_resolution = response.resolution
 
     def handle_response_detector_frame_get(
         self,
         response: DetectorFrameGetResponse,
-        detector_label: str
+        component_label: str
     ):
-        detector_connection: DetectorConnection = self._get_connection(
-            connection_label=detector_label,
-            connection_type=DetectorConnection)
-        if detector_connection is None:
+        if component_label not in self._detector_caches:
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
-                message=f"Failed to find DetectorConnection with label {detector_label}.")
+                message=f"Failed to find DetectorCache associated with label {component_label}.")
             return
+        detector_cache: DetectorCache = self._detector_caches[component_label]
         frame: DetectorFrame = response.frame
         adjusted_timestamp_utc: datetime.datetime = \
-            frame.timestamp_utc - datetime.timedelta(seconds=detector_connection.controller_offset_seconds)
+            frame.timestamp_utc - datetime.timedelta(seconds=detector_cache.controller_offset_seconds)
         frame.timestamp_utc_iso8601 = adjusted_timestamp_utc.isoformat()
-        detector_connection.latest_frame = frame
+        detector_cache.latest_frame = frame
 
     def handle_response_get_poses(
         self,
         response: PoseSolverGetPosesResponse,
-        pose_solver_label: str
+        component_label: str
     ) -> None:
-        pose_solver_connection: PoseSolverConnection = self._get_connection(
-            connection_label=pose_solver_label,
-            connection_type=PoseSolverConnection)
-        if pose_solver_connection is None:
+        if component_label not in self._mixer_caches:
             self.status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
-                message=f"Failed to find PoseSolverConnection with label {pose_solver_label}.")
+                message=f"Failed to find MixerCache associated with label {component_label}.")
             return
-        pose_solver_connection.detector_poses = response.detector_poses
-        pose_solver_connection.target_poses = response.target_poses
-        pose_solver_connection.poses_timestamp = (
+        mixer_cache: MixerCache = self._mixer_caches[component_label]
+        mixer_cache.detector_poses = response.detector_poses
+        mixer_cache.target_poses = response.target_poses
+        mixer_cache.poses_timestamp = (
             datetime.datetime.now(tz=datetime.timezone.utc) -  # TODO: This should come from the pose solver
-            datetime.timedelta(seconds=pose_solver_connection.controller_offset_seconds))
+            datetime.timedelta(seconds=mixer_cache.controller_offset_seconds))
 
     def handle_response_timestamp_get(
         self,
         response: TimestampGetResponse,
         component_label: str
     ) -> None:
-        connection: Connection = self._get_connection(
-            connection_label=component_label,
-            connection_type=Connection)
+        cache: BaseCache
+        if component_label in self._detector_caches:
+            cache = self._detector_caches[component_label]
+        elif component_label in self._mixer_caches:
+            cache = self._mixer_caches[component_label]
+        else:
+            self.status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=f"Failed to find cache associated with label {component_label}.")
+            return
         utc_now: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)
         requester_timestamp: datetime.datetime
         requester_timestamp = datetime.datetime.fromisoformat(response.requester_timestamp_utc_iso8601)
         round_trip_seconds: float = (utc_now - requester_timestamp).total_seconds()
-        connection.network_latency_samples_seconds.append(round_trip_seconds)
+        cache.network_latency_samples_seconds.append(round_trip_seconds)
         responder_timestamp: datetime.datetime
         responder_timestamp = datetime.datetime.fromisoformat(response.responder_timestamp_utc_iso8601)
         network_plus_offset_seconds: float = (responder_timestamp - requester_timestamp).total_seconds()
-        connection.network_plus_offset_samples_seconds.append(network_plus_offset_seconds)
+        cache.network_plus_offset_samples_seconds.append(network_plus_offset_seconds)
         if self._time_sync_sample_count >= _TIME_SYNC_SAMPLE_MAXIMUM_COUNT:
-            connection.network_latency_seconds = float(numpy.median(connection.network_latency_samples_seconds))
-            connection.controller_offset_samples_seconds = [
-                network_plus_offset_sample_seconds - (connection.network_latency_seconds / 2.0)
-                for network_plus_offset_sample_seconds in connection.network_plus_offset_samples_seconds]
-            connection.controller_offset_seconds = float(numpy.median(connection.controller_offset_samples_seconds))
-            print(f"Calculated offset to {connection.get_label()}: {connection.controller_offset_seconds}")
+            cache.network_latency_seconds = float(numpy.median(cache.network_latency_samples_seconds))
+            cache.controller_offset_samples_seconds = [
+                network_plus_offset_sample_seconds - (cache.network_latency_seconds / 2.0)
+                for network_plus_offset_sample_seconds in cache.network_plus_offset_samples_seconds]
+            cache.controller_offset_seconds = float(numpy.median(cache.controller_offset_samples_seconds))
+            print(f"Calculated offset to {component_label}: {cache.controller_offset_seconds}")
 
     def handle_response_unknown(
         self,
-        response: MCTResponse
+        response: MCTResponse,
+        component_label: str
     ):
         self.status_message_source.enqueue_status_message(
             severity=SeverityLabel.ERROR,
-            message=f"Received unexpected response: {str(type(response))}")
+            message=f"Received unexpected response from {component_label}: {str(type(response))}")
 
     def handle_response_series(
         self,
@@ -531,15 +562,15 @@ class MCTController(MCTComponent):
             if isinstance(response, IntrinsicCalibrationResultGetActiveResponse):
                 self.handle_response_calibration_result_get_active(
                     response=response,
-                    detector_label=response_series.responder)
+                    component_label=response_series.responder)
             elif isinstance(response, CameraResolutionGetResponse):
                 self.handle_response_camera_resolution_get(
                     response=response,
-                    detector_label=response_series.responder)
+                    component_label=response_series.responder)
             elif isinstance(response, DetectorFrameGetResponse):
                 self.handle_response_detector_frame_get(
                     response=response,
-                    detector_label=response_series.responder)
+                    component_label=response_series.responder)
             elif isinstance(response, TimestampGetResponse):
                 self.handle_response_timestamp_get(
                     response=response,
@@ -547,12 +578,16 @@ class MCTController(MCTComponent):
             elif isinstance(response, PoseSolverGetPosesResponse):
                 self.handle_response_get_poses(
                     response=response,
-                    pose_solver_label=response_series.responder)
+                    component_label=response_series.responder)
             elif isinstance(response, ErrorResponse):
-                self.handle_error_response(response=response)
+                self.handle_error_response(
+                    response=response,
+                    component_label=response_series.responder)
                 success = False
             elif not isinstance(response, EmptyResponse):
-                self.handle_response_unknown(response=response)
+                self.handle_response_unknown(
+                    response=response,
+                    component_label=response_series.responder)
                 success = False
         return success
 
@@ -566,11 +601,11 @@ class MCTController(MCTComponent):
         return self._status == MCTController.Status.STARTING or self._status == MCTController.Status.STOPPING
 
     def recording_start(
-            self,
-            save_path : str,
-            record_pose_solver : bool,
-            record_detector : bool
-        ):
+        self,
+        save_path : str,
+        record_pose_solver : bool,
+        record_detector : bool
+    ):
 
         if save_path:
             self._recording_pose_solver = record_pose_solver
@@ -581,43 +616,19 @@ class MCTController(MCTComponent):
                 severity=SeverityLabel.ERROR,
                 message=f"Recording save path not defined")
 
-    def recording_stop(self):
-        for connection_label in self._connections:
-            connection = self._get_connection(
-                connection_label=connection_label,
-                connection_type=Connection)
-            report = connection.get_report()
-            # Do not record if specified
-            if report.role == Detector.get_role_label() and not self._recording_detector:
-                continue
-            if report.role == Mixer.get_role_label() and not self._recording_pose_solver:
-                continue
-
-            if isinstance(connection, DetectorConnection) and self._recording_save_path is not None:
-                frames_dict = [frame.model_dump() for frame in connection.recording]
-                frames_json = json.dumps(frames_dict)
-                with open(os.path.join(self._recording_save_path, report.role+"_log.json"), 'w') as f:
-                    f.write(frames_json)
-
-        self._recording_detector = False
-        self._recording_pose_solver = False
-
-    def remove_connection(
-        self,
-        label: str
-    ):
-        if label not in self._connections:
-            raise RuntimeError(f"Failed to find connection associated with {label}.")
-        self._connections.pop(label)
+    def register_sink_type(self, implementation_str: str, sink_type: type[BaseSink]) -> None:
+        self._sink_type_registry[implementation_str] = sink_type
 
     def _reset(self):
         self._status = MCTController.Status.STOPPED
-        self._startup_mode = StartupMode.DETECTING_AND_SOLVING  # Will be overwritten on startup
         self._startup_state = MCTController.StartupState.INITIAL
 
-        self._connections = dict()
         self._pending_request_ids = list()
+        self._detector_caches = dict()
+        self._mixer_caches = dict()
 
+        self._sinks = list()
+        # self._sink_type_registry is excluded from reset
         self._recording_detector = False
         self._recording_pose_solver = False
         self._recording_save_path = None
@@ -629,35 +640,13 @@ class MCTController(MCTComponent):
         connection_label: str,
         request_series: MCTRequestSeries
     ) -> uuid.UUID:
-        if connection_label not in self._connections:
-            raise RuntimeError(f"Failed to find connection with label {connection_label}.")
-        elif not self._connections[connection_label].is_active():
-            raise RuntimeError(f"Connection with label {connection_label} is not active.")
-        return self._connections[connection_label].enqueue_request_series(
-            request_series=request_series)
+        return self._router.request_series_push(label=connection_label, request_series=request_series)
 
     def response_series_pop(
         self,
         request_series_id: uuid.UUID
     ) -> tuple[uuid.UUID | None, MCTResponseSeries | None]:
-        """
-        Only "pop" if there is a response (not None).
-        Return value is a tuple whose elements comprise:
-          - UUID of the request if no response has been received, or None
-          - MCTResponseSeries if a response has been received, or None
-        The dual return values allow easier reassignment of completed request ID's in calling code
-        """
-        for connection in self._connections.values():
-            response_result: Connection.PopResponseSeriesResult = connection.pop_response_series_if_responded(
-                request_series_id=request_series_id)
-            if response_result.status == Connection.PopResponseSeriesResult.Status.UNTRACKED:
-                continue
-            elif response_result.status == Connection.PopResponseSeriesResult.Status.RESPONDED:
-                return None, response_result.response_series
-            else:  # queued, in progress
-                return request_series_id, None  # Connection is tracking desired request series, waiting for response
-        # Cannot be found
-        raise ResponseSeriesNotExpected()
+        return self._router.response_series_pop(request_series_id=request_series_id)
 
     def start_from_configuration_filepath(
         self,
@@ -680,154 +669,105 @@ class MCTController(MCTComponent):
                 f"Failed to load configuration file {input_configuration_filepath}. "
                 f"Error: {e}") from None
         self._reset()
+        for sink_configuration in configuration.sinks:
+            if sink_configuration.implementation not in self._sink_type_registry:
+                self.status_message_source.enqueue_status_message(
+                    severity=SeverityLabel.ERROR,
+                    message=f"Unrecognized sink implementation {sink_configuration.implementation}. Skipping.")
+                continue
+            sink_type: type[BaseSink] = self._sink_type_registry[sink_configuration.implementation]
+            sink: BaseSink = sink_type(**sink_configuration.configuration)
+            self._sinks.append(sink)
         self.add_connections_from_configuration(configuration)
-        self.start_up(mode=configuration.startup_mode)
+        self.start_up()
 
     def start_up(
-        self,
-        mode: str = StartupMode.DETECTING_AND_SOLVING
+        self
     ) -> None:
-        if mode not in StartupMode:
-            raise ValueError(f"Unexpected mode \"{mode}\".")
-        self._startup_mode = StartupMode(mode)
-
         if self._status != MCTController.Status.STOPPED:
             raise RuntimeError("Cannot start up if controller isn't first stopped.")
-        for connection in self._connections.values():
-            if mode == StartupMode.DETECTING_ONLY and \
-               connection.get_role() == Mixer.get_role_label():
-                continue
-            connection.start_up()
-
+        self._router.start_up()
         self._startup_state = MCTController.StartupState.CONNECTING
         self._status = MCTController.Status.STARTING
-
-        # self.recording_start(save_path="/home/adminpi5",
-        #                      record_pose_solver=True,
-        #                      record_detector=True)
 
     def shut_down(self) -> None:
         if self._status != MCTController.Status.RUNNING:
             raise RuntimeError("Cannot shut down if controller isn't first running.")
-        for connection in self._connections.values():
-            if connection.is_start_up_finished():
-                connection.shut_down()
-
+        self._router.shut_down()
         self._status = MCTController.Status.STOPPING
-
-        self.recording_stop()
-
-    def supported_request_methods(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
-        return super().supported_request_methods()
 
     # Right now this function doesn't update on its own - must be called externally and regularly
     def update(
         self
     ) -> None:
-        connections = list(self._connections.values())
-        for connection in connections:
-            connection.update()
-            status_messages: list[StatusMessage] = connection.dequeue_status_messages()
-            for status_message in status_messages:
-                self._status_message_source.enqueue_status_message(
-                    severity=status_message.severity,
-                    message=status_message.message,
-                    source_label=status_message.source_label,
-                    timestamp_utc_iso8601=status_message.timestamp_utc_iso8601)
-
+        self._router.update()
         if self._status == MCTController.Status.STARTING and \
            self._startup_state == MCTController.StartupState.CONNECTING:
-            all_connected: bool = True
-            for connection in connections:
-                if self._startup_mode == StartupMode.DETECTING_ONLY and \
-                   connection.get_role() == Mixer.get_role_label():
-                    continue
-                if not connection.is_start_up_finished():
-                    all_connected = False
-                    break
-            if all_connected:
+            if self._router.is_start_up_finished():
                 self._advance_startup_state()
         elif self._status == MCTController.Status.STOPPING:
-            shutdown_finished: bool = True
-            for connection in connections:
-                if not connection.is_shut_down():
-                    shutdown_finished = False
-                    break
-            if shutdown_finished:
+            if self._router.is_shut_down_finished():
                 self._status = MCTController.Status.STOPPED
 
         if self.is_running():
             for detector_label in self.get_active_detector_labels():
-                detector_connection: DetectorConnection = self._get_connection(
-                    connection_label=detector_label,
-                    connection_type=DetectorConnection)
-                if detector_connection is None:
+                if detector_label not in self._detector_caches:
                     self.status_message_source.enqueue_status_message(
                         severity=SeverityLabel.ERROR,
-                        message=f"Failed to find DetectorConnection with label {detector_label}.")
+                        message=f"Failed to find DetectorCache associated with label {detector_label}.")
                     continue
-                if detector_connection.request_id is not None:
-                    _, detector_connection.request_id = self.update_request(
-                        request_id=detector_connection.request_id)
-                if detector_connection.request_id is None:
-                    detector_connection.request_id = self.request_series_push(
+                detector_cache: DetectorCache = self._detector_caches[detector_label]
+                if detector_cache.request_id is not None:
+                    _, detector_cache.request_id = self.update_request(
+                        request_id=detector_cache.request_id)
+                if detector_cache.request_id is None:
+                    detector_cache.request_id = self.request_series_push(
                         connection_label=detector_label,
                         request_series=MCTRequestSeries(series=[DetectorFrameGetRequest()]))
-            for pose_solver_label in self.get_active_mixer_labels():
-                pose_solver_connection: PoseSolverConnection = self._get_connection(
-                    connection_label=pose_solver_label,
-                    connection_type=PoseSolverConnection)
-                if pose_solver_connection is None:
+            for mixer_label in self.get_active_mixer_labels():
+                if mixer_label not in self._mixer_caches:
                     self.status_message_source.enqueue_status_message(
                         severity=SeverityLabel.ERROR,
-                        message=f"Failed to find PoseSolverConnection with label {pose_solver_label}.")
+                        message=f"Failed to find MixerCache associated with label {mixer_label}.")
                     continue
-                if pose_solver_connection.request_id is not None:
-                    _, pose_solver_connection.request_id = self.update_request(
-                        request_id=pose_solver_connection.request_id)
-                if pose_solver_connection.request_id is None:
+                mixer_cache: MixerCache = self._mixer_caches[mixer_label]
+                if mixer_cache.request_id is not None:
+                    _, mixer_cache.request_id = self.update_request(
+                        request_id=mixer_cache.request_id)
+                if mixer_cache.request_id is None:
                     solver_request_list: list[MCTRequest] = list()
                     detector_labels: list[str] = self.get_active_detector_labels()
                     for detector_label in detector_labels:
-                        detector_connection: DetectorConnection = self._get_connection(
-                            connection_label=detector_label,
-                            connection_type=DetectorConnection)
                         current_detector_frame: DetectorFrame | None = self.get_live_detector_frame(
                             detector_label=detector_label)
                         if current_detector_frame is None:
                             continue
                         current_detector_frame_timestamp: datetime.datetime = current_detector_frame.timestamp_utc
                         current_is_new: bool = False
-                        if detector_label in pose_solver_connection.detector_timestamps:
+                        if detector_label in mixer_cache.detector_timestamps:
                             old_detector_frame_timestamp = \
-                                pose_solver_connection.detector_timestamps[detector_label]
+                                mixer_cache.detector_timestamps[detector_label]
                             if current_detector_frame_timestamp > old_detector_frame_timestamp:
                                 current_is_new = True
                         else:
                             current_is_new = True
                         if current_is_new:
-                            pose_solver_connection.detector_timestamps[detector_label] = \
+                            mixer_cache.detector_timestamps[detector_label] = \
                                 current_detector_frame_timestamp
                             adjusted_detector_frame: DetectorFrame = current_detector_frame.model_copy()
                             adjusted_timestamp_utc: datetime.datetime = \
                                 current_detector_frame.timestamp_utc + \
-                                datetime.timedelta(seconds=pose_solver_connection.controller_offset_seconds)
+                                datetime.timedelta(seconds=mixer_cache.controller_offset_seconds)
                             adjusted_detector_frame.timestamp_utc_iso8601 = adjusted_timestamp_utc.isoformat()
                             marker_request: PoseSolverAddDetectorFrameRequest = PoseSolverAddDetectorFrameRequest(
                                 detector_label=detector_label,
                                 detector_frame=adjusted_detector_frame)
                             solver_request_list.append(marker_request)
 
-                            if self._recording_detector:
-                                detector_connection.recording.append(current_detector_frame)
-                            if self._recording_pose_solver:
-                                current_pose_solver_frame = self.get_live_pose_solver_frame(pose_solver_label)
-                                pose_solver_connection.recording.append(current_pose_solver_frame)
-
                     solver_request_list.append(PoseSolverGetPosesRequest())
                     request_series: MCTRequestSeries = MCTRequestSeries(series=solver_request_list)
-                    pose_solver_connection.request_id = self.request_series_push(
-                        connection_label=pose_solver_label,
+                    mixer_cache.request_id = self.request_series_push(
+                        connection_label=mixer_label,
                         request_series=request_series)
 
         if len(self._pending_request_ids) > 0:

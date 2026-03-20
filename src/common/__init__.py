@@ -63,6 +63,10 @@ from .serialization import \
     KeyValueMetaInt, \
     MCTSerializationError, \
     MCTDeserializable
+from .sink import \
+    BaseSink, \
+    CSVPoseSink, \
+    SinkConfiguration
 from .status import \
     MCTError, \
     SeverityLabel, \

@@ -215,7 +215,7 @@ class PoseSolverPanel(BasePanel):
             pose_solver_labels: list[str] = self._controller.get_active_mixer_labels()
             for pose_solver_label in pose_solver_labels:
                 retrieved_pose_solver_frame: MixerFrame = self._controller.get_live_pose_solver_frame(
-                    pose_solver_label=pose_solver_label)
+                    mixer_label=pose_solver_label)
                 retrieved_pose_solver_frame_timestamp: datetime.datetime = retrieved_pose_solver_frame.timestamp_utc()
                 if pose_solver_label in self._latest_pose_solver_frames:
                     latest_pose_solver_frame: MixerFrame = self._latest_pose_solver_frames[pose_solver_label]

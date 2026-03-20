@@ -151,6 +151,9 @@ class Matrix4x4(BaseModel):
         result_numpy_array = numpy.matmul(self.as_numpy_array(), other.as_numpy_array())
         return Matrix4x4(values=list(result_numpy_array.flatten()))
 
+    def get_rotation_as_matrix(self) -> list[list[float]]:
+        return self.as_numpy_array()[0:3, 0:3].tolist()
+
     def get_rotation_as_quaternion(self, canonical: bool = False) -> list[float]:
         # noinspection PyArgumentList
         return Rotation.from_matrix(self.as_numpy_array()[0:3, 0:3]).as_quat(canonical=canonical).tolist()

@@ -1,6 +1,7 @@
 from src.common import \
     KeyValueSimpleAny, \
     Matrix4x4, \
+    SinkConfiguration, \
     Target
 from enum import StrEnum
 from pydantic import BaseModel, Field, SerializeAsAny
@@ -29,6 +30,6 @@ class PoseSolverConfig(MCTComponentConfig):
 
 
 class MCTConfiguration(BaseModel):
-    startup_mode: StartupMode = Field()
+    sinks: list[SinkConfiguration] = Field(default_factory=list)
     detectors: list[DetectorComponentConfig] = Field(default_factory=list)
     mixers: list[PoseSolverConfig] = Field(default_factory=list)

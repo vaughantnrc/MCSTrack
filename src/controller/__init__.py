@@ -4,6 +4,5 @@ from .connection import \
     PoseSolverConnection
 from .configuration import \
     MCTComponentConfig, \
-    MCTConfiguration, \
-    StartupMode
+    MCTConfiguration
 from .mct_controller import MCTController

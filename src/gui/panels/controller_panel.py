@@ -146,12 +146,6 @@ class ControllerPanel(BasePanel):
         self._controller.shut_down()
         self.update_controller_buttons()
 
-    def on_remove_pressed(self, _event: wx.CommandEvent):
-        selected_row_label: str | None = self._connection_table.get_selected_row_label()
-        self._controller.remove_connection(label=selected_row_label)
-        self.update_connection_table_display()
-        self.update_controller_buttons()
-
     def update_loop(self):
         super().update_loop()
         self._is_updating = True

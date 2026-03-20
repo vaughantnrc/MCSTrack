@@ -1,5 +1,14 @@
 {
   "startup_mode": "detecting_and_solving",
+  "sinks": [
+    {
+      "implementation": "csv",
+      "configuration": {
+        "prepend_datetime": true,
+        "filename": "tracking.csv"
+      }
+    }
+  ],
   "detectors": [
     {
       "label": "d101",

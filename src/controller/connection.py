@@ -1,56 +1,10 @@
 from src.common import \
-    DequeueStatusMessagesResponse, \
-    DetectorFrame, \
-    EmptyResponse, \
-    ErrorResponse, \
-    ImageResolution, \
-    IntrinsicParameters, \
-    KeyValueSimpleAny, \
-    Matrix4x4, \
     MCTDeserializable, \
-    MCTRequest, \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
-    Pose, \
-    MixerFrame, \
     SeverityLabel, \
-    StatusMessage, \
-    Target, \
-    TimestampGetResponse
-from src.detector import \
-    IntrinsicCalibrationCalculateResponse, \
-    IntrinsicCalibrationImageAddResponse, \
-    IntrinsicCalibrationImageGetResponse, \
-    IntrinsicCalibrationImageMetadataListResponse, \
-    IntrinsicCalibrationResolutionListResponse, \
-    IntrinsicCalibrationResultGetResponse, \
-    IntrinsicCalibrationResultGetActiveResponse, \
-    IntrinsicCalibrationResultMetadataListResponse, \
-    CameraImageGetResponse, \
-    CameraParametersGetResponse, \
-    CameraParametersSetRequest, \
-    CameraParametersSetResponse, \
-    CameraResolutionGetResponse, \
-    DetectorFrameGetResponse, \
-    DetectorStartRequest, \
-    DetectorStopRequest, \
-    AnnotatorParametersGetResponse, \
-    AnnotatorParametersSetRequest
-from src.mixer import \
-    ExtrinsicCalibrationCalculateResponse, \
-    ExtrinsicCalibrationImageAddResponse, \
-    ExtrinsicCalibrationImageGetResponse, \
-    ExtrinsicCalibrationImageMetadataListResponse, \
-    ExtrinsicCalibrationResultGetResponse, \
-    ExtrinsicCalibrationResultGetActiveResponse, \
-    ExtrinsicCalibrationResultMetadataListResponse, \
-    PoseSolverAddTargetResponse, \
-    PoseSolverGetPosesResponse, \
-    PoseSolverSetTargetsRequest, \
-    MixerStartRequest, \
-    MixerStopRequest
-import abc
+    StatusMessage
 import datetime
 from enum import StrEnum
 from ipaddress import IPv4Address
@@ -65,7 +19,7 @@ _ATTEMPT_COUNT_MAXIMUM: Final[int] = 3
 _ATTEMPT_TIME_GAP_SECONDS: Final[float] = 5.0
 
 
-class Connection(abc.ABC):
+class Connection:
     """
     A connection represents the interface with a remote component
     """
@@ -76,15 +30,12 @@ class Connection(abc.ABC):
         # This is the normal progression cycle ending back in "Inactive"
         INACTIVE = "Inactive"
         CONNECTING = "Connecting"
-        INITIALIZING = "Initializing"
         RUNNING = "Running"
         RECONNECTING = "Reconnecting"  # Only if connection gets lost
-        NORMAL_DEINITIALIZING = "Deinitializing"   # normal means not in a failure state
         NORMAL_DISCONNECTING = "Disconnecting"
         # States below indicate abnormal/failed states
         FAILURE = "Failure"
         FAILURE_DISCONNECTING = "Failure - Disconnecting"
-        FAILURE_DEINITIALIZING = "Failure - Deinitializing"
 
     class ComponentAddress:
         """
@@ -183,6 +134,7 @@ class Connection(abc.ABC):
 
     # treat as immutable
     _component_address: ComponentAddress
+    _supported_response_types: dict[str, type[MCTResponse]]
 
     _state: State
 
@@ -191,25 +143,19 @@ class Connection(abc.ABC):
     _socket: ClientConnection | None
     _attempt_count: int
     _next_attempt_timestamp_utc: datetime.datetime
-    _init_request_id: uuid.UUID | None
-    _deinit_request_id: uuid.UUID | None
 
     # Requests are handled one at a time, with results being appended to a Response queue
     _request_series_queue: list[tuple[MCTRequestSeries, uuid.UUID]]
     _current_request_id: uuid.UUID | None
     _response_series_queue: dict[uuid.UUID, MCTResponseSeries]
 
-    network_latency_samples_seconds: list[float]
-    network_latency_seconds: float
-    network_plus_offset_samples_seconds: list[float]
-    controller_offset_samples_seconds: list[float]
-    controller_offset_seconds: float  # how much time to be ADDED to go from controller time to component
-
     def __init__(
         self,
-        component_address: ComponentAddress
+        component_address: ComponentAddress,
+        supported_response_types: dict[str, type[MCTResponse]]
     ):
         self._component_address = component_address
+        self._supported_response_types = supported_response_types
 
         self._state = Connection.State.INACTIVE
 
@@ -224,14 +170,6 @@ class Connection(abc.ABC):
         self._request_series_queue = list()
         self._current_request_id = None
         self._response_series_queue = dict()
-
-        self.reset_time_sync_stats()
-
-    @abc.abstractmethod
-    def create_deinitialization_request_series(self) -> MCTRequestSeries: ...
-
-    @abc.abstractmethod
-    def create_initialization_request_series(self) -> MCTRequestSeries: ...
 
     def dequeue_status_messages(self) -> list[StatusMessage]:
         status_messages = self._status_message_queue
@@ -284,18 +222,6 @@ class Connection(abc.ABC):
     def get_role(self) -> str:
         return self._component_address.role
 
-    @abc.abstractmethod
-    def handle_initialization_response_series(
-        self,
-        response_series: MCTResponseSeries
-    ) -> InitializationResult: ...
-
-    @abc.abstractmethod
-    def handle_deinitialization_response_series(
-        self,
-        response_series: MCTResponseSeries
-    ) -> DeinitializationResult: ...
-
     def is_shut_down(self) -> bool:
         return self._state == Connection.State.INACTIVE
 
@@ -327,13 +253,6 @@ class Connection(abc.ABC):
         return Connection.PopResponseSeriesResult(
             status=Connection.PopResponseSeriesResult.Status.UNTRACKED)
 
-    def reset_time_sync_stats(self):
-        self.network_latency_samples_seconds = list()
-        self.network_latency_seconds = 0.0
-        self.network_plus_offset_samples_seconds = list()
-        self.controller_offset_samples_seconds = list()
-        self.controller_offset_seconds = 0.0
-
     def _send_recv(self) -> SendRecvResult:
 
         def _response_series_converter(
@@ -341,7 +260,7 @@ class Connection(abc.ABC):
         ) -> MCTResponseSeries:
             series_list: list[MCTResponse] = MCTDeserializable.deserialize_series_list(
                 series_dict=response_series_dict,
-                supported_types=self.supported_response_types())
+                supported_types=self._supported_response_types)
             return MCTResponseSeries(series=series_list)
 
         if self._current_request_id is None and len(self._request_series_queue) > 0:
@@ -375,18 +294,11 @@ class Connection(abc.ABC):
                     message=f"Connection is closed for {self._component_address.label}. Cannot receive. {str(e)}")
                 return Connection.SendRecvResult.FAILURE
 
-        # TODO: Migrate this outside the class
-        # for response in response_series.series:
-        #     if isinstance(response, DequeueStatusMessagesResponse):
-        #         for status_message in response.status_messages:
-        #             status_message_dict = status_message.model_dump()
-        #             status_message_dict["source_label"] = self._component_address.label
-        #             self._enqueue_status_message(**status_message_dict)
         return Connection.SendRecvResult.NORMAL
 
     def shut_down(self) -> None:
         if self.is_active():
-            self._state = Connection.State.NORMAL_DEINITIALIZING
+            self._state = Connection.State.NORMAL_DISCONNECTING
         elif self._state == Connection.State.FAILURE:
             self._state = Connection.State.INACTIVE
         else:
@@ -404,18 +316,6 @@ class Connection(abc.ABC):
         self._state = Connection.State.CONNECTING
         self._attempt_count = 0
         self._next_attempt_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
-
-    @abc.abstractmethod
-    def supported_response_types(self) -> dict[str, type[MCTResponse]]:
-        type_list: list[MCTResponse] = [
-            DequeueStatusMessagesResponse,
-            EmptyResponse,
-            ErrorResponse,
-            TimestampGetResponse]
-        type_dict: dict[str, type[MCTResponse]] = {
-            type_single.type_identifier(): type_single
-            for type_single in type_list}
-        return type_dict
 
     def _try_connect(self) -> ConnectionResult:
         uri: str = f"ws://{self._component_address.ip_address}:{self._component_address.port}/websocket"
@@ -435,68 +335,14 @@ class Connection(abc.ABC):
             return
         elif self._state == Connection.State.CONNECTING:
             self._update_in_connecting_state()
-        elif self._state == Connection.State.INITIALIZING:
-            self._update_in_initializing_state()
         elif self._state == Connection.State.RUNNING:
             self._update_in_running_state()
         elif self._state == Connection.State.RECONNECTING:
             self._update_in_reconnecting_state()
-        elif self._state == Connection.State.NORMAL_DEINITIALIZING:
-            self._update_in_normal_deinitializing_state()
         elif self._state == Connection.State.NORMAL_DISCONNECTING:
             self._update_in_normal_disconnecting_state()
-        elif self._state == Connection.State.FAILURE_DEINITIALIZING:
-            self._update_in_failure_deinitializing_state()
         elif self._state == Connection.State.FAILURE_DISCONNECTING:
             self._update_in_failure_disconnecting_state()
-
-    def _update_deinitialization_result(self) -> DeinitializationResult:
-        if self._deinit_request_id is None:
-            self._deinit_request_id = uuid.uuid4()
-            self._request_series_queue.append((self.create_deinitialization_request_series(), self._deinit_request_id))
-
-        send_recv_result: Connection.SendRecvResult = self._send_recv()
-        if send_recv_result != Connection.SendRecvResult.NORMAL:
-            return Connection.DeinitializationResult.FAILURE
-
-        response_result: Connection.PopResponseSeriesResult = self.pop_response_series_if_responded(
-            request_series_id=self._deinit_request_id)
-        if response_result.status == Connection.PopResponseSeriesResult.Status.UNTRACKED:
-            self.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=f"The current request ID is not recognized.")
-            self._deinit_request_id = None
-            return Connection.DeinitializationResult.FAILURE
-
-        if response_result.status == Connection.PopResponseSeriesResult.Status.RESPONDED:
-            self._deinit_request_id = None
-            return self.handle_deinitialization_response_series(response_series=response_result.response_series)
-
-        return Connection.DeinitializationResult.IN_PROGRESS
-
-    def _update_initialization_result(self) -> InitializationResult:
-        if self._init_request_id is None:
-            self._init_request_id = uuid.uuid4()
-            self._request_series_queue.append((self.create_initialization_request_series(), self._init_request_id))
-
-        send_recv_result: Connection.SendRecvResult = self._send_recv()
-        if send_recv_result != Connection.SendRecvResult.NORMAL:
-            return Connection.InitializationResult.FAILURE
-
-        response_result: Connection.PopResponseSeriesResult = self.pop_response_series_if_responded(
-            request_series_id=self._init_request_id)
-        if response_result.status == Connection.PopResponseSeriesResult.Status.UNTRACKED:
-            self.enqueue_status_message(
-                severity=SeverityLabel.ERROR,
-                message=f"The current request ID is not recognized.")
-            self._init_request_id = None
-            return Connection.InitializationResult.FAILURE
-
-        if response_result.status == Connection.PopResponseSeriesResult.Status.RESPONDED:
-            self._init_request_id = None
-            return self.handle_initialization_response_series(response_series=response_result.response_series)
-
-        return Connection.InitializationResult.IN_PROGRESS
 
     def _update_in_connecting_state(self) -> None:
         now_utc = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -508,7 +354,7 @@ class Connection(abc.ABC):
                 self.enqueue_status_message(
                     severity=SeverityLabel.INFO,
                     message=message)
-                self._state = Connection.State.INITIALIZING
+                self._state = Connection.State.RUNNING
             else:
                 if self._attempt_count >= _ATTEMPT_COUNT_MAXIMUM:
                     message = \
@@ -528,31 +374,12 @@ class Connection(abc.ABC):
                     self._next_attempt_timestamp_utc = now_utc + datetime.timedelta(
                         seconds=_ATTEMPT_TIME_GAP_SECONDS)
 
-    def _update_in_failure_deinitializing_state(self) -> None:
-        deinitialization_result: Connection.DeinitializationResult = self._update_deinitialization_result()
-        if deinitialization_result != Connection.DeinitializationResult.IN_PROGRESS:
-            self._state = Connection.State.FAILURE_DISCONNECTING
-
     def _update_in_failure_disconnecting_state(self) -> None:
         if self._socket is not None:
             self._socket.close()
             self._socket = None
         self._socket = None
         self._state = Connection.State.FAILURE
-
-    def _update_in_initializing_state(self) -> None:
-        initialization_result: Connection.InitializationResult = self._update_initialization_result()
-        if initialization_result == Connection.InitializationResult.SUCCESS:
-            self._state = Connection.State.RUNNING
-        elif initialization_result == Connection.InitializationResult.FAILURE:
-            self._state = Connection.State.FAILURE_DEINITIALIZING
-
-    def _update_in_normal_deinitializing_state(self) -> None:
-        deinitialization_result: Connection.DeinitializationResult = self._update_deinitialization_result()
-        if deinitialization_result == Connection.DeinitializationResult.SUCCESS:
-            self._state = Connection.State.NORMAL_DISCONNECTING
-        elif deinitialization_result == Connection.DeinitializationResult.FAILURE:
-            self._state = Connection.State.FAILURE_DISCONNECTING
 
     def _update_in_normal_disconnecting_state(self) -> None:
         if self._socket is not None:
@@ -583,183 +410,3 @@ class Connection(abc.ABC):
 
     def _update_in_running_state(self) -> None:
         self._send_recv()
-
-
-class DetectorConnection(Connection):
-
-    configured_transform_to_reference: Matrix4x4 | None
-    configured_camera_parameters: list[KeyValueSimpleAny] | None
-    configured_marker_parameters: list[KeyValueSimpleAny] | None
-
-    # These are variables used directly by the MCTController for storing data
-    request_id: uuid.UUID | None
-    current_resolution: ImageResolution | None
-    current_intrinsic_parameters: IntrinsicParameters | None
-    latest_frame: DetectorFrame | None
-    recording: list[DetectorFrame] | None
-
-    def __init__(
-        self,
-        component_address: Connection.ComponentAddress
-    ):
-        super().__init__(component_address=component_address)
-
-        self.configured_transform_to_reference = None
-        self.configured_camera_parameters = None
-        self.configured_marker_parameters = None
-
-        self.request_id = None
-        self.current_resolution = None
-        self.current_intrinsic_parameters = None
-        self.latest_frame = None
-        self.recording = []
-
-    def create_deinitialization_request_series(self) -> MCTRequestSeries:
-        return MCTRequestSeries(series=[DetectorStopRequest()])
-
-    def create_initialization_request_series(self) -> MCTRequestSeries:
-        series: list[MCTRequest] = [DetectorStartRequest()]
-        if self.configured_camera_parameters is not None:
-            series.append(CameraParametersSetRequest(parameters=self.configured_camera_parameters))
-        if self.configured_marker_parameters is not None:
-            series.append(AnnotatorParametersSetRequest(parameters=self.configured_marker_parameters))
-        return MCTRequestSeries(series=series)
-
-    def handle_deinitialization_response_series(
-        self,
-        response_series: MCTResponseSeries
-    ) -> Connection.DeinitializationResult:
-        response_count: int = len(response_series.series)
-        if response_count != 1:
-            self.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"Expected exactly one response to deinitialization requests. Got {response_count}.")
-        elif not isinstance(response_series.series[0], (EmptyResponse, CameraParametersSetResponse)):
-            self.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"The deinitialization response was not of the expected type EmptyResponse.")
-        return Connection.DeinitializationResult.SUCCESS
-
-    def handle_initialization_response_series(
-        self,
-        response_series: MCTResponseSeries
-    ) -> Connection.InitializationResult:
-        response_count: int = len(response_series.series)
-        if response_count != 1:
-            self.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"Expected exactly one response to initialization requests. Got {response_count}.")
-        elif not isinstance(response_series.series[0], EmptyResponse):
-            self.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"The initialization response was not of the expected type EmptyResponse.")
-        return Connection.InitializationResult.SUCCESS
-
-    def supported_response_types(self) -> dict[str, type[MCTResponse]]:
-        type_dict: dict[str, type[MCTResponse]] = super().supported_response_types()
-        type_list: list[MCTResponse] = [
-            AnnotatorParametersGetResponse,
-            CameraImageGetResponse,
-            CameraParametersGetResponse,
-            CameraParametersSetResponse,
-            CameraResolutionGetResponse,
-            DetectorFrameGetResponse,
-            IntrinsicCalibrationCalculateResponse,
-            IntrinsicCalibrationImageAddResponse,
-            IntrinsicCalibrationImageGetResponse,
-            IntrinsicCalibrationImageMetadataListResponse,
-            IntrinsicCalibrationResolutionListResponse,
-            IntrinsicCalibrationResultGetResponse,
-            IntrinsicCalibrationResultGetActiveResponse,
-            IntrinsicCalibrationResultMetadataListResponse]
-        type_dict.update({
-            type_single.type_identifier(): type_single
-            for type_single in type_list})
-        return type_dict
-
-
-class PoseSolverConnection(Connection):
-
-    # These are variables used directly by the MCTController for storing data
-
-    configured_solver_parameters: list[KeyValueSimpleAny] | None
-    configured_targets: list[Target] | None
-
-    request_id: uuid.UUID | None
-    detector_poses: list[Pose]
-    target_poses: list[Pose]
-    detector_timestamps: dict[str, datetime.datetime]  # access by detector_label
-    poses_timestamp: datetime.datetime
-    recording: list[MixerFrame] | None
-
-    def __init__(
-        self,
-        component_address: Connection.ComponentAddress
-    ):
-        super().__init__(component_address=component_address)
-
-        self.configured_solver_parameters = None
-        self.configured_targets = None
-
-        self.request_id = None
-        self.detector_poses = list()
-        self.target_poses = list()
-        self.detector_timestamps = dict()
-        self.poses_timestamp = datetime.datetime.min
-        self.recording = []
-
-    def create_deinitialization_request_series(self) -> MCTRequestSeries:
-        return MCTRequestSeries(series=[MixerStopRequest()])
-
-    def create_initialization_request_series(self) -> MCTRequestSeries:
-        series: list[MCTRequest] = [MixerStartRequest()]
-        if self.configured_targets is not None:
-            series.append(PoseSolverSetTargetsRequest(targets=self.configured_targets))
-        return MCTRequestSeries(series=series)
-
-    def handle_deinitialization_response_series(
-        self,
-        response_series: MCTResponseSeries
-    ) -> Connection.DeinitializationResult:
-        response_count: int = len(response_series.series)
-        if response_count != 1:
-            self.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"Expected exactly one response to deinitialization requests. Got {response_count}.")
-        elif not isinstance(response_series.series[0], EmptyResponse):
-            self.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"The deinitialization response was not of the expected type EmptyResponse.")
-        return Connection.DeinitializationResult.SUCCESS
-
-    def handle_initialization_response_series(
-        self,
-        response_series: MCTResponseSeries
-    ) -> Connection.InitializationResult:
-        response_count: int = len(response_series.series)
-        if response_count != 1:
-            self.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"Expected exactly one response to initialization requests. Got {response_count}.")
-        elif not isinstance(response_series.series[0], EmptyResponse):
-            self.enqueue_status_message(
-                severity=SeverityLabel.WARNING,
-                message=f"The initialization response was not of the expected type EmptyResponse.")
-        return Connection.InitializationResult.SUCCESS
-
-    def supported_response_types(self) -> dict[str, type[MCTResponse]]:
-        type_dict: dict[str, type[MCTResponse]] = super().supported_response_types()
-        type_list: list[MCTResponse] = [
-            ExtrinsicCalibrationCalculateResponse,
-            ExtrinsicCalibrationImageAddResponse,
-            ExtrinsicCalibrationImageGetResponse,
-            ExtrinsicCalibrationImageMetadataListResponse,
-            ExtrinsicCalibrationResultGetResponse,
-            ExtrinsicCalibrationResultGetActiveResponse,
-            ExtrinsicCalibrationResultMetadataListResponse,
-            PoseSolverAddTargetResponse,
-            PoseSolverGetPosesResponse]
-        type_dict.update({
-            type_single.type_identifier(): type_single
-            for type_single in type_list})
-        return type_dict
