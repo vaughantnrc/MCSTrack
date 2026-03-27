@@ -1,21 +1,69 @@
 from .connection import \
     Connection
 from src.common import \
-    MCTError, \
     MCTRequestSeries, \
     MCTResponse, \
-    MCTResponseSeries
+    MCTResponseSeries, \
+    StatusMessageSource
 import logging
 import uuid
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
 
-class ResponseSeriesNotExpected(MCTError):
-    pass
+class CallbackRouter:
+    """
+    Scope: Maintaining a list of functions to eventually call back once certain data are available.
+    """
+
+    CallbackFunction = Callable[
+        [MCTResponseSeries,  # response from remote MCTComponent
+        dict[str, ...]],     # pass-through arguments
+        None]
+    Callback = tuple[CallbackFunction, dict[str, ...]]
+
+    _callbacks_by_id: dict[uuid.UUID, Callback]
+
+    def __init__(self):
+        self._callbacks_by_id = dict()
+
+    def add_callback(
+        self,
+        request_id: uuid.UUID,
+        callback: CallbackFunction,
+        passthrough_arguments: dict[str, ...] | None = None
+    ):
+        if passthrough_arguments is None:
+            passthrough_arguments = dict()
+        self._callbacks_by_id[request_id] = (callback, passthrough_arguments)
+
+    def handle_callback(
+        self,
+        response_series: MCTResponseSeries
+    ) -> None:
+        request_id: uuid.UUID = response_series.request_id
+        callback_tuple: CallbackRouter.Callback | None = self._callbacks_by_id.pop(request_id, None)
+        if callback_tuple is not None:
+            callback: CallbackRouter.CallbackFunction = callback_tuple[0]
+            passthrough_arguments: dict[str, ...] = callback_tuple[1]
+            callback(response_series, passthrough_arguments)
+
+    def remove_callback(
+        self,
+        request_id: uuid.UUID
+    ) -> None:
+        self._callbacks_by_id.pop(request_id, None)
+
+    def reset(self):
+        self._callbacks_by_id = dict()
 
 
-class Router:
+class ConnectionRouter:
+    """
+    Scope: Maintaining a list of Connections.
+    """
+
     _connections_by_label: dict[str, Connection]
 
     def __init__(
@@ -26,14 +74,16 @@ class Router:
     def add_connection(
         self,
         component_address: Connection.ComponentAddress,
-        supported_response_types: dict[str, type[MCTResponse]]
+        supported_response_types: dict[str, type[MCTResponse]],
+        status_message_source: StatusMessageSource
     ) -> None:
         label = component_address.label
         if label in self._connections_by_label:
             raise RuntimeError(f"Connection associated with label {label} already exists.")
         return_value: Connection = Connection(
             component_address=component_address,
-            supported_response_types=supported_response_types)
+            supported_response_types=supported_response_types,
+            status_message_source=status_message_source)
         self._connections_by_label[label] = return_value
         return return_value
 
@@ -75,42 +125,25 @@ class Router:
             raise RuntimeError(f"Connection associated with label {label} does not exist.")
         self._connections_by_label.pop(label)
 
-    def _reset(self):
+    def reset(self):
         self._connections_by_label = dict()
 
-    def request_series_push(
+    def enqueue_request_series(
         self,
         label: str,
         request_series: MCTRequestSeries
-    ) -> uuid.UUID:
+    ) -> None:
         if label not in self._connections_by_label:
             raise RuntimeError(f"Failed to find connection with label {label}.")
         elif not self._connections_by_label[label].is_active():
             raise RuntimeError(f"Connection with label {label} is not active.")
-        return self._connections_by_label[label].enqueue_request_series(request_series=request_series)
+        self._connections_by_label[label].enqueue_request_series(request_series=request_series)
 
-    def response_series_pop(
-        self,
-        request_series_id: uuid.UUID
-    ) -> tuple[uuid.UUID | None, MCTResponseSeries | None]:
-        """
-        Only "pop" if there is a response (not None).
-        Return value is a tuple whose elements comprise:
-          - UUID of the request if no response has been received, or None
-          - MCTResponseSeries if a response has been received, or None
-        The dual return values allow easier reassignment of completed request ID's in calling code
-        """
+    def dequeue_response_series_lists(self) -> list[list[MCTResponseSeries]]:
+        return_value: list[list[MCTResponseSeries]] = list()
         for connection in self._connections_by_label.values():
-            response_result: Connection.PopResponseSeriesResult = connection.pop_response_series_if_responded(
-                request_series_id=request_series_id)
-            if response_result.status == Connection.PopResponseSeriesResult.Status.UNTRACKED:
-                continue
-            elif response_result.status == Connection.PopResponseSeriesResult.Status.RESPONDED:
-                return None, response_result.response_series
-            else:  # queued, in progress
-                return request_series_id, None  # Connection is tracking desired request series, waiting for response
-        # Cannot be found
-        raise ResponseSeriesNotExpected()
+            return_value.append(connection.dequeue_response_series_list())
+        return return_value
 
     def start_up(self) -> None:
         for connection in self._connections_by_label.values():

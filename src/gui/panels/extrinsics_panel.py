@@ -43,7 +43,7 @@ from src.mixer import \
     ExtrinsicCalibrationResultMetadataListRequest, \
     ExtrinsicCalibrationResultMetadataListResponse, \
     ExtrinsicCalibrationResultMetadataUpdateRequest, \
-    MixerUpdateIntrinsicParametersRequest
+    MixerIntrinsicUpdateRequest
 import datetime
 from io import BytesIO
 import logging
@@ -325,7 +325,7 @@ class ExtrinsicsPanel(BasePanel):
 
     def on_page_select(self) -> None:
         super().on_page_select()
-        available_mixer_labels: list[str] = self._controller.get_active_mixer_labels()
+        available_mixer_labels: list[str] = self._controller.get_mixer_labels()
         self._mixer_selector.set_options(option_list=available_mixer_labels)
         self._update_ui_controls()
 
@@ -359,7 +359,7 @@ class ExtrinsicsPanel(BasePanel):
                     self._preview_images_by_detector_label[detector_label] = \
                         ImageUtils.base64_to_image(response.image_base64)
                     detector_labels_with_responses.add(detector_label)
-            detector_labels: list[str] = self._controller.get_active_detector_labels()
+            detector_labels: list[str] = self._controller.get_detector_labels()
             for detector_label in detector_labels:
                 if detector_label in detector_labels_with_responses or \
                    detector_label not in self._preview_request_ids_by_detector_label:
@@ -367,7 +367,7 @@ class ExtrinsicsPanel(BasePanel):
                         series=[CameraImageGetRequest(
                             format=_PREVIEW_CAPTURE_FORMAT,
                             requested_resolution=ImageResolution(x_px=800, y_px=480))])  # TODO: Parameterize
-                    preview_request_id = self._controller.request_series_push(
+                    preview_request_id = self._controller.request_send_custom(
                         connection_label=detector_label,
                         request_series=request_series)
                     self._preview_request_ids_by_detector_label[detector_label] = preview_request_id
@@ -389,7 +389,7 @@ class ExtrinsicsPanel(BasePanel):
                 detector_label=detector_label,
                 timestamp_utc_iso8601=self._current_capture_timestamp.isoformat()),
             ExtrinsicCalibrationImageMetadataListRequest()])
-        self._control_blocking_request_ids.add(self._controller.request_series_push(
+        self._control_blocking_request_ids.add(self._controller.request_send_custom(
             connection_label=mixer_label,
             request_series=request_series))
 
@@ -400,13 +400,13 @@ class ExtrinsicsPanel(BasePanel):
     ) -> None:
         mixer_label: str = self._mixer_selector.selector.GetStringSelection()
         request_series: MCTRequestSeries = MCTRequestSeries(series=[
-            MixerUpdateIntrinsicParametersRequest(
+            MixerIntrinsicUpdateRequest(
                 detector_label=detector_label,
                 intrinsic_parameters=response.intrinsic_calibration.calibrated_values)])
         if len(self._control_blocking_request_ids) <= 0:  # This is the last intrinsic - we are ready to calculate
             request_series.series.append(ExtrinsicCalibrationCalculateRequest())
             request_series.series.append(ExtrinsicCalibrationResultMetadataListRequest())
-        self._control_blocking_request_ids.add(self._controller.request_series_push(
+        self._control_blocking_request_ids.add(self._controller.request_send_custom(
             connection_label=mixer_label,
             request_series=request_series))
 
@@ -466,7 +466,7 @@ class ExtrinsicsPanel(BasePanel):
         request_series: MCTRequestSeries = MCTRequestSeries(series=[
             ExtrinsicCalibrationImageMetadataListRequest(),
             ExtrinsicCalibrationResultMetadataListRequest()])
-        self._control_blocking_request_ids.add(self._controller.request_series_push(
+        self._control_blocking_request_ids.add(self._controller.request_send_custom(
             connection_label=mixer_label,
             request_series=request_series))
         self._update_ui_controls()
@@ -479,11 +479,11 @@ class ExtrinsicsPanel(BasePanel):
 
     def _on_capture_pressed(self, _event: wx.CommandEvent) -> None:
         self._current_capture_timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
-        detector_labels: list[str] = self._controller.get_active_detector_labels()
+        detector_labels: list[str] = self._controller.get_detector_labels()
         for detector_label in detector_labels:
             request_series: MCTRequestSeries = MCTRequestSeries(series=[
                 CameraImageGetRequest(format=ImageFormat.FORMAT_PNG)])
-            self._control_blocking_request_ids.add(self._controller.request_series_push(
+            self._control_blocking_request_ids.add(self._controller.request_send_custom(
                 connection_label=detector_label,
                 request_series=request_series))
         self._update_ui_controls()
@@ -492,10 +492,10 @@ class ExtrinsicsPanel(BasePanel):
         self._calibrate_status_textbox.SetForegroundColour(colour=wx.Colour(red=0, green=0, blue=0, alpha=255))
         self._calibrate_status_textbox.SetValue("Calibrating...")
         self._result_display_textbox.SetValue(str())
-        detector_labels: list[str] = self._controller.get_active_detector_labels()
+        detector_labels: list[str] = self._controller.get_detector_labels()
         for detector_label in detector_labels:
             request_series: MCTRequestSeries = MCTRequestSeries(series=[IntrinsicCalibrationResultGetActiveRequest()])
-            self._control_blocking_request_ids.add(self._controller.request_series_push(
+            self._control_blocking_request_ids.add(self._controller.request_send_custom(
                 connection_label=detector_label,
                 request_series=request_series))
         self._calibration_in_progress = True
@@ -511,7 +511,7 @@ class ExtrinsicsPanel(BasePanel):
             request_series: MCTRequestSeries = MCTRequestSeries(series=[
                 ExtrinsicCalibrationImageGetRequest(image_identifier=image_identifier)])
             mixer_label: str = self._mixer_selector.selector.GetStringSelection()
-            self._control_blocking_request_ids.add(self._controller.request_series_push(
+            self._control_blocking_request_ids.add(self._controller.request_send_custom(
                 connection_label=mixer_label,
                 request_series=request_series))
         self._update_ui_controls()
@@ -531,7 +531,7 @@ class ExtrinsicsPanel(BasePanel):
                 image_label=image_label),
             ExtrinsicCalibrationDeleteStagedRequest(),
             ExtrinsicCalibrationImageMetadataListRequest()])
-        self._control_blocking_request_ids.add(self._controller.request_series_push(
+        self._control_blocking_request_ids.add(self._controller.request_send_custom(
             connection_label=mixer_label,
             request_series=request_series))
         self._update_ui_controls()
@@ -547,7 +547,7 @@ class ExtrinsicsPanel(BasePanel):
             request_series: MCTRequestSeries = MCTRequestSeries(series=[
                 ExtrinsicCalibrationResultGetRequest(result_identifier=result_identifier)])
             mixer_label: str = self._mixer_selector.selector.GetStringSelection()
-            self._control_blocking_request_ids.add(self._controller.request_series_push(
+            self._control_blocking_request_ids.add(self._controller.request_send_custom(
                 connection_label=mixer_label,
                 request_series=request_series))
         self._update_ui_controls()
@@ -567,7 +567,7 @@ class ExtrinsicsPanel(BasePanel):
                 result_label=result_label),
             ExtrinsicCalibrationDeleteStagedRequest(),
             ExtrinsicCalibrationResultMetadataListRequest()])
-        self._control_blocking_request_ids.add(self._controller.request_series_push(
+        self._control_blocking_request_ids.add(self._controller.request_send_custom(
             connection_label=mixer_label,
             request_series=request_series))
         self._update_ui_controls()
@@ -651,7 +651,7 @@ class ExtrinsicsPanel(BasePanel):
         display_image: numpy.ndarray = ImageUtils.black_image(resolution_px=self._image_panel.GetSize())
         available_size_px: int = (display_image.shape[1], display_image.shape[0])
         if self._preview_toggle_button.GetValue():
-            detector_labels: list[str] = self._controller.get_active_detector_labels()
+            detector_labels: list[str] = self._controller.get_detector_labels()
             image_dimensions: tuple[int, int]
             image_positions: list[tuple[int, int]]
             image_dimensions, image_positions = ImageUtils.partition_rect(

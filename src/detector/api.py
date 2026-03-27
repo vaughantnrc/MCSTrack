@@ -1,5 +1,8 @@
 from src.common import \
+    DequeueStatusMessagesResponse, \
     DetectorFrame, \
+    EmptyResponse, \
+    ErrorResponse, \
     ImageFormat, \
     ImageResolution, \
     IntrinsicCalibration, \
@@ -7,8 +10,10 @@ from src.common import \
     KeyValueMetaAny, \
     KeyValueSimpleAny, \
     MCTRequest, \
-    MCTResponse
+    MCTResponse, \
+    TimestampGetResponse
 from pydantic import Field, SerializeAsAny
+from typing import Optional
 
 
 class AnnotatorParametersGetRequest(MCTRequest):
@@ -78,6 +83,7 @@ class CameraParametersGetResponse(MCTResponse):
     parsable_type: str = Field(default=type_identifier())
 
     parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
+    resolution: ImageResolution = Field()
 
 
 class CameraParametersSetRequest(MCTRequest):
@@ -127,6 +133,9 @@ class DetectorFrameGetRequest(MCTRequest):
 
     include_detected: bool = Field(default=True)
     include_rejected: bool = Field(default=True)
+    include_image: bool = Field(default=False)
+    image_format: ImageFormat = Field(default=ImageFormat.FORMAT_JPG)
+    image_resolution: ImageResolution | None = Field(default=None)  # None = that of the Detector's camera
 
 
 class DetectorFrameGetResponse(MCTResponse):
@@ -137,6 +146,25 @@ class DetectorFrameGetResponse(MCTResponse):
     parsable_type: str = Field(default=type_identifier())
 
     frame: DetectorFrame = Field()
+
+
+class DetectorQueryRequest(MCTRequest):
+    @staticmethod
+    def type_identifier() -> str:
+        return "detector_status"
+
+    parsable_type: str = Field(default=type_identifier())
+
+
+class DetectorQueryResponse(MCTResponse):
+    @staticmethod
+    def type_identifier() -> str:
+        return "detector_status"
+
+    parsable_type: str = Field(default=type_identifier())
+
+    annotator_status: str = Field()
+    camera_status: str = Field()
 
 
 class DetectorStartRequest(MCTRequest):
@@ -307,7 +335,7 @@ class IntrinsicCalibrationResultGetActiveResponse(MCTResponse):
 
     parsable_type: str = Field(default=type_identifier())
 
-    intrinsic_calibration: IntrinsicCalibration = Field()
+    intrinsic_calibration: Optional[IntrinsicCalibration] = Field()
 
 
 class IntrinsicCalibrationResultMetadataListRequest(MCTRequest):
@@ -340,3 +368,25 @@ class IntrinsicCalibrationResultMetadataUpdateRequest(MCTRequest):
     result_identifier: str = Field()
     result_state: IntrinsicCalibrator.ResultState = Field()
     result_label: str | None = Field(default=None)
+
+
+DETECTOR_RESPONSE_TYPES: list[type[MCTResponse]] = [
+    AnnotatorParametersGetResponse,
+    CameraImageGetResponse,
+    CameraParametersGetResponse,
+    CameraParametersSetResponse,
+    CameraResolutionGetResponse,
+    DequeueStatusMessagesResponse,
+    DetectorFrameGetResponse,
+    DetectorQueryResponse,
+    EmptyResponse,
+    ErrorResponse,
+    IntrinsicCalibrationCalculateResponse,
+    IntrinsicCalibrationImageAddResponse,
+    IntrinsicCalibrationImageGetResponse,
+    IntrinsicCalibrationImageMetadataListResponse,
+    IntrinsicCalibrationResolutionListResponse,
+    IntrinsicCalibrationResultGetResponse,
+    IntrinsicCalibrationResultGetActiveResponse,
+    IntrinsicCalibrationResultMetadataListResponse,
+    TimestampGetResponse]

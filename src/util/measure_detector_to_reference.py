@@ -55,9 +55,9 @@ async def main():
         controller.update()
         detectors_and_their_frames = {}
 
-        for detector_label in controller.get_active_detector_labels():
+        for detector_label in controller.get_detector_labels():
             board_builder.pose_solver.set_intrinsic_parameters(
-                detector_label, controller.get_live_detector_intrinsics(detector_label))
+                detector_label, controller.get_detector_live_data(detector_label))
 
             frame = controller.get_live_detector_frame(detector_label)
             # Keep trying if it is a None frame, which happens on startup
@@ -69,7 +69,7 @@ async def main():
 
         board_builder.locate_reference_board(detectors_and_their_frames)
     
-        for idx, detector_label in enumerate(controller.get_active_detector_labels()):
+        for idx, detector_label in enumerate(controller.get_detector_labels()):
             all_measured_transforms_by_detector[detector_label].append(\
                 board_builder.detector_poses[idx].object_to_reference_matrix.as_numpy_array())
         sleep(0.1)

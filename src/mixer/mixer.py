@@ -16,16 +16,18 @@ from .api import \
     ExtrinsicCalibrationResultMetadataListRequest, \
     ExtrinsicCalibrationResultMetadataListResponse, \
     ExtrinsicCalibrationResultMetadataUpdateRequest, \
-    PoseSolverAddDetectorFrameRequest, \
-    PoseSolverAddTargetRequest, \
-    PoseSolverGetPosesRequest, \
-    PoseSolverGetPosesResponse, \
-    PoseSolverSetExtrinsicRequest, \
-    MixerUpdateIntrinsicParametersRequest, \
-    PoseSolverSetReferenceRequest, \
-    PoseSolverSetTargetsRequest, \
+    PoseSolverDetectorFrameAddRequest, \
+    PoseSolverExtrinsicClearRequest, \
+    PoseSolverExtrinsicSetRequest, \
+    PoseSolverPosesGetRequest, \
+    PoseSolverPosesGetResponse, \
+    PoseSolverTargetAddRequest, \
+    PoseSolverTargetsSetRequest, \
+    MixerQueryRequest, \
+    MixerIntrinsicUpdateRequest, \
+    MixerQueryResponse, \
     MixerStartRequest, \
-    MixerStopRequest
+    MixerStopRequest, MixerFrameGetResponse
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -35,6 +37,7 @@ from src.common import \
     MCTComponent, \
     MCTRequest, \
     MCTResponse, \
+    MixerFrame, \
     Pose, \
     PoseSolver, \
     PoseSolverException
@@ -243,6 +246,17 @@ class Mixer(MCTComponent):
     def get_role_label():
         return _ROLE_LABEL
 
+    def mixer_frame_get(self, **_kwargs) -> MixerFrameGetResponse | ErrorResponse:
+        detector_poses, target_poses = self._pose_solver.get_poses()
+        return MixerFrameGetResponse(
+            frame=MixerFrame(
+                detector_poses=detector_poses,
+                target_poses=target_poses,
+                timestamp_utc_iso8601=self._pose_solver.get_detector_frame_timestamp().isoformat()))
+
+    def mixer_query(self, **_kwargs) -> MixerQueryResponse:
+        return MixerQueryResponse(mixer_status=self._status)
+
     def mixer_start(self, **_kwargs) -> EmptyResponse:
         self._status = Mixer.Status.RUNNING
         return EmptyResponse()
@@ -255,10 +269,10 @@ class Mixer(MCTComponent):
         self,
         **kwargs
     ) -> EmptyResponse | ErrorResponse:
-        request: MixerUpdateIntrinsicParametersRequest = self.get_kwarg(
+        request: MixerIntrinsicUpdateRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
-            arg_type=MixerUpdateIntrinsicParametersRequest)
+            arg_type=MixerIntrinsicUpdateRequest)
         self._pose_solver.set_intrinsic_parameters(
             detector_label=request.detector_label,
             intrinsic_parameters=request.intrinsic_parameters)
@@ -267,11 +281,11 @@ class Mixer(MCTComponent):
             intrinsic_parameters=request.intrinsic_parameters)
         return EmptyResponse()
 
-    def pose_solver_add_detector_frame(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverAddDetectorFrameRequest = self.get_kwarg(
+    def pose_solver_detector_frame_add(self, **kwargs) -> EmptyResponse | ErrorResponse:
+        request: PoseSolverDetectorFrameAddRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
-            arg_type=PoseSolverAddDetectorFrameRequest)
+            arg_type=PoseSolverDetectorFrameAddRequest)
         try:
             self._pose_solver.add_detector_frame(
                 detector_label=request.detector_label,
@@ -281,33 +295,37 @@ class Mixer(MCTComponent):
             return ErrorResponse(message=e.message)
         return EmptyResponse()
 
-    def pose_solver_add_target(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverAddTargetRequest = self.get_kwarg(
+    def pose_solver_target_add(self, **kwargs) -> EmptyResponse | ErrorResponse:
+        request: PoseSolverTargetAddRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
-            arg_type=PoseSolverAddTargetRequest)
+            arg_type=PoseSolverTargetAddRequest)
         try:
             self._pose_solver.add_target(target=request.target)
         except PoseSolverException as e:
             return ErrorResponse(message=e.message)
         return EmptyResponse()
 
-    def pose_solver_get_poses(self, **_kwargs) -> PoseSolverGetPosesResponse | ErrorResponse:
+    def pose_solver_poses_get(self, **_kwargs) -> PoseSolverPosesGetResponse | ErrorResponse:
         detector_poses: list[Pose]
         target_poses: list[Pose]
         try:
             detector_poses, target_poses = self._pose_solver.get_poses()
         except PoseSolverException as e:
             return ErrorResponse(message=e.message)
-        return PoseSolverGetPosesResponse(
+        return PoseSolverPosesGetResponse(
             detector_poses=detector_poses,
             target_poses=target_poses)
 
-    def pose_solver_set_extrinsic_matrix(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverSetExtrinsicRequest = self.get_kwarg(
+    def pose_solver_extrinsic_clear(self, **_kwargs) -> EmptyResponse | ErrorResponse:
+        self._pose_solver.clear_extrinsic_matrices()
+        return EmptyResponse()
+
+    def pose_solver_extrinsic_set(self, **kwargs) -> EmptyResponse | ErrorResponse:
+        request: PoseSolverExtrinsicSetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
-            arg_type=PoseSolverSetExtrinsicRequest)
+            arg_type=PoseSolverExtrinsicSetRequest)
         try:
             self._pose_solver.set_extrinsic_matrix(
                 detector_label=request.detector_label,
@@ -316,22 +334,11 @@ class Mixer(MCTComponent):
             return ErrorResponse(message=e.message)
         return EmptyResponse()
 
-    def pose_solver_set_reference_marker(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverSetReferenceRequest = self.get_kwarg(
-            kwargs=kwargs,
-            key="request",
-            arg_type=PoseSolverSetReferenceRequest)
-        try:
-            self._pose_solver.set_reference_target(target_id=str(request.marker_id))
-        except PoseSolverException as e:
-            return ErrorResponse(message=e.message)
-        return EmptyResponse()
-
     def pose_solver_set_targets(self, **kwargs) -> EmptyResponse | ErrorResponse:
-        request: PoseSolverSetTargetsRequest = self.get_kwarg(
+        request: PoseSolverTargetsSetRequest = self.get_kwarg(
             kwargs=kwargs,
             key="request",
-            arg_type=PoseSolverSetTargetsRequest)
+            arg_type=PoseSolverTargetsSetRequest)
         try:
             self._pose_solver.set_targets(targets=request.targets)
         except PoseSolverException as e:
@@ -351,15 +358,16 @@ class Mixer(MCTComponent):
             ExtrinsicCalibrationResultGetRequest: self.extrinsic_calibrator_result_get,
             ExtrinsicCalibrationResultMetadataListRequest: self.extrinsic_calibrator_result_metadata_list,
             ExtrinsicCalibrationResultMetadataUpdateRequest: self.extrinsic_calibrator_result_metadata_update,
+            MixerIntrinsicUpdateRequest: self.mixer_update_intrinsic_parameters,
+            MixerQueryRequest: self.mixer_query,
             MixerStartRequest: self.mixer_start,
             MixerStopRequest: self.mixer_stop,
-            MixerUpdateIntrinsicParametersRequest: self.mixer_update_intrinsic_parameters,
-            PoseSolverAddDetectorFrameRequest: self.pose_solver_add_detector_frame,
-            PoseSolverAddTargetRequest: self.pose_solver_add_target,
-            PoseSolverGetPosesRequest: self.pose_solver_get_poses,
-            PoseSolverSetExtrinsicRequest: self.pose_solver_set_extrinsic_matrix,
-            PoseSolverSetReferenceRequest: self.pose_solver_set_reference_marker,
-            PoseSolverSetTargetsRequest: self.pose_solver_set_targets})
+            PoseSolverDetectorFrameAddRequest: self.pose_solver_detector_frame_add,
+            PoseSolverExtrinsicClearRequest: self.pose_solver_extrinsic_clear,
+            PoseSolverExtrinsicSetRequest: self.pose_solver_extrinsic_set,
+            PoseSolverPosesGetRequest: self.pose_solver_poses_get,
+            PoseSolverTargetAddRequest: self.pose_solver_target_add,
+            PoseSolverTargetsSetRequest: self.pose_solver_set_targets})
         return return_value
 
     async def update(self):

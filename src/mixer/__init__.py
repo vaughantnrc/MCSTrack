@@ -17,14 +17,19 @@ from .api import \
     ExtrinsicCalibrationResultMetadataListRequest, \
     ExtrinsicCalibrationResultMetadataListResponse, \
     ExtrinsicCalibrationResultMetadataUpdateRequest, \
-    PoseSolverAddDetectorFrameRequest, \
-    PoseSolverAddTargetRequest, \
-    PoseSolverAddTargetResponse, \
-    PoseSolverGetPosesRequest, \
-    PoseSolverGetPosesResponse, \
-    PoseSolverSetExtrinsicRequest, \
-    PoseSolverSetReferenceRequest, \
-    PoseSolverSetTargetsRequest, \
+    PoseSolverDetectorFrameAddRequest, \
+    PoseSolverExtrinsicClearRequest, \
+    PoseSolverExtrinsicSetRequest, \
+    PoseSolverPosesGetRequest, \
+    PoseSolverPosesGetResponse, \
+    PoseSolverTargetAddRequest, \
+    PoseSolverTargetAddResponse, \
+    PoseSolverTargetsSetRequest, \
+    MixerFrameGetRequest, \
+    MixerFrameGetResponse, \
+    MixerIntrinsicUpdateRequest, \
+    MixerQueryRequest, \
+    MixerQueryResponse, \
     MixerStartRequest, \
     MixerStopRequest, \
-    MixerUpdateIntrinsicParametersRequest
+    MIXER_RESPONSE_TYPES

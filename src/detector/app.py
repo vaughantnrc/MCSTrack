@@ -1,13 +1,14 @@
 from .api import \
-    IntrinsicCalibrationResultGetActiveResponse, \
+    AnnotatorParametersGetResponse, \
+    AnnotatorParametersSetRequest, \
     CameraImageGetRequest, \
     CameraImageGetResponse, \
     CameraParametersGetResponse, \
     CameraResolutionGetResponse, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse, \
-    AnnotatorParametersGetResponse, \
-    AnnotatorParametersSetRequest
+    DetectorQueryResponse, \
+    IntrinsicCalibrationResultGetActiveResponse
 from .detector import \
     Detector
 from src.common import \
@@ -17,7 +18,6 @@ from src.common import \
     ErrorResponse, \
     ImageFormat, \
     IntrinsicCalibrator, \
-    TimestampGetRequest, \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
@@ -97,6 +97,10 @@ def create_app() -> FastAPI:
         return detector.annotator_parameters_set(
             request=request)
 
+    @detector_app.get("/detector/query")
+    async def detector_query() -> DetectorQueryResponse:
+        return detector.detector_query()
+
     @detector_app.head("/detector/start")
     async def detector_start() -> None:
         detector.detector_start()
@@ -123,13 +127,10 @@ def create_app() -> FastAPI:
     async def detector_get_frame(
         request: DetectorFrameGetRequest
     ) -> DetectorFrameGetResponse:
-        return detector.detector_frame_get(
-            request=request)
+        return detector.detector_frame_get(request=request)
     
     @detector_app.get("/detector/get_timestamp")
-    async def get_timestamp(
-        request: TimestampGetRequest
-    ) -> TimestampGetResponse:
+    async def get_timestamp() -> TimestampGetResponse:
         return detector.timestamp_get()
 
     @detector_app.get("/calibration/get_result_active")

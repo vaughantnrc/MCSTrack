@@ -1,13 +1,18 @@
 from src.common import \
+    DequeueStatusMessagesResponse, \
     DetectorFrame, \
+    EmptyResponse, \
+    ErrorResponse, \
     ExtrinsicCalibration, \
     ExtrinsicCalibrator, \
     IntrinsicParameters, \
     Matrix4x4, \
     MCTRequest, \
     MCTResponse, \
+    MixerFrame, \
     Pose, \
-    Target
+    Target, \
+    TimestampGetResponse
 from pydantic import Field
 
 
@@ -178,7 +183,7 @@ class ExtrinsicCalibrationResultMetadataUpdateRequest(MCTRequest):
     result_label: str | None = Field(default=None)
 
 
-class PoseSolverAddDetectorFrameRequest(MCTRequest):
+class PoseSolverDetectorFrameAddRequest(MCTRequest):
     @staticmethod
     def type_identifier() -> str:
         return "mixer_pose_solver_add_marker_corners"
@@ -190,53 +195,19 @@ class PoseSolverAddDetectorFrameRequest(MCTRequest):
     detector_frame: DetectorFrame = Field()
 
 
-class PoseSolverAddTargetRequest(MCTRequest):
+class PoseSolverExtrinsicClearRequest(MCTRequest):
     @staticmethod
     def type_identifier() -> str:
-        return "mixer_pose_solver_add_target"
-
-    # noinspection PyTypeHints
-    parsable_type: str = Field(default=type_identifier())
-
-    target: Target = Field()
-
-
-class PoseSolverAddTargetResponse(MCTResponse):
-    @staticmethod
-    def type_identifier() -> str:
-        return "mixer_pose_solver_add_target"
-
-    # noinspection PyTypeHints
-    parsable_type: str = Field(default=type_identifier())
-
-    target_id: str = Field()
-
-
-class PoseSolverGetPosesRequest(MCTRequest):
-    @staticmethod
-    def type_identifier() -> str:
-        return "mixer_pose_solver_get_poses"
+        return "pose_solver_extrinsic_clear"
 
     # noinspection PyTypeHints
     parsable_type: str = Field(default=type_identifier())
 
 
-class PoseSolverGetPosesResponse(MCTResponse):
+class PoseSolverExtrinsicSetRequest(MCTRequest):
     @staticmethod
     def type_identifier() -> str:
-        return "mixer_pose_solver_get_poses"
-
-    # noinspection PyTypeHints
-    parsable_type: str = Field(default=type_identifier())
-
-    detector_poses: list[Pose]
-    target_poses: list[Pose]
-
-
-class PoseSolverSetExtrinsicRequest(MCTRequest):
-    @staticmethod
-    def type_identifier() -> str:
-        return "mixer_pose_solver_set_extrinsic_parameters"
+        return "pose_solver_extrinsic_set"
 
     # noinspection PyTypeHints
     parsable_type: str = Field(default=type_identifier())
@@ -245,19 +216,59 @@ class PoseSolverSetExtrinsicRequest(MCTRequest):
     transform_to_reference: Matrix4x4 = Field()
 
 
-class PoseSolverSetReferenceRequest(MCTRequest):
+class PoseSolverPosesGetRequest(MCTRequest):
     @staticmethod
     def type_identifier() -> str:
-        return "mixer_pose_solver_set_reference_marker"
+        return "mixer_pose_solver_poses_get"
 
     # noinspection PyTypeHints
     parsable_type: str = Field(default=type_identifier())
 
-    marker_id: int = Field()
-    marker_diameter: float = Field()
+
+class PoseSolverPosesGetResponse(MCTResponse):
+    @staticmethod
+    def type_identifier() -> str:
+        return "pose_solver_poses_get"
+
+    # noinspection PyTypeHints
+    parsable_type: str = Field(default=type_identifier())
+
+    detector_poses: list[Pose]
+    target_poses: list[Pose]
 
 
-class PoseSolverSetTargetsRequest(MCTRequest):
+class PoseSolverTargetAddRequest(MCTRequest):
+    @staticmethod
+    def type_identifier() -> str:
+        return "pose_solver_add_target"
+
+    # noinspection PyTypeHints
+    parsable_type: str = Field(default=type_identifier())
+
+    target: Target = Field()
+
+
+class PoseSolverTargetAddResponse(MCTResponse):
+    @staticmethod
+    def type_identifier() -> str:
+        return "pose_solver_add_target"
+
+    # noinspection PyTypeHints
+    parsable_type: str = Field(default=type_identifier())
+
+    target_id: str = Field()
+
+
+class PoseSolverTargetClear(MCTRequest):
+    @staticmethod
+    def type_identifier() -> str:
+        return "mixer_pose_solver_target_clear"
+
+    # noinspection PyTypeHints
+    parsable_type: str = Field(default=type_identifier())
+
+
+class PoseSolverTargetsSetRequest(MCTRequest):
     @staticmethod
     def type_identifier() -> str:
         return "mixer_pose_solver_set_targets"
@@ -266,6 +277,57 @@ class PoseSolverSetTargetsRequest(MCTRequest):
     parsable_type: str = Field(default=type_identifier())
 
     targets: list[Target] = Field()
+
+
+class MixerFrameGetRequest(MCTRequest):
+    @staticmethod
+    def type_identifier() -> str:
+        return "mixer_frame_get"
+
+    # noinspection PyTypeHints
+    parsable_type: str = Field(default=type_identifier())
+
+
+class MixerFrameGetResponse(MCTResponse):
+    @staticmethod
+    def type_identifier() -> str:
+        return "mixer_frame_get"
+
+    # noinspection PyTypeHints
+    parsable_type: str = Field(default=type_identifier())
+
+    frame: MixerFrame = Field()
+
+
+class MixerIntrinsicUpdateRequest(MCTRequest):
+    @staticmethod
+    def type_identifier() -> str:
+        return "mixer_intrinsic_update_parameters"
+
+    parsable_type: str = Field(default=type_identifier())
+
+    detector_label: str = Field()
+    intrinsic_parameters: IntrinsicParameters = Field()
+
+
+class MixerQueryRequest(MCTRequest):
+    @staticmethod
+    def type_identifier() -> str:
+        return "mixer_query"
+
+    # noinspection PyTypeHints
+    parsable_type: str = Field(default=type_identifier())
+
+
+class MixerQueryResponse(MCTResponse):
+    @staticmethod
+    def type_identifier() -> str:
+        return "mixer_query"
+
+    # noinspection PyTypeHints
+    parsable_type: str = Field(default=type_identifier())
+
+    mixer_status: str = Field()
 
 
 class MixerStartRequest(MCTRequest):
@@ -286,12 +348,19 @@ class MixerStopRequest(MCTRequest):
     parsable_type: str = Field(default=type_identifier())
 
 
-class MixerUpdateIntrinsicParametersRequest(MCTRequest):
-    @staticmethod
-    def type_identifier() -> str:
-        return "mixer_update_intrinsic_parameters"
-
-    parsable_type: str = Field(default=type_identifier())
-
-    detector_label: str = Field()
-    intrinsic_parameters: IntrinsicParameters = Field()
+MIXER_RESPONSE_TYPES: list[type[MCTResponse]] = [
+    DequeueStatusMessagesResponse,
+    EmptyResponse,
+    ErrorResponse,
+    ExtrinsicCalibrationCalculateResponse,
+    ExtrinsicCalibrationImageAddResponse,
+    ExtrinsicCalibrationImageGetResponse,
+    ExtrinsicCalibrationImageMetadataListResponse,
+    ExtrinsicCalibrationResultGetResponse,
+    ExtrinsicCalibrationResultGetActiveResponse,
+    ExtrinsicCalibrationResultMetadataListResponse,
+    PoseSolverPosesGetResponse,
+    PoseSolverTargetAddResponse,
+    MixerFrameGetResponse,
+    MixerQueryResponse,
+    TimestampGetResponse]

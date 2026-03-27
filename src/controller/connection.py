@@ -4,7 +4,7 @@ from src.common import \
     MCTResponse, \
     MCTResponseSeries, \
     SeverityLabel, \
-    StatusMessage
+    StatusMessageSource
 import datetime
 from enum import StrEnum
 from ipaddress import IPv4Address
@@ -136,74 +136,52 @@ class Connection:
     _component_address: ComponentAddress
     _supported_response_types: dict[str, type[MCTResponse]]
 
-    _state: State
+    _status_message_source: StatusMessageSource
 
-    _status_message_queue: list[StatusMessage]
+    _state: State
 
     _socket: ClientConnection | None
     _attempt_count: int
     _next_attempt_timestamp_utc: datetime.datetime
 
-    # Requests are handled one at a time, with results being appended to a Response queue
-    _request_series_queue: list[tuple[MCTRequestSeries, uuid.UUID]]
-    _current_request_id: uuid.UUID | None
-    _response_series_queue: dict[uuid.UUID, MCTResponseSeries]
+    # Requests are handled one at a time, with results being appended to a queue
+    _waiting_for_response: bool
+    _request_series_queue: list[MCTRequestSeries]
+    _response_series_queue: list[MCTResponseSeries]
 
     def __init__(
         self,
         component_address: ComponentAddress,
-        supported_response_types: dict[str, type[MCTResponse]]
+        supported_response_types: dict[str, type[MCTResponse]],
+        status_message_source: StatusMessageSource
     ):
         self._component_address = component_address
         self._supported_response_types = supported_response_types
 
-        self._state = Connection.State.INACTIVE
+        self._status_message_source = status_message_source
 
-        self._status_message_queue = list()
+        self._state = Connection.State.INACTIVE
 
         self._socket = None
         self._attempt_count = 0
         self._next_attempt_timestamp_utc = datetime.datetime.min
-        self._init_request_id = None
-        self._deinit_request_id = None
 
+        self._waiting_for_response = False
         self._request_series_queue = list()
-        self._current_request_id = None
-        self._response_series_queue = dict()
+        self._response_series_queue = list()
 
-    def dequeue_status_messages(self) -> list[StatusMessage]:
-        status_messages = self._status_message_queue
-        self._status_message_queue = list()
-        return status_messages
+    def dequeue_response_series_list(self) -> list[MCTResponseSeries]:
+        return_value: list[MCTResponseSeries] = list(self._response_series_queue)
+        self._response_series_queue.clear()
+        return return_value
 
     def enqueue_request_series(
         self,
         request_series: MCTRequestSeries
-    ) -> uuid.UUID:
-        """
-        Returns the id that can be used to get the result (when it is ready)
-        """
+    ) -> None:
         if not self.is_active():
             raise RuntimeError("Connection is not active. Cannot yet make requests.")
-        request_series_id: uuid.UUID = uuid.uuid4()
-        self._request_series_queue.append((request_series, request_series_id))
-        return request_series_id
-
-    def enqueue_status_message(
-        self,
-        severity: SeverityLabel,
-        message: str
-    ) -> None:
-        """
-        Meant to be called by subclasses.
-        Add a status message to report to a user.
-        """
-        self._status_message_queue.append(
-            StatusMessage(
-                source_label=self._component_address.label,
-                severity=severity,
-                message=message,
-                timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat()))
+        self._request_series_queue.append(request_series)
 
     def get_current_state(self) -> str:
         return self._state
@@ -234,25 +212,6 @@ class Connection:
     def is_active(self) -> bool:
         return self._state == Connection.State.RUNNING or self._state == Connection.State.RECONNECTING
 
-    def pop_response_series_if_responded(
-        self,
-        request_series_id: uuid.UUID
-    ) -> PopResponseSeriesResult:
-        if request_series_id in self._response_series_queue:
-            return Connection.PopResponseSeriesResult(
-                status=Connection.PopResponseSeriesResult.Status.RESPONDED,
-                response_series=self._response_series_queue.pop(request_series_id))
-        if request_series_id == self._current_request_id:
-            return Connection.PopResponseSeriesResult(
-                status=Connection.PopResponseSeriesResult.Status.IN_PROGRESS)
-        for _, queued_id in self._request_series_queue:
-            if queued_id == request_series_id:
-                return Connection.PopResponseSeriesResult(
-                    status=Connection.PopResponseSeriesResult.Status.QUEUED)
-        # Getting past this point indicates the request was not made, or has already been removed.
-        return Connection.PopResponseSeriesResult(
-            status=Connection.PopResponseSeriesResult.Status.UNTRACKED)
-
     def _send_recv(self) -> SendRecvResult:
 
         def _response_series_converter(
@@ -263,35 +222,45 @@ class Connection:
                 supported_types=self._supported_response_types)
             return MCTResponseSeries(series=series_list)
 
-        if self._current_request_id is None and len(self._request_series_queue) > 0:
-            request_series: MCTRequestSeries
-            (request_series, self._current_request_id) = self._request_series_queue[0]
-            request_series_as_str: str = request_series.model_dump_json()
-            try:
-                self._socket.send(request_series_as_str)
-                self._request_series_queue.pop(0)
-            except ConnectionClosed as e:
-                self._state = Connection.State.FAILURE
-                self.enqueue_status_message(
-                    severity=SeverityLabel.ERROR,
-                    message=f"Connection is closed for {self._component_address.label}. Cannot send. {str(e)}")
-                return Connection.SendRecvResult.FAILURE
+        if self._waiting_for_response and len(self._request_series_queue) <= 0:
+            self._status_message_source.enqueue_status_message(
+                source_label=self._component_address.label,
+                severity=SeverityLabel.ERROR,
+                message=f"Connection is in an inconsistent state - waiting for response but no requests made.")
+            self._waiting_for_response = False
 
-        if self._current_request_id is not None:
+        if self._waiting_for_response:
+            request_id: uuid.UUID = self._request_series_queue[0].request_id
             try:
                 response_series_as_str: str = self._socket.recv(timeout=0.0)
                 response_series_as_dict: dict = json.loads(response_series_as_str)
                 response_series: MCTResponseSeries = _response_series_converter(response_series_as_dict)
                 response_series.responder = self._component_address.label
-                self._response_series_queue[self._current_request_id] = response_series
-                self._current_request_id = None
+                self._response_series_queue.append(response_series)
+                self._request_series_queue.pop(0)
+                self._waiting_for_response = False
             except TimeoutError:
                 pass
             except ConnectionClosed as e:
                 self._state = Connection.State.FAILURE
-                self.enqueue_status_message(
+                self._status_message_source.enqueue_status_message(
+                    source_label=self._component_address.label,
                     severity=SeverityLabel.ERROR,
                     message=f"Connection is closed for {self._component_address.label}. Cannot receive. {str(e)}")
+                return Connection.SendRecvResult.FAILURE
+
+        if not self._waiting_for_response and len(self._request_series_queue) > 0:
+            request_series: MCTRequestSeries = self._request_series_queue[0]
+            request_series_as_str: str = request_series.model_dump_json()
+            try:
+                self._socket.send(request_series_as_str)
+                self._waiting_for_response = True
+            except ConnectionClosed as e:
+                self._state = Connection.State.FAILURE
+                self._status_message_source.enqueue_status_message(
+                    source_label=self._component_address.label,
+                    severity=SeverityLabel.ERROR,
+                    message=f"Connection is closed for {self._component_address.label}. Cannot send. {str(e)}")
                 return Connection.SendRecvResult.FAILURE
 
         return Connection.SendRecvResult.NORMAL
@@ -351,7 +320,8 @@ class Connection:
             connection_result: Connection.ConnectionResult = self._try_connect()
             if connection_result.success:
                 message = f"Connection successful."
-                self.enqueue_status_message(
+                self._status_message_source.enqueue_status_message(
+                    source_label=self._component_address.label,
                     severity=SeverityLabel.INFO,
                     message=message)
                 self._state = Connection.State.RUNNING
@@ -360,7 +330,8 @@ class Connection:
                     message = \
                         f"Failed to connect, received error: {str(connection_result.error_message)}. "\
                         f"Connection is being aborted after {self._attempt_count} attempts."
-                    self.enqueue_status_message(
+                    self._status_message_source.enqueue_status_message(
+                        source_label=self._component_address.label,
                         severity=SeverityLabel.ERROR,
                         message=message)
                     self._state = Connection.State.FAILURE
@@ -368,7 +339,8 @@ class Connection:
                     message: str = \
                         f"Failed to connect, received error: {str(connection_result.error_message)}. "\
                         f"Will retry in {_ATTEMPT_TIME_GAP_SECONDS} seconds."
-                    self.enqueue_status_message(
+                    self._status_message_source.enqueue_status_message(
+                        source_label=self._component_address.label,
                         severity=SeverityLabel.WARNING,
                         message=message)
                     self._next_attempt_timestamp_utc = now_utc + datetime.timedelta(
@@ -394,7 +366,8 @@ class Connection:
             connection_result: Connection.ConnectionResult = self._try_connect()
             if connection_result.success:
                 message = f"Reconnection successful."
-                self.enqueue_status_message(
+                self._status_message_source.enqueue_status_message(
+                    source_label=self._component_address.label,
                     severity=SeverityLabel.INFO,
                     message=message)
                 self._state = Connection.State.RUNNING
@@ -402,7 +375,8 @@ class Connection:
                 message: str = \
                     f"Failed to reconnect, received error: {str(connection_result.error_message)}. "\
                     f"Will retry in {_ATTEMPT_TIME_GAP_SECONDS} seconds."
-                self.enqueue_status_message(
+                self._status_message_source.enqueue_status_message(
+                    source_label=self._component_address.label,
                     severity=SeverityLabel.WARNING,
                     message=message)
                 self._next_attempt_timestamp_utc = now_utc + datetime.timedelta(

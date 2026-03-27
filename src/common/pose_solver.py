@@ -213,6 +213,9 @@ class PoseSolver:
         self._landmark_target_map.clear()
         self._last_change_timestamp_utc = datetime.datetime.now(tz=datetime.timezone.utc)
 
+    def get_detector_frame_timestamp(self) -> datetime.datetime:
+        return self._last_change_timestamp_utc  # TODO: track target and detector change timestamps separately
+
     def get_poses(
         self
     ) -> tuple[list[Pose], list[Pose]]:

@@ -1,8 +1,9 @@
 from .api import \
-    PoseSolverAddDetectorFrameRequest, \
-    PoseSolverAddTargetRequest, \
-    PoseSolverGetPosesResponse, \
-    MixerUpdateIntrinsicParametersRequest
+    PoseSolverDetectorFrameAddRequest, \
+    PoseSolverTargetAddRequest, \
+    PoseSolverPosesGetResponse, \
+    MixerQueryResponse, \
+    MixerIntrinsicUpdateRequest
 from .mixer import \
     Mixer
 from src.common import \
@@ -53,25 +54,29 @@ def create_app() -> FastAPI:
 
     @mixer_app.post("/add_detector_frame")
     async def add_marker_corners(
-        request: PoseSolverAddDetectorFrameRequest
+        request: PoseSolverDetectorFrameAddRequest
     ) -> EmptyResponse | ErrorResponse:
-        return mixer.pose_solver_add_detector_frame(request=request)
+        return mixer.pose_solver_detector_frame_add(request=request)
 
     @mixer_app.post("/add_target")
     async def add_target_marker(
-        request: PoseSolverAddTargetRequest
+        request: PoseSolverTargetAddRequest
     ) -> EmptyResponse | ErrorResponse:
-        return mixer.pose_solver_add_target(request=request)
+        return mixer.pose_solver_target_add(request=request)
 
     @mixer_app.get("/get_poses")
-    async def get_poses() -> PoseSolverGetPosesResponse | ErrorResponse:
-        return mixer.pose_solver_get_poses()
+    async def get_poses() -> PoseSolverPosesGetResponse | ErrorResponse:
+        return mixer.pose_solver_poses_get()
 
     @mixer_app.post("/set_intrinsic_parameters")
     async def set_intrinsic_parameters(
-        request: MixerUpdateIntrinsicParametersRequest
+        request: MixerIntrinsicUpdateRequest
     ) -> EmptyResponse | ErrorResponse:
         return mixer.mixer_update_intrinsic_parameters(request=request)
+
+    @mixer_app.get("/query")
+    async def query() -> MixerQueryResponse | ErrorResponse:
+        return mixer.mixer_query()
 
     @mixer_app.head("/start")
     async def start() -> None:

@@ -279,7 +279,7 @@ class DetectorPanel(BasePanel):
     def begin_capture_calibration(self) -> None:
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         request_series: MCTRequestSeries = MCTRequestSeries(series=[IntrinsicCalibrationImageAddRequest()])
-        self._control_blocking_request_id = self._controller.request_series_push(
+        self._control_blocking_request_id = self._controller.request_send_custom(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -290,7 +290,7 @@ class DetectorPanel(BasePanel):
             series=[CameraImageGetRequest(
                 format=_CAPTURE_FORMAT,
                 requested_resolution=requested_resolution)])
-        self._live_preview_request_id = self._controller.request_series_push(
+        self._live_preview_request_id = self._controller.request_send_custom(
             connection_label=selected_detector_label,
             request_series=request_series)
 
@@ -300,7 +300,7 @@ class DetectorPanel(BasePanel):
             series=[
                 CameraParametersGetRequest(),
                 AnnotatorParametersGetRequest()])
-        self._control_blocking_request_id = self._controller.request_series_push(
+        self._control_blocking_request_id = self._controller.request_send_custom(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -313,7 +313,7 @@ class DetectorPanel(BasePanel):
             series=[
                 CameraParametersSetRequest(parameters=key_values),
                 CameraParametersGetRequest()])  # sync
-        self._control_blocking_request_id = self._controller.request_series_push(
+        self._control_blocking_request_id = self._controller.request_send_custom(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -325,7 +325,7 @@ class DetectorPanel(BasePanel):
         request_series: MCTRequestSeries = MCTRequestSeries(series=[
             AnnotatorParametersSetRequest(parameters=key_values),
             AnnotatorParametersGetRequest()])  # sync
-        self._control_blocking_request_id = self._controller.request_series_push(
+        self._control_blocking_request_id = self._controller.request_send_custom(
             connection_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
@@ -438,7 +438,7 @@ class DetectorPanel(BasePanel):
 
     def on_page_select(self):
         super().on_page_select()
-        available_detector_labels: list[str] = self._controller.get_active_detector_labels()
+        available_detector_labels: list[str] = self._controller.get_detector_labels()
         self._detector_selector.set_options(option_list=available_detector_labels)
         self._update_ui_controls()
 

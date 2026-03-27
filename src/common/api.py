@@ -1,3 +1,5 @@
+import uuid
+
 from .serialization import MCTDeserializable
 from .status import StatusMessage
 import abc
@@ -10,6 +12,7 @@ class MCTRequest(BaseModel, MCTDeserializable, abc.ABC):
 
 class MCTRequestSeries(BaseModel):
     series: list[SerializeAsAny[MCTRequest]] = Field()
+    request_id: str = Field(default_factory=uuid.uuid4)
 
 
 class MCTResponse(BaseModel, MCTDeserializable, abc.ABC):
@@ -17,8 +20,9 @@ class MCTResponse(BaseModel, MCTDeserializable, abc.ABC):
 
 
 class MCTResponseSeries(BaseModel):
-    series: list[SerializeAsAny[MCTResponse]] = Field(default=list())
-    responder: str = Field(default=str())
+    series: list[SerializeAsAny[MCTResponse]] = Field(default_factory=list)
+    request_id: str = Field(default_factory=str)
+    responder: str = Field(default_factory=str)
 
 
 class EmptyResponse(MCTResponse):

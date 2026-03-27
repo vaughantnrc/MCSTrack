@@ -2,6 +2,20 @@ from .api import \
     AnnotatorParametersGetRequest, \
     AnnotatorParametersGetResponse, \
     AnnotatorParametersSetRequest, \
+    CameraImageGetRequest, \
+    CameraImageGetResponse, \
+    CameraParametersGetRequest, \
+    CameraParametersGetResponse, \
+    CameraParametersSetRequest, \
+    CameraParametersSetResponse, \
+    CameraResolutionGetRequest, \
+    CameraResolutionGetResponse, \
+    DetectorFrameGetRequest, \
+    DetectorFrameGetResponse, \
+    DetectorQueryRequest, \
+    DetectorQueryResponse, \
+    DetectorStartRequest, \
+    DetectorStopRequest, \
     IntrinsicCalibrationCalculateRequest, \
     IntrinsicCalibrationCalculateResponse, \
     IntrinsicCalibrationDeleteStagedRequest, \
@@ -20,27 +34,17 @@ from .api import \
     IntrinsicCalibrationResultGetActiveResponse, \
     IntrinsicCalibrationResultMetadataListRequest, \
     IntrinsicCalibrationResultMetadataListResponse, \
-    IntrinsicCalibrationResultMetadataUpdateRequest, \
-    CameraImageGetRequest, \
-    CameraImageGetResponse, \
-    CameraParametersGetRequest, \
-    CameraParametersGetResponse, \
-    CameraParametersSetRequest, \
-    CameraParametersSetResponse, \
-    CameraResolutionGetRequest, \
-    CameraResolutionGetResponse, \
-    DetectorFrameGetRequest, \
-    DetectorFrameGetResponse, \
-    DetectorStartRequest, \
-    DetectorStopRequest
+    IntrinsicCalibrationResultMetadataUpdateRequest
 from src.common import \
     Annotator, \
     Camera, \
+    CalibrationErrorReason, \
     DetectorFrame, \
     EmptyResponse, \
     ErrorResponse, \
     ImageFormat, \
     ImageResolution, \
+    ImageUtils, \
     IntrinsicCalibration, \
     IntrinsicCalibrator, \
     KeyValueMetaAbstract, \
@@ -276,8 +280,11 @@ class Detector(MCTComponent):
             image_resolution: ImageResolution = self._camera.get_resolution()
             intrinsic_calibration = self._calibrator.get_result_active_by_image_resolution(image_resolution=image_resolution)
         except MCTCalibrationError as e:
-            logger.error(e.private_message)
-            return ErrorResponse(message=e.public_message)
+            if e.reason != CalibrationErrorReason.DATA_NOT_FOUND:
+                logger.error(e.private_message)
+                return ErrorResponse(message=e.public_message)
+            else:
+                return IntrinsicCalibrationResultGetActiveResponse(intrinsic_calibration=None)
         return IntrinsicCalibrationResultGetActiveResponse(intrinsic_calibration=intrinsic_calibration)
 
     def calibration_result_metadata_list(
@@ -341,11 +348,15 @@ class Detector(MCTComponent):
         **_kwargs
     ) -> CameraParametersGetResponse | ErrorResponse:
         parameters: list[KeyValueMetaAbstract]
+        resolution: ImageResolution
         try:
             parameters = self._camera.get_parameters()
+            resolution = self._camera.get_resolution()
         except MCTCameraRuntimeError as e:
             return ErrorResponse(message=e.message)
-        return CameraParametersGetResponse(parameters=parameters)
+        return CameraParametersGetResponse(
+            parameters=parameters,
+            resolution=resolution)
 
     def camera_parameters_set(
         self,
@@ -392,9 +403,21 @@ class Detector(MCTComponent):
                 detector_frame.annotations += self._annotator.get_markers_detected()
             if request.include_rejected:
                 detector_frame.annotations += self._annotator.get_markers_rejected()
+            if request.include_image:
+                detector_frame.image_base64 = ImageUtils.image_to_base64(
+                    image_data=self._camera.get_image(),
+                    image_format=request.image_format)
         except (MCTCameraRuntimeError, MCTAnnotatorRuntimeError) as e:
             return ErrorResponse(message=e.message)
         return DetectorFrameGetResponse(frame=detector_frame)
+
+    def detector_query(
+        self,
+        **_kwargs
+    ) -> DetectorQueryResponse:
+        return DetectorQueryResponse(
+            annotator_status=self._annotator.get_status(),
+            camera_status=self._camera.get_status())
 
     def detector_start(
         self,
@@ -423,7 +446,14 @@ class Detector(MCTComponent):
     def supported_request_methods(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
         return_value: dict[type[MCTRequest], Callable[[dict], MCTResponse]] = super().supported_request_methods()
         return_value.update({
+            AnnotatorParametersGetRequest: self.annotator_parameters_get,
+            AnnotatorParametersSetRequest: self.annotator_parameters_set,
+            CameraImageGetRequest: self.camera_image_get,
+            CameraParametersGetRequest: self.camera_parameters_get,
+            CameraParametersSetRequest: self.camera_parameters_set,
+            CameraResolutionGetRequest: self.camera_resolution_get,
             DetectorFrameGetRequest: self.detector_frame_get,
+            DetectorQueryRequest: self.detector_query,
             DetectorStartRequest: self.detector_start,
             DetectorStopRequest: self.detector_stop,
             IntrinsicCalibrationCalculateRequest: self.calibration_calculate,
@@ -436,13 +466,7 @@ class Detector(MCTComponent):
             IntrinsicCalibrationResultGetRequest: self.calibration_result_get,
             IntrinsicCalibrationResultGetActiveRequest: self.calibration_result_get_active,
             IntrinsicCalibrationResultMetadataListRequest: self.calibration_result_metadata_list,
-            IntrinsicCalibrationResultMetadataUpdateRequest: self.calibration_result_metadata_update,
-            CameraImageGetRequest: self.camera_image_get,
-            CameraParametersGetRequest: self.camera_parameters_get,
-            CameraParametersSetRequest: self.camera_parameters_set,
-            CameraResolutionGetRequest: self.camera_resolution_get,
-            AnnotatorParametersGetRequest: self.annotator_parameters_get,
-            AnnotatorParametersSetRequest: self.annotator_parameters_set})
+            IntrinsicCalibrationResultMetadataUpdateRequest: self.calibration_result_metadata_update})
         return return_value
 
     async def update(self):

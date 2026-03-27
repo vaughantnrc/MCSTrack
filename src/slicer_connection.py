@@ -37,7 +37,7 @@ while True:
 
     done_transitioning: bool = (not controller.is_transitioning())
     if done_transitioning:
-        ps_frame = controller.get_live_pose_solver_frame("sol")
+        ps_frame = controller.get_mixer_live_data("sol")
         timestamp = ps_frame.timestamp_utc_iso8601
 
         if len(ps_frame.target_poses) > 0:

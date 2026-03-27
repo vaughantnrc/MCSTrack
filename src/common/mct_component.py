@@ -42,6 +42,7 @@ class DetectorFrame(BaseModel):
     annotations: list[Annotation] = Field(default_factory=list)
     timestamp_utc_iso8601: str = Field()
     image_resolution: ImageResolution = Field()
+    image_base64: str | None = Field(default=None)
 
     @property
     def annotations_identified(self):
@@ -198,11 +199,11 @@ class MCTComponent(abc.ABC):
             requester_timestamp_utc_iso8601=request.requester_timestamp_utc_iso8601,
             responder_timestamp_utc_iso8601=timestamp_utc_iso8601)
     
-    def time_sync_start(self, **kwargs) -> EmptyResponse:
+    def time_sync_start(self, **_kwargs) -> EmptyResponse:
         self.time_sync_active = True
         return EmptyResponse()
     
-    def time_sync_stop(self, **kwargs) -> EmptyResponse:
+    def time_sync_stop(self, **_kwargs) -> EmptyResponse:
         self.time_sync_active = False
         return EmptyResponse()
     
@@ -215,6 +216,13 @@ class MCTComponent(abc.ABC):
             response_series: MCTResponseSeries
             while True:
                 request_series_dict = await websocket.receive_json()
+                request_id: str
+                if "request_id" in request_series_dict:
+                    request_id: str = request_series_dict["request_id"]
+                else:
+                    logger.exception(f"Request id is missing from request series. Response will be empty.")
+                    await websocket.send_json(MCTResponseSeries().model_dump())
+                    continue
                 try:
                     request_series_list: list[MCTRequest] = self.parse_dynamic_series_list(
                         parsable_series_dict=request_series_dict,
@@ -225,7 +233,9 @@ class MCTComponent(abc.ABC):
                     continue
                 response_series: MCTResponseSeries = self.websocket_handle_requests(
                     client_identifier=client_identifier,
-                    request_series=MCTRequestSeries(series=request_series_list))
+                    request_series=MCTRequestSeries(
+                        request_id=request_id,
+                        series=request_series_list))
                 await websocket.send_json(response_series.model_dump())
         except WebSocketDisconnect as e:
             print(f"DISCONNECTED: {str(e)}")
@@ -262,4 +272,5 @@ class MCTComponent(abc.ABC):
                     message=message)
                 response_series.append(ErrorResponse(message=message))
         return MCTResponseSeries(
-            series=response_series)
+            series=response_series,
+            request_id=request_series.request_id)

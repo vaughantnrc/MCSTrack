@@ -401,7 +401,7 @@ class BoardBuilderPanel(BasePanel):
             series=[
                 CameraImageGetRequest(
                     format=_CAPTURE_FORMAT)])
-        preview.image_request_id = self._controller.request_series_push(
+        preview.image_request_id = self._controller.request_send_custom(
             connection_label=preview.detector_label,
             request_series=request_series)
 
@@ -489,13 +489,13 @@ class BoardBuilderPanel(BasePanel):
         self.board_builder.board_label = self._board_label.textbox.GetValue()  # Set board name
         self._locate_reference_button.Enable(True)
         self._repeatability_testing_checkbox.checkbox.Enable(True)
-        for detector_label in self._controller.get_active_detector_labels():
-            self._detector_intrinsics[detector_label] = self._controller.get_live_detector_intrinsics(detector_label)
+        for detector_label in self._controller.get_detector_labels():
+            self._detector_intrinsics[detector_label] = self._controller.get_detector_live_data(detector_label)
 
     def _on_display_mode_changed(self, _event: wx.CommandEvent):
         if self._preview_image_checkbox.checkbox.GetValue():
             if not self.live_detector_previews:
-                for detector in self._controller.get_active_detector_labels():
+                for detector in self._controller.get_detector_labels():
                     image_panel = self.default_image_panel
 
                     if len(self.live_detector_previews) > 0:
