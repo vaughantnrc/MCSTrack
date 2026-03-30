@@ -139,7 +139,7 @@ class ControllerPanel(BasePanel):
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         if dialog.ShowModal() == wx.ID_CANCEL:
             return
-        self._controller.start_from_configuration_filepath(dialog.GetPath())
+        self._controller.configure(dialog.GetPath())
         self.update_controller_buttons()
 
     def on_stop_pressed(self, _event: wx.CommandEvent) -> None:
@@ -150,7 +150,7 @@ class ControllerPanel(BasePanel):
         super().update_loop()
         self._is_updating = True
         self.update_connection_table_display()
-        controller_status: str = self._controller.get_state()
+        controller_status: str = self._controller.get_controller_state()
         if controller_status != self._controller_status:
             self._controller_status = controller_status
             self._controller_status_textbox.SetValue(f"MCTController Status: {controller_status}")

@@ -42,7 +42,7 @@ class CallbackRouter:
         self,
         response_series: MCTResponseSeries
     ) -> None:
-        request_id: uuid.UUID = response_series.request_id
+        request_id: uuid.UUID = uuid.UUID(response_series.request_id)
         callback_tuple: CallbackRouter.Callback | None = self._callbacks_by_id.pop(request_id, None)
         if callback_tuple is not None:
             callback: CallbackRouter.CallbackFunction = callback_tuple[0]
@@ -74,7 +74,7 @@ class ConnectionRouter:
     def add_connection(
         self,
         component_address: Connection.ComponentAddress,
-        supported_response_types: dict[str, type[MCTResponse]],
+        supported_response_types: list[type[MCTResponse]],
         status_message_source: StatusMessageSource
     ) -> None:
         label = component_address.label
@@ -85,7 +85,6 @@ class ConnectionRouter:
             supported_response_types=supported_response_types,
             status_message_source=status_message_source)
         self._connections_by_label[label] = return_value
-        return return_value
 
     def get_connection_reports(self) -> list[Connection.Report]:
         return_value: list[Connection.Report] = list()

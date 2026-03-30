@@ -24,6 +24,7 @@ from .api import \
     PoseSolverPosesGetResponse, \
     PoseSolverTargetAddRequest, \
     PoseSolverTargetAddResponse, \
+    PoseSolverTargetsClearRequest, \
     PoseSolverTargetsSetRequest, \
     MixerFrameGetRequest, \
     MixerFrameGetResponse, \

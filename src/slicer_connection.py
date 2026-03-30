@@ -23,21 +23,21 @@ while not server.is_connected():
 logging.basicConfig(level=logging.INFO)
 
 controller = MCTController(
-    serial_identifier="controller",
+    controller_name="controller",
     send_status_messages_to_logger=True)
 
 controller.add_status_message(
         severity="info",
         message=f"Slicer client connected")
 
-controller.start_from_configuration_filepath(input_filepath)
+controller.configure(input_filepath)
 
 while True:
     controller.update()
 
     done_transitioning: bool = (not controller.is_transitioning())
     if done_transitioning:
-        ps_frame = controller.get_mixer_live_data("sol")
+        ps_frame = controller.get_live_mixer_data("sol")
         timestamp = ps_frame.timestamp_utc_iso8601
 
         if len(ps_frame.target_poses) > 0:

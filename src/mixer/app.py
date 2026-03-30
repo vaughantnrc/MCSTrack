@@ -8,7 +8,9 @@ from .mixer import \
     Mixer
 from src.common import \
     EmptyResponse, \
-    ErrorResponse
+    ErrorResponse, \
+    ExtrinsicCalibrator, \
+    PoseSolver
 import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,10 +19,6 @@ import hjson
 import logging
 import os
 from typing import Final
-
-
-# Note: This is the only implementation, currently.
-from src.implementations.extrinsic_charuco_opencv import CharucoOpenCVExtrinsicCalibrator
 
 
 logger = logging.getLogger(__name__)
@@ -38,9 +36,33 @@ def create_app() -> FastAPI:
         configuration_dict = hjson.loads(file_contents)
         configuration = Mixer.Configuration(**configuration_dict)
 
+    # Eventually it would be preferable to put the initialization logic/mapping below into an abstract factory,
+    # and allow end-users to register custom classes that are not necessarily shipped within this library.
+
+    pose_solver_type: type[PoseSolver]
+    if configuration.pose_solver.implementation == "standard":
+        from src.implementations.pose_solver_standard import StandardPoseSolver
+        pose_solver_type = StandardPoseSolver
+    elif configuration.pose_solver.implementation == "mock":
+        from src.implementations.pose_solver_mock import MockPoseSolver
+        pose_solver_type = MockPoseSolver
+    else:
+        raise RuntimeError(f"Unsupported pose solver implementation {configuration.pose_solver.implementation}.")
+
+    extrinsic_calibrator_type: type[ExtrinsicCalibrator]
+    if configuration.extrinsic_calibrator.implementation == "charuco_opencv":
+        from src.implementations.extrinsic_charuco_opencv import CharucoOpenCVExtrinsicCalibrator
+        extrinsic_calibrator_type = CharucoOpenCVExtrinsicCalibrator
+    elif configuration.extrinsic_calibrator.implementation == "mock":
+        from src.implementations.extrinsic_mock import MockExtrinsicCalibrator
+        extrinsic_calibrator_type = MockExtrinsicCalibrator
+    else:
+        raise RuntimeError(f"Unsupported intrinsic implementation {configuration.camera.implementation}.")
+
     mixer = Mixer(
         configuration=configuration,
-        extrinsic_calibrator_type=CharucoOpenCVExtrinsicCalibrator)
+        pose_solver_type=pose_solver_type,
+        extrinsic_calibrator_type=extrinsic_calibrator_type)
     mixer_app = FastAPI()
 
     # CORS Middleware

@@ -1,14 +1,17 @@
 from .common_aruco_opencv import ArucoOpenCVCommon
 from src.common import \
     Annotation, \
+    CalibrationErrorReason, \
     ExtrinsicCalibration, \
-    ExtrinsicCalibrationDetectorResult, \
+    ExtrinsicDetectorCalibration, \
     ExtrinsicCalibrator, \
     FeatureRay, \
     IntrinsicParameters, \
     Landmark, \
     MathUtils, \
     Matrix4x4, \
+    MCTCalibrationError, \
+    StatusMessageSource, \
     Target
 import cv2
 import cv2.aruco
@@ -123,11 +126,17 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
     Configuration: type[ExtrinsicCalibrator.Configuration] = _Configuration
     configuration: _Configuration
 
-    def __init__(self, configuration: Configuration | dict):
+    def __init__(
+        self,
+        configuration: Configuration | dict,
+        status_message_source: StatusMessageSource
+    ):
         if isinstance(configuration, dict):
             configuration = _Configuration(**configuration)
         self.configuration = configuration
-        super().__init__(configuration)
+        super().__init__(
+            configuration=configuration,
+            status_message_source=status_message_source)
 
     @staticmethod
     def _annotate_image(
@@ -208,6 +217,11 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                     detector: _DetectorData = data.get_detector_container(detector_label=image_data.detector_label)
                     detector.initial_to_reference = initial_to_reference
                     detector.refined_to_reference = initial_to_reference
+                else:
+                    message: str = \
+                        f"The reference target was not visible in the first image available " + \
+                        f"for detector {metadata.detector_label}."
+                    raise MCTCalibrationError(public_message=message, reason=CalibrationErrorReason.COMPUTATION_FAILURE)
 
         for i in range(0, self.configuration.termination_iteration_count):
             # Update each ray based on the current pose
@@ -290,9 +304,9 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
                         "This is not expected to occur and is not presently handled. "
                         "If you are seeing this, then please report that you are seeing this message.")
                 refined_to_reference: Matrix4x4 = reference_to_refined.inverse()
-                translation_change: float = numpy.linalg.norm(
+                translation_change: float = float(numpy.linalg.norm(
                     numpy.asarray(refined_to_reference.get_translation()) -
-                    numpy.asarray(detector_data.refined_to_reference.get_translation()))
+                    numpy.asarray(detector_data.refined_to_reference.get_translation())))
                 old_to_refined: numpy.ndarray = numpy.matmul(
                     reference_to_refined.as_numpy_array(),
                     detector_data.refined_to_reference.as_numpy_array())
@@ -309,7 +323,7 @@ class CharucoOpenCVExtrinsicCalibrator(ExtrinsicCalibrator):
         extrinsic_calibration: ExtrinsicCalibration = ExtrinsicCalibration(
             timestamp_utc=datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
             calibrated_values=[
-                ExtrinsicCalibrationDetectorResult(
+                ExtrinsicDetectorCalibration(
                     detector_label=detector_data.detector_label,
                     detector_to_reference=detector_data.refined_to_reference)
                 for detector_data in data.detectors],

@@ -93,7 +93,7 @@ class Detector(MCTComponent):
 
     def __init__(
         self,
-        detector_configuration: Configuration,
+        configuration: Configuration,
         camera_type: type[Camera],
         annotator_type: type[Annotator],
         intrinsic_calibrator_type: type[IntrinsicCalibrator]
@@ -102,20 +102,15 @@ class Detector(MCTComponent):
             status_source_label="detector",
             send_status_messages_to_logger=True)
         
-        self._configuration = detector_configuration
-        # noinspection PyArgumentList
+        self._configuration = configuration
         self._calibrator = intrinsic_calibrator_type(
-            configuration=intrinsic_calibrator_type.Configuration(
-                **detector_configuration.intrinsic_calibrator.configuration))
-        # noinspection PyArgumentList
+            configuration=intrinsic_calibrator_type.Configuration(**configuration.intrinsic_calibrator.configuration),
+            status_message_source=self._status_message_source)
         self._camera = camera_type(
-            configuration=camera_type.Configuration(
-                **detector_configuration.camera.configuration),
+            configuration=camera_type.Configuration(**configuration.camera.configuration),
             status_message_source=self.get_status_message_source())
-        # noinspection PyArgumentList
         self._annotator = annotator_type(
-            configuration=annotator_type.Configuration(
-                **detector_configuration.annotator.configuration),
+            configuration=annotator_type.Configuration(**configuration.annotator.configuration),
             status_message_source=self.get_status_message_source())
         self._frame_count = 0
 

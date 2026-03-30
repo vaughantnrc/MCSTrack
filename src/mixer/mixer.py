@@ -22,6 +22,7 @@ from .api import \
     PoseSolverPosesGetRequest, \
     PoseSolverPosesGetResponse, \
     PoseSolverTargetAddRequest, \
+    PoseSolverTargetsClearRequest, \
     PoseSolverTargetsSetRequest, \
     MixerQueryRequest, \
     MixerIntrinsicUpdateRequest, \
@@ -63,6 +64,7 @@ class Mixer(MCTComponent):
 
     class Configuration(BaseModel):
         mixer_label: str = Field()
+        pose_solver: _ConfigurationSection = Field()
         extrinsic_calibrator: _ConfigurationSection = Field()
 
     class Status(StrEnum):
@@ -79,6 +81,7 @@ class Mixer(MCTComponent):
     def __init__(
         self,
         configuration: Configuration,
+        pose_solver_type: type[PoseSolver],
         extrinsic_calibrator_type: type[ExtrinsicCalibrator]
     ):
         super().__init__(
@@ -86,10 +89,12 @@ class Mixer(MCTComponent):
             send_status_messages_to_logger=True)
 
         self._configuration = configuration
-        self._pose_solver = PoseSolver()
+        self._pose_solver = pose_solver_type(
+            configuration=pose_solver_type.Configuration(**configuration.pose_solver.configuration),
+            status_message_source=self._status_message_source)
         self._extrinsic_calibrator = extrinsic_calibrator_type(
-            configuration=extrinsic_calibrator_type.Configuration(
-                **self._configuration.extrinsic_calibrator.configuration))
+            configuration=extrinsic_calibrator_type.Configuration(**configuration.extrinsic_calibrator.configuration),
+            status_message_source=self._status_message_source)
 
         self._status = Mixer.Status.STOPPED
 
@@ -306,6 +311,13 @@ class Mixer(MCTComponent):
             return ErrorResponse(message=e.message)
         return EmptyResponse()
 
+    def pose_solver_targets_clear(self, **_kwargs) -> EmptyResponse | ErrorResponse:
+        try:
+            self._pose_solver.clear_targets()
+        except PoseSolverException as e:
+            return ErrorResponse(message=e.message)
+        return EmptyResponse()
+
     def pose_solver_poses_get(self, **_kwargs) -> PoseSolverPosesGetResponse | ErrorResponse:
         detector_poses: list[Pose]
         target_poses: list[Pose]
@@ -367,6 +379,7 @@ class Mixer(MCTComponent):
             PoseSolverExtrinsicSetRequest: self.pose_solver_extrinsic_set,
             PoseSolverPosesGetRequest: self.pose_solver_poses_get,
             PoseSolverTargetAddRequest: self.pose_solver_target_add,
+            PoseSolverTargetsClearRequest: self.pose_solver_targets_clear,
             PoseSolverTargetsSetRequest: self.pose_solver_set_targets})
         return return_value
 

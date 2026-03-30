@@ -259,10 +259,10 @@ class PoseSolverTargetAddResponse(MCTResponse):
     target_id: str = Field()
 
 
-class PoseSolverTargetClear(MCTRequest):
+class PoseSolverTargetsClearRequest(MCTRequest):
     @staticmethod
     def type_identifier() -> str:
-        return "mixer_pose_solver_target_clear"
+        return "pose_solver_target_clear"
 
     # noinspection PyTypeHints
     parsable_type: str = Field(default=type_identifier())
@@ -271,7 +271,7 @@ class PoseSolverTargetClear(MCTRequest):
 class PoseSolverTargetsSetRequest(MCTRequest):
     @staticmethod
     def type_identifier() -> str:
-        return "mixer_pose_solver_set_targets"
+        return "pose_solver_set_targets"
 
     # noinspection PyTypeHints
     parsable_type: str = Field(default=type_identifier())

@@ -10,7 +10,6 @@ from enum import StrEnum
 from ipaddress import IPv4Address
 import json
 from typing import Final
-import uuid
 from websockets import ConnectionClosed
 from websockets.sync.client import connect, ClientConnection
 
@@ -152,11 +151,13 @@ class Connection:
     def __init__(
         self,
         component_address: ComponentAddress,
-        supported_response_types: dict[str, type[MCTResponse]],
+        supported_response_types: list[type[MCTResponse]],
         status_message_source: StatusMessageSource
     ):
         self._component_address = component_address
-        self._supported_response_types = supported_response_types
+        self._supported_response_types = {
+            response_type.type_identifier(): response_type
+            for response_type in supported_response_types}
 
         self._status_message_source = status_message_source
 
@@ -230,7 +231,6 @@ class Connection:
             self._waiting_for_response = False
 
         if self._waiting_for_response:
-            request_id: uuid.UUID = self._request_series_queue[0].request_id
             try:
                 response_series_as_str: str = self._socket.recv(timeout=0.0)
                 response_series_as_dict: dict = json.loads(response_series_as_str)
@@ -270,7 +270,7 @@ class Connection:
             self._state = Connection.State.NORMAL_DISCONNECTING
         elif self._state == Connection.State.FAILURE:
             self._state = Connection.State.INACTIVE
-        else:
+        elif self._state != Connection.State.INACTIVE:
             raise RuntimeError(
                 f"Cannot shut down connection {self._component_address.label}. "
                 "It is not in a (stable) started up state. "

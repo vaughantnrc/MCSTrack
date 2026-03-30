@@ -156,7 +156,7 @@ class ControllerFrame(wx.Frame):
 def main():
     logging.basicConfig(level=logging.INFO)
     controller = MCTController(
-        serial_identifier="controller",
+        controller_name="controller",
         send_status_messages_to_logger=True)
     app: wx.App = wx.App()
     frame: ControllerFrame = ControllerFrame(

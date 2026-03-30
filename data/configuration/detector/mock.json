@@ -1,15 +1,15 @@
 {
-  "detector_label": "detector_01",
+  "detector_label": "mock_detector",
   "camera": {
-    "implementation": "picamera2",
+    "implementation": "mock",
     "configuration": {}
   },
   "annotator": {
-    "implementation": "aruco_opencv",
+    "implementation": "mock",
     "configuration": {}
   },
   "intrinsic_calibrator": {
-    "implementation": "charuco_opencv",
+    "implementation": "mock",
     "configuration": {
       "data_path": "./calibration/intrinsic/"
     }

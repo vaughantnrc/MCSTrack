@@ -547,7 +547,7 @@ class MathUtils:
                 annotation = annotations_dict[landmark.feature_label]
                 target_points.append([landmark.x, landmark.y, landmark.z])
                 detector_points.append([annotation.x_px, annotation.y_px])
-        if len(detector_points) <= 4:
+        if len(detector_points) < 4:
             return False, None
         rotation_vector: numpy.ndarray
         translation_vector: numpy.ndarray

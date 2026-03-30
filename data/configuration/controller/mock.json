@@ -1,0 +1,31 @@
+{
+  "startup_mode": "detecting_and_solving",
+  "detectors": [
+    {
+      "label": "det",
+      "ip_address": "127.0.0.1",
+      "port": 8001,
+      "camera_parameters": [],
+      "marker_parameters": []
+    }
+  ],
+  "mixers": [
+    {
+      "label": "mix",
+      "ip_address": "127.0.0.1",
+      "port": 8000,
+      "detectors": [
+        {
+          "detector_label": "det",
+          "pose_mode": "static_calibrated"
+        }
+      ],
+      "targets": [
+        {
+          "label": "reference",
+          "landmarks": []
+        }
+      ]
+    }
+  ]
+}

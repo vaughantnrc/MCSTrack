@@ -1,5 +1,6 @@
 from .structures import PoseLocation, Marker, TargetBoard
-from src.common import Annotation, Matrix4x4, Pose, PoseSolver
+from src.common import Annotation, Matrix4x4, Pose
+from src.implementations.pose_solver_standard import StandardPoseSolver
 from src.implementations.common_aruco_opencv import ArucoOpenCVCommon
 from collections import defaultdict
 import datetime
@@ -39,7 +40,7 @@ class BoardBuilder:
         self.marker_size = marker_size  # in mm
         self._index_to_marker_uuid = dict()
         self._index_to_marker_id = dict()
-        self.pose_solver = PoseSolver()
+        self.pose_solver = StandardPoseSolver()
 
         # matrix init
         self._matrix_id_index = 0

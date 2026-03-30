@@ -1,7 +1,4 @@
-from .connection import \
-    Connection, \
-    DetectorConnection, \
-    PoseSolverConnection
+from .connection import Connection
 from .configuration import \
     MCTComponentConfig, \
     MCTConfiguration

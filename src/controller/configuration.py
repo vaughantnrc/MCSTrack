@@ -1,15 +1,10 @@
 from src.common import \
+    DetectorPoseMode, \
     KeyValueSimpleAny, \
     Matrix4x4, \
     SinkConfiguration, \
     Target
-from enum import StrEnum
 from pydantic import BaseModel, Field, SerializeAsAny
-
-
-class StartupMode(StrEnum):
-    DETECTING_ONLY = "detecting_only"
-    DETECTING_AND_SOLVING = "detecting_and_solving"
 
 
 class MCTComponentConfig(BaseModel):
@@ -20,16 +15,25 @@ class MCTComponentConfig(BaseModel):
 
 class DetectorComponentConfig(MCTComponentConfig):
     camera_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
-    marker_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
-    fixed_transform_to_reference: Matrix4x4 | None = Field(default=None)
+    annotator_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
 
 
-class PoseSolverConfig(MCTComponentConfig):
+class MixerDetectorConfig(BaseModel):
+    """
+    The per-detector configuration that is stored for and will be applied for the Mixer.
+    """
+    detector_label: str = Field()
+    pose_mode: DetectorPoseMode = Field(default_factory=DetectorPoseMode.default_mode)
+    detector_to_reference: Matrix4x4 | None = Field(default=None)
+
+
+class MixerConfig(MCTComponentConfig):
     solver_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
+    detectors: list[MixerDetectorConfig] | None = Field(default=None)
     targets: list[Target] | None = Field(default=None)
 
 
 class MCTConfiguration(BaseModel):
-    sinks: list[SinkConfiguration] = Field(default_factory=list)
     detectors: list[DetectorComponentConfig] = Field(default_factory=list)
-    mixers: list[PoseSolverConfig] = Field(default_factory=list)
+    mixers: list[MixerConfig] = Field(default_factory=list)
+    sinks: list[SinkConfiguration] = Field(default_factory=list)

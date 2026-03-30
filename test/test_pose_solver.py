@@ -1,9 +1,10 @@
+from src.implementations.pose_solver_standard import StandardPoseSolver
 from src.common import \
     Annotation, \
     IntrinsicParameters, \
     Matrix4x4, \
     Pose, \
-    PoseSolver, \
+    StatusMessageSource, \
     Target
 from src.implementations.common_aruco_opencv import ArucoOpenCVCommon
 import datetime
@@ -97,7 +98,9 @@ class TestPoseSolver(unittest.TestCase):
     def test_single_camera_viewing_target_marker(self):
         # Note that single-marker tests are particularly susceptible to reference pose ambiguity
         now_utc = datetime.datetime.now(datetime.timezone.utc)
-        pose_solver: PoseSolver = PoseSolver()
+        pose_solver: StandardPoseSolver = StandardPoseSolver(
+            configuration=StandardPoseSolver.Configuration(),
+            status_message_source=StatusMessageSource(source_label="test"))
         # TODO: The following line shall be replaced upon implementation of an appropriate mechanism
         pose_solver._configuration.minimum_detector_count = 1
         pose_solver.set_intrinsic_parameters(
@@ -153,7 +156,9 @@ class TestPoseSolver(unittest.TestCase):
     def test_four_cameras_viewing_target_marker(self):
         # Note that single-marker tests are particularly susceptible to reference pose ambiguity
         now_utc = datetime.datetime.now(datetime.timezone.utc)
-        pose_solver: PoseSolver = PoseSolver()
+        pose_solver: StandardPoseSolver = StandardPoseSolver(
+            configuration=StandardPoseSolver.Configuration(),
+            status_message_source=StatusMessageSource(source_label="test"))
         pose_solver.set_intrinsic_parameters(
             detector_label=DETECTOR_RED_NAME,
             intrinsic_parameters=DETECTOR_RED_INTRINSICS)

@@ -8,7 +8,8 @@ from .math import \
 from .serialization import \
     IOUtils
 from .status import \
-    MCTError
+    MCTError, \
+    StatusMessageSource
 import abc
 import datetime
 from enum import StrEnum
@@ -24,11 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 class CalibrationErrorReason(StrEnum):
-    INITIALIZATION: Final[str] = "initialization"
-    INVALID_INPUT: Final[str] = "invalid_input"
-    INVALID_STATE: Final[str] = "invalid_state"
-    DATA_NOT_FOUND: Final[str] = "data_not_found"
-    COMPUTATION_FAILURE: Final[str] = "computation_failure"
+    INITIALIZATION = "initialization"
+    INVALID_STATE = "invalid_state"
+    DATA_NOT_FOUND = "data_not_found"
+    COMPUTATION_FAILURE = "computation_failure"
 
 
 _PUBLIC_MESSAGE_KEY: Final[str] = "public_message"
@@ -52,7 +52,7 @@ class MCTCalibrationError(MCTError):
         self.public_message = public_message
         self.private_message = private_message
         if self.private_message is None and self.public_message is not None:
-            self.private_message = self.private_message
+            self.private_message = self.public_message
 
 
 _RESULT_FORMAT: Final[str] = ".json"
@@ -114,6 +114,7 @@ class _DataLedger(BaseModel):
 
 class AbstractCalibrator(abc.ABC):
 
+    _status_message_source: StatusMessageSource
     _data_path: str
 
     _DATA_LEDGER_FILENAME: Final[str] = "data_ledger.json"
@@ -122,8 +123,10 @@ class AbstractCalibrator(abc.ABC):
 
     def __init__(
         self,
-        configuration: _Configuration
+        configuration: _Configuration,
+        status_message_source: StatusMessageSource
     ):
+        self._status_message_source = status_message_source
         self._data_path = configuration.data_path
         if not self._exists_on_filesystem(path=self._data_path, pathtype="path", create_path=True):
             raise MCTCalibrationError(
@@ -476,9 +479,14 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
     def __init__(
         self,
-        configuration: Configuration,
+        configuration: Configuration | dict,
+        status_message_source: StatusMessageSource
     ):
-        super().__init__(configuration=configuration)
+        if isinstance(configuration, dict):
+            configuration = IntrinsicCalibrator.Configuration(**configuration)
+        super().__init__(
+            configuration=configuration,
+            status_message_source=status_message_source)
 
     # noinspection DuplicatedCode
     def add_image(
@@ -651,14 +659,14 @@ class IntrinsicCalibrator(AbstractCalibrator, abc.ABC):
 # =====================================================================================================================
 
 
-class ExtrinsicCalibrationDetectorResult(BaseModel):
+class ExtrinsicDetectorCalibration(BaseModel):
     detector_label: str = Field()
     detector_to_reference: Matrix4x4 = Field()
 
 
 class ExtrinsicCalibration(BaseModel):
     timestamp_utc: str = Field()
-    calibrated_values: list[ExtrinsicCalibrationDetectorResult] = Field()
+    calibrated_values: list[ExtrinsicDetectorCalibration] = Field()
     supplemental_data: dict = Field()
 
 
@@ -673,12 +681,15 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
 
     def __init__(
         self,
-        configuration: Configuration | dict
+        configuration: Configuration | dict,
+        status_message_source: StatusMessageSource
     ):
         if isinstance(configuration, dict):
             configuration = ExtrinsicCalibrator.Configuration(**configuration)
         self.detector_intrinsics_by_label = dict()
-        super().__init__(configuration=configuration)
+        super().__init__(
+            configuration=configuration,
+            status_message_source=status_message_source)
 
     # noinspection DuplicatedCode
     def add_image(
@@ -775,7 +786,7 @@ class ExtrinsicCalibrator(AbstractCalibrator, abc.ABC):
     def _calculate_implementation(
         self,
         image_metadata_list: list[ImageMetadata]
-    ):
+    ) -> tuple[IntrinsicCalibration, list[IntrinsicCalibrator.ImageMetadata]]:
         pass
 
     def get_result(

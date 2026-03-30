@@ -1,6 +1,6 @@
 from src.common import \
     ExtrinsicCalibration, \
-    ExtrinsicCalibrationDetectorResult, \
+    ExtrinsicDetectorCalibration, \
     ImageResolution, \
     ImageUtils, \
     IntrinsicParameters, \
@@ -38,7 +38,7 @@ class TestPoseSolver(unittest.TestCase):
     def test(self):
         # Organize ourselves with respect to the input data
         image_location: str = os.path.join("images", "simulated", "ideal")
-        image_contents: list[str] = os.listdir(image_location)
+        image_contents: list[str] = sorted(os.listdir(image_location))
         image_filepaths_by_camera_frame: dict[str, dict[str, str]] = dict()  # Access as: x[CameraID][FrameID]
         image_filepaths_by_frame_camera: dict[str, dict[str, str]] = dict()  # Access as: x[FrameID][CameraID]
         timestamps_iso8601_by_frame: dict[str, str] = dict()  # Access as: x[FrameID]
@@ -118,7 +118,7 @@ class TestPoseSolver(unittest.TestCase):
             "09": ([500., -500., 707.107], [ 0.353553, 0.146447, 0.353553, 0.853553]),
             "10": ([707.107, 0., 707.107], [ 0.270598, 0.270598, 0.653282, 0.653281])}
 
-        calibrated_value: ExtrinsicCalibrationDetectorResult
+        calibrated_value: ExtrinsicDetectorCalibration
         for calibrated_value in extrinsic_calibration.calibrated_values:
             expected_translation: list[float]
             expected_rotation_quaternion: list[float]

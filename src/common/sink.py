@@ -6,11 +6,12 @@ import datetime
 import io
 import os
 from pydantic import BaseModel, Field
+from typing import Any
 
 
 class SinkConfiguration(BaseModel):
     implementation: str = Field()
-    configuration: dict[str, ...] = Field()
+    configuration: dict[str, Any] = Field()
 
 
 class SinkException(MCTError):

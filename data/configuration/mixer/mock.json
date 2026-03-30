@@ -1,11 +1,11 @@
 {
-  "mixer_label": "aruco_mixer",
+  "mixer_label": "mock_mixer",
   "pose_solver": {
-    "implementation": "standard",
+    "implementation": "mock",
     "configuration": {}
   },
   "extrinsic_calibrator": {
-    "implementation": "charuco_opencv",
+    "implementation": "mock",
     "configuration": {
       "data_path": "./calibration/extrinsic/"
     }

@@ -17,7 +17,7 @@ from .api import \
 from .calibration import \
     CalibrationErrorReason, \
     ExtrinsicCalibration, \
-    ExtrinsicCalibrationDetectorResult, \
+    ExtrinsicDetectorCalibration, \
     ExtrinsicCalibrator, \
     IntrinsicCalibration, \
     IntrinsicCalibrator, \
@@ -45,7 +45,9 @@ from .mct_component import \
     MCTComponent, \
     MixerFrame
 from .pose_solver import \
+    DetectorPoseMode, \
     PoseSolver, \
+    PoseSolverDetectorRecord, \
     PoseSolverException
 from .serialization import \
     IOUtils, \

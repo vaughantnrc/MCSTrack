@@ -12,7 +12,7 @@ class MCTRequest(BaseModel, MCTDeserializable, abc.ABC):
 
 class MCTRequestSeries(BaseModel):
     series: list[SerializeAsAny[MCTRequest]] = Field()
-    request_id: str = Field(default_factory=uuid.uuid4)
+    request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 
 class MCTResponse(BaseModel, MCTDeserializable, abc.ABC):
