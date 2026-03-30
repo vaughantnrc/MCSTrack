@@ -350,6 +350,12 @@ class Connection:
 
     def _update_in_failure_disconnecting_state(self) -> None:
         if self._socket is not None:
+            if self._waiting_for_response:  # TCP will not close properly unless all pending data is transmitted
+                try:
+                    self._socket.recv(timeout=0.0)
+                except TimeoutError:
+                    return  # Try again shortly
+                self._waiting_for_response = False
             self._socket.close()
             self._socket = None
         self._socket = None
@@ -358,7 +364,10 @@ class Connection:
     def _update_in_normal_disconnecting_state(self) -> None:
         if self._socket is not None:
             if self._waiting_for_response:  # TCP will not close properly unless all pending data is transmitted
-                self._socket.recv()
+                try:
+                    self._socket.recv(timeout=0.0)
+                except TimeoutError:
+                    return  # Try again shortly
                 self._waiting_for_response = False
             self._socket.close()
             self._socket = None

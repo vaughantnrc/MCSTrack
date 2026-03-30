@@ -32,6 +32,7 @@ from .api import \
     MixerStartRequest, \
     MixerStopRequest
 from src.common import \
+    CalibrationErrorReason, \
     EmptyResponse, \
     ErrorResponse, \
     ExtrinsicCalibration, \
@@ -199,8 +200,11 @@ class Mixer(MCTComponent):
         try:
             calibration = self._extrinsic_calibrator.get_result_active()
         except MCTCalibrationError as e:
-            logger.error(e.private_message)
-            return ErrorResponse(message=e.public_message)
+            if e.reason != CalibrationErrorReason.DATA_NOT_FOUND:
+                logger.error(e.private_message)
+                return ErrorResponse(message=e.public_message)
+            else:
+                return ExtrinsicCalibrationResultGetActiveResponse(extrinsic_calibration=None)
         return ExtrinsicCalibrationResultGetActiveResponse(extrinsic_calibration=calibration)
 
     def extrinsic_calibrator_result_get(

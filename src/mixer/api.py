@@ -150,7 +150,7 @@ class ExtrinsicCalibrationResultGetActiveResponse(MCTResponse):
 
     parsable_type: str = Field(default=type_identifier())
 
-    extrinsic_calibration: ExtrinsicCalibration = Field()
+    extrinsic_calibration: ExtrinsicCalibration | None = Field()
 
 
 class ExtrinsicCalibrationResultMetadataListRequest(MCTRequest):

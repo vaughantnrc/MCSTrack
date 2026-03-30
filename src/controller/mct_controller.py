@@ -7,9 +7,30 @@ from .routing import \
     CallbackRouter, \
     ConnectionRouter
 from .sequencing import \
+    AnyCalibrationSequencer, \
+    DetectorCalibrationIntrinsicCalculateSequencer, \
+    DetectorCalibrationIntrinsicDeleteStagedSequencer, \
+    DetectorCalibrationIntrinsicImageAddSequencer, \
+    DetectorCalibrationIntrinsicImageGetSequencer, \
+    DetectorCalibrationIntrinsicImageMetadataListSequencer, \
+    DetectorCalibrationIntrinsicImageMetadataUpdateSequencer, \
+    DetectorCalibrationIntrinsicResolutionListSequencer, \
+    DetectorCalibrationIntrinsicResultGetSequencer, \
+    DetectorCalibrationIntrinsicResultGetActiveSequencer, \
+    DetectorCalibrationIntrinsicResultMetadataListSequencer, \
+    DetectorCalibrationIntrinsicResultMetadataUpdateSequencer, \
     DetectorFrameGetSequencer, \
     DetectorShutdownSequencer, \
     DetectorStartupSequencer, \
+    MixerCalibrationExtrinsicCalculateSequencer, \
+    MixerCalibrationExtrinsicDeleteStagedSequencer, \
+    MixerCalibrationExtrinsicImageGetSequencer, \
+    MixerCalibrationExtrinsicImageMetadataListSequencer, \
+    MixerCalibrationExtrinsicImageMetadataUpdateSequencer, \
+    MixerCalibrationExtrinsicResultGetActiveSequencer, \
+    MixerCalibrationExtrinsicResultGetSequencer, \
+    MixerCalibrationExtrinsicResultMetadataListSequencer, \
+    MixerCalibrationExtrinsicResultMetadataUpdateSequencer, \
     MixerFrameGetSequencer, \
     MixerShutdownSequencer, \
     MixerStartupSequencer, \
@@ -20,45 +41,27 @@ from src.common import \
     DetectorFrame, \
     DetectorPoseMode, \
     ExtrinsicCalibration, \
+    ExtrinsicCalibrator, \
     ImageResolution, \
     IntrinsicCalibration, \
+    IntrinsicCalibrator, \
     IntrinsicParameters, \
     KeyValueMetaAny, \
-    KeyValueSimpleAny, \
-    Matrix4x4, \
     MCTRequest, \
     MCTRequestSeries, \
     MCTResponseSeries, \
     MixerFrame, \
     SeverityLabel, \
-    StatusMessageSource, \
-    Target
-from src.detector import \
-    IntrinsicCalibrationCalculateResponse, \
-    IntrinsicCalibrationImageAddResponse, \
-    IntrinsicCalibrationImageGetResponse, \
-    IntrinsicCalibrationImageMetadataListResponse, \
-    IntrinsicCalibrationResolutionListResponse, \
-    IntrinsicCalibrationResultGetResponse, \
-    IntrinsicCalibrationResultGetActiveResponse, \
-    IntrinsicCalibrationResultMetadataListResponse, \
-    DETECTOR_RESPONSE_TYPES
-from src.mixer import \
-    ExtrinsicCalibrationCalculateResponse, \
-    ExtrinsicCalibrationImageAddResponse, \
-    ExtrinsicCalibrationImageGetResponse, \
-    ExtrinsicCalibrationImageMetadataListResponse, \
-    ExtrinsicCalibrationResultGetResponse, \
-    ExtrinsicCalibrationResultGetActiveResponse, \
-    ExtrinsicCalibrationResultMetadataListResponse, \
-    MIXER_RESPONSE_TYPES
+    StatusMessageSource
+from src.detector import DETECTOR_RESPONSE_TYPES
+from src.mixer import MIXER_RESPONSE_TYPES
 from enum import StrEnum
 import hjson
 from ipaddress import IPv4Address
 import logging
 import os
 from pydantic import ValidationError
-from typing import Final
+from typing import Callable, Final
 import uuid
 
 
@@ -120,11 +123,10 @@ class MCTController:
         detector_startup_sequencer: DetectorStartupSequencer | None
         detector_frame_get_sequencer: DetectorFrameGetSequencer | None
         detector_shutdown_sequencer: DetectorShutdownSequencer | None
-
         mixer_startup_sequencer: MixerStartupSequencer | None
         mixer_frame_get_sequencer: MixerFrameGetSequencer | None
         mixer_shutdown_sequencer: MixerShutdownSequencer | None
-
+        general_sequencer: AnyCalibrationSequencer | None
         def __init__(self):
             self.reset()
         def reset(self):
@@ -135,6 +137,7 @@ class MCTController:
             self.mixer_startup_sequencer = None
             self.mixer_frame_get_sequencer = None
             self.mixer_shutdown_sequencer = None
+            self.general_sequencer = None
 
     _status_message_source: StatusMessageSource
     _sink_type_registry: dict[str, type[BaseSink]]
@@ -484,23 +487,31 @@ class MCTController:
                 self._state = MCTController.State.RUNNING
 
         if self._state == MCTController.State.STOPPING:
-            if self._sequencers.detector_shutdown_sequencer is None:
-                self._sequencers.detector_shutdown_sequencer = DetectorShutdownSequencer(**self._sequencer_init_args())
-                self._sequencers.detector_shutdown_sequencer.begin(
-                    component_labels=list(self._detector_live_data.keys()))
-            if len(self._configuration.mixers) > 0 and self._sequencers.mixer_shutdown_sequencer is None:
-                self._sequencers.mixer_shutdown_sequencer = MixerShutdownSequencer(**self._sequencer_init_args())
-                self._sequencers.mixer_shutdown_sequencer.begin(
-                    component_labels=list(self._mixer_live_data.keys()))
-            if (
-                self._sequencers.detector_shutdown_sequencer is not None and
-                self._sequencers.detector_shutdown_sequencer.is_finished() and
-                len(self._configuration.mixers) <= 0 or (
-                    self._sequencers.mixer_shutdown_sequencer is not None and
-                    self._sequencers.mixer_shutdown_sequencer.is_finished())
-            ):
-                self._connection_router.shut_down()
-                self._state = MCTController.State.DISCONNECTING
+            if not self.is_general_sequencer_busy():
+                if (
+                    self._sequencers.detector_shutdown_sequencer is None
+                ):
+                    self._sequencers.detector_shutdown_sequencer = \
+                        DetectorShutdownSequencer(**self._sequencer_init_args())
+                    self._sequencers.detector_shutdown_sequencer.begin(
+                        component_labels=list(self._detector_live_data.keys()))
+                if (
+                    len(self._configuration.mixers) > 0 and
+                    self._sequencers.mixer_shutdown_sequencer is None
+                ):
+                    self._sequencers.mixer_shutdown_sequencer = \
+                        MixerShutdownSequencer(**self._sequencer_init_args())
+                    self._sequencers.mixer_shutdown_sequencer.begin(
+                        component_labels=list(self._mixer_live_data.keys()))
+                if (
+                    self._sequencers.detector_shutdown_sequencer is not None and
+                    self._sequencers.detector_shutdown_sequencer.is_finished() and
+                    len(self._configuration.mixers) <= 0 or (
+                        self._sequencers.mixer_shutdown_sequencer is not None and
+                        self._sequencers.mixer_shutdown_sequencer.is_finished())
+                ):
+                    self._connection_router.shut_down()
+                    self._state = MCTController.State.DISCONNECTING
 
         response_series_lists: list[list[MCTResponseSeries]] = self._connection_router.dequeue_response_series_lists()
         for response_series_list in response_series_lists:
@@ -583,6 +594,11 @@ class MCTController:
     def get_remote_labels_mixer(self) -> list[str]:
         return list(self._mixer_live_data.keys())
 
+    def is_general_sequencer_busy(self) -> bool:
+        if self._sequencers.general_sequencer is None:
+            return False
+        return not self._sequencers.general_sequencer.is_finished()
+
     def send_custom_request(
         self,
         connection_label: str,
@@ -590,6 +606,7 @@ class MCTController:
         callback: CallbackRouter.CallbackFunction = None,
         passthrough_arguments: dict[str, ...] | None = None
     ) -> uuid.UUID:
+        # TODO: We probably want to deprecate this one
         request_series = MCTRequestSeries(series=requests)
         request_id: uuid.UUID = uuid.UUID(request_series.request_id)
         self._connection_router.enqueue_request_series(
@@ -604,24 +621,559 @@ class MCTController:
                 passthrough_arguments=passthrough_arguments)
         return request_id
 
-    # def handle_response_calibration_result_get_active(
-    #     self,
-    #     response: IntrinsicCalibrationResultGetActiveResponse,
-    #     component_label: str
-    # ) -> None:
-    #     detector_cache: DetectorCache = self._detector_caches[component_label]
-    #     if response.intrinsic_calibration is None:
-    #         if detector_cache.current_resolution is None:
-    #             self.status_message_source.enqueue_status_message(
-    #                 severity=SeverityLabel.ERROR,
-    #                 message=f"No calibration was found for detector {component_label}, and failed to get resolution.")
-    #             return
-    #         self.status_message_source.enqueue_status_message(
-    #             severity=SeverityLabel.WARNING,
-    #             message=f"No calibration was found for detector {component_label}. "
-    #                     f"Zero parameters for active resolution {detector_cache.current_resolution} will be used.")
-    #         detector_cache.current_intrinsic_parameters = IntrinsicParameters.generate_zero_parameters(
-    #             resolution_x_px=detector_cache.current_resolution.x_px,
-    #             resolution_y_px=detector_cache.current_resolution.y_px)
-    #         return
-    #     detector_cache.current_intrinsic_parameters = response.intrinsic_calibration.calibrated_values
+    # =================================================================================================================
+    #                                                 CALIBRATION
+    # =================================================================================================================
+    # This section of code is intended to provide a "nice" interface
+    # to some of the more-involved calibration operations,
+    # which can involve a lot of back-and-forth communication.
+    # Yes, it's long. Yes, it's repetitive. Yes, it's ugly.
+    # But this will probably help IDEs with static analysis
+    # and greatly simplify the interface for the end-user
+    # compared to a more "clever" or generic solution.
+
+    def _calibration_can_proceed_plus_report_errors(self) -> bool:
+        if self._state != MCTController.State.RUNNING:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=f"Cannot send calibration request if the controller is not running.")
+            return False
+        if self.is_general_sequencer_busy():
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=f"Cannot send calibration request while another task is already active.")
+            return False
+        return True
+
+    def calibrate_intrinsic_calculate(
+        self,
+        detector_label: str,
+        image_resolution: ImageResolution,
+        callback: Callable[[str, str, IntrinsicCalibration], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param image_resolution: Resolution for which to calibrate (different resolutions do not mix)
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+            1 - result_identifier: str
+            2 - intrinsic_calibration: IntrinsicCalibration
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicCalculateSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback,
+            request_args={"image_resolution": image_resolution})
+        return True
+
+    def calibrate_intrinsic_delete_staged(
+        self,
+        detector_label: str,
+        callback: Callable[[str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicDeleteStagedSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback)
+        return True
+
+    def calibrate_intrinsic_image_add(
+        self,
+        detector_label: str,
+        callback: Callable[[str, str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        Note that no image is sent from the controller; the Detector will use its own most recent image.
+        :param detector_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+            1 - image_identifier: str
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicImageAddSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback)
+        return True
+
+    def calibrate_intrinsic_image_get(
+        self,
+        detector_label: str,
+        image_identifier: str,
+        callback: Callable[[str, str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param image_identifier: Retrieved either by a list operation or after an add operation
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+            1 - image_base64: str
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicImageGetSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback,
+            request_args={"image_identifier": image_identifier})
+        return True
+
+    def calibrate_intrinsic_image_metadata_list(
+        self,
+        detector_label: str,
+        image_resolution: ImageResolution,
+        callback: Callable[[str, list[IntrinsicCalibrator.ImageMetadata]], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param image_resolution: Resolution for which to calibrate (different resolutions do not mix)
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+            1 - metadata_list: list[IntrinsicCalibrator.ImageMetadata]
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicImageMetadataListSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback,
+            request_args={"image_resolution": image_resolution})
+        return True
+
+    def calibrate_intrinsic_image_metadata_update(
+        self,
+        detector_label: str,
+        image_identifier: str,
+        image_state: IntrinsicCalibrator.ImageState,
+        image_label: str | None,
+        callback: Callable[[str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param image_identifier:
+        :param image_state:
+        :param image_label:
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicImageMetadataUpdateSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback,
+            request_args={
+                "image_identifier": image_identifier,
+                "image_state": str(image_state),
+                "image_label": image_label})
+        return True
+
+    def calibrate_intrinsic_resolution_list(
+        self,
+        detector_label: str,
+        callback: Callable[[str, list[ImageResolution]], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+            1 - resolutions: list[ImageResolution]
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicResolutionListSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback)
+        return True
+
+    def calibrate_intrinsic_result_get(
+        self,
+        detector_label: str,
+        result_identifier: str,
+        callback: Callable[[str, IntrinsicCalibration], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param result_identifier: Retrieved either by a list operation or after calibration
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+            1 - intrinsic_calibration: IntrinsicCalibration
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicResultGetSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback,
+            request_args={"result_identifier": result_identifier})
+        return True
+
+    def calibrate_intrinsic_result_get_active(
+        self,
+        detector_label: str,
+        callback: Callable[[str, IntrinsicCalibration | None], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+
+        This differs from the non "_active" version because it does not require a result_identifier.
+        Instead, this method relies on the Detector keeping track
+        of the most recently-"active" calibration for its current resolution.
+        If there is no "active" calibration (possibly because it has never been calibrated),
+        then the Detector will yield None.
+
+        :param detector_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+            1 - intrinsic_calibration: IntrinsicCalibration | None
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicResultGetActiveSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback)
+        return True
+
+    def calibrate_intrinsic_result_metadata_list(
+        self,
+        detector_label: str,
+        image_resolution: ImageResolution,
+        callback: Callable[[str, list[IntrinsicCalibrator.ResultMetadata]], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param image_resolution: Resolution for which to calibrate (different resolutions do not mix)
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+            1 - metadata_list: list[IntrinsicCalibrator.ResultMetadata]
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicResultMetadataListSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback,
+            request_args={"image_resolution": image_resolution})
+        return True
+
+    def calibrate_intrinsic_result_metadata_update(
+        self,
+        detector_label: str,
+        result_identifier: str,
+        result_state: IntrinsicCalibrator.ImageState,
+        result_label: str | None,
+        callback: Callable[[str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param detector_label: label to which this shall apply
+        :param result_identifier:
+        :param result_state:
+        :param result_label:
+        :param callback: Callback args:
+            0 - component_label: str (detector)
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            DetectorCalibrationIntrinsicResultMetadataUpdateSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[detector_label],
+            callback=callback,
+            request_args={
+                "result_identifier": result_identifier,
+                "result_state": str(result_state),
+                "result_label": result_label})
+        return True
+
+    def calibrate_extrinsic_calculate(
+        self,
+        mixer_label: str,
+        callback: Callable[[str, str, ExtrinsicCalibration], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param mixer_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+            1 - result_identifier: str
+            2 - extrinsic_calibration: ExtrinsicCalibration
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicCalculateSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback)
+        return True
+
+    def calibrate_extrinsic_delete_staged(
+        self,
+        mixer_label: str,
+        callback: Callable[[str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param mixer_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicDeleteStagedSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback)
+        return True
+
+    def calibrate_extrinsic_image_add(
+        self,
+        mixer_label: str,
+        callback: Callable[[str, str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+
+        The live detector image for EACH Detector will be sent to the indicated Mixer.
+
+        :param mixer_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+            1 - image_identifier: str
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        # TODO: This is more complex than can be captured with the general sequencer pattern used elsewhere
+        raise NotImplementedError()
+
+    def calibrate_extrinsic_image_get(
+        self,
+        mixer_label: str,
+        image_identifier: str,
+        callback: Callable[[str, str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param mixer_label: label to which this shall apply
+        :param image_identifier: Retrieved either by a list operation or after an add operation
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+            1 - image_base64: str
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicImageGetSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback,
+            request_args={"image_identifier": image_identifier})
+        return True
+
+    def calibrate_extrinsic_image_metadata_list(
+        self,
+        mixer_label: str,
+        callback: Callable[[str, list[ExtrinsicCalibrator.ImageMetadata]], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param mixer_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+            1 - metadata_list: list[ExtrinsicCalibrator.ImageMetadata]
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicImageMetadataListSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback)
+        return True
+
+    def calibrate_extrinsic_image_metadata_update(
+        self,
+        mixer_label: str,
+        image_identifier: str,
+        image_state: ExtrinsicCalibrator.ImageState,
+        image_label: str | None,
+        callback: Callable[[str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param mixer_label: label to which this shall apply
+        :param image_identifier:
+        :param image_state:
+        :param image_label:
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicImageMetadataUpdateSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback,
+            request_args={
+                "image_identifier": image_identifier,
+                "image_state": str(image_state),
+                "image_label": image_label})
+        return True
+
+    def calibrate_extrinsic_result_get(
+        self,
+        mixer_label: str,
+        result_identifier: str,
+        callback: Callable[[str, ExtrinsicCalibration], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param mixer_label: label to which this shall apply
+        :param result_identifier: Retrieved either by a list operation or after calibration
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+            1 - extrinsic_calibration: ExtrinsicCalibration
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicResultGetSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback,
+            request_args={"result_identifier": result_identifier})
+        return True
+
+    def calibrate_extrinsic_result_get_active(
+        self,
+        mixer_label: str,
+        callback: Callable[[str, ExtrinsicCalibration | None], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+
+        This differs from the non "_active" version because it does not require a result_identifier.
+        Instead, this method relies on the Mixer keeping track
+        of the most recently-"active" calibration for its Detectors.
+        If there is no "active" calibration (possibly because it has never been calibrated),
+        then the Mixer will return None.
+
+        :param mixer_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+            1 - extrinsic_calibration: ExtrinsicCalibration | None
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicResultGetActiveSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback)
+        return True
+
+    def calibrate_extrinsic_result_metadata_list(
+        self,
+        mixer_label: str,
+        callback: Callable[[str, list[ExtrinsicCalibrator.ResultMetadata]], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param mixer_label: label to which this shall apply
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+            1 - metadata_list: list[ExtrinsicCalibrator.ResultMetadata]
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicResultMetadataListSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback)
+        return True
+
+    def calibrate_extrinsic_result_metadata_update(
+        self,
+        mixer_label: str,
+        result_identifier: str,
+        result_state: ExtrinsicCalibrator.ImageState,
+        result_label: str | None,
+        callback: Callable[[str], None] | None = None
+    ) -> bool:
+        """
+        Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
+        :param mixer_label: label to which this shall apply
+        :param result_identifier:
+        :param result_state:
+        :param result_label:
+        :param callback: Callback args:
+            0 - component_label: str (mixer)
+        :returns: True if no errors immediately occurred and the request was sent.
+        """
+        if not self._calibration_can_proceed_plus_report_errors():
+            return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicResultMetadataUpdateSequencer(**self._sequencer_init_args())
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            callback=callback,
+            request_args={
+                "result_identifier": result_identifier,
+                "result_state": str(result_state),
+                "result_label": result_label})
+        return True

@@ -43,9 +43,43 @@ from src.detector import \
     DetectorQueryResponse, \
     DetectorStartRequest, \
     DetectorStopRequest, \
+    IntrinsicCalibrationCalculateRequest, \
+    IntrinsicCalibrationCalculateResponse, \
+    IntrinsicCalibrationDeleteStagedRequest, \
+    IntrinsicCalibrationImageAddRequest, \
+    IntrinsicCalibrationImageAddResponse, \
+    IntrinsicCalibrationImageGetRequest, \
+    IntrinsicCalibrationImageGetResponse, \
+    IntrinsicCalibrationImageMetadataListRequest, \
+    IntrinsicCalibrationImageMetadataListResponse, \
+    IntrinsicCalibrationImageMetadataUpdateRequest, \
+    IntrinsicCalibrationResolutionListRequest, \
+    IntrinsicCalibrationResolutionListResponse, \
+    IntrinsicCalibrationResultGetRequest, \
+    IntrinsicCalibrationResultGetResponse, \
     IntrinsicCalibrationResultGetActiveRequest, \
-    IntrinsicCalibrationResultGetActiveResponse
+    IntrinsicCalibrationResultGetActiveResponse, \
+    IntrinsicCalibrationResultMetadataListRequest, \
+    IntrinsicCalibrationResultMetadataListResponse, \
+    IntrinsicCalibrationResultMetadataUpdateRequest
 from src.mixer import \
+    ExtrinsicCalibrationCalculateRequest, \
+    ExtrinsicCalibrationCalculateResponse, \
+    ExtrinsicCalibrationDeleteStagedRequest, \
+    ExtrinsicCalibrationImageAddRequest, \
+    ExtrinsicCalibrationImageAddResponse, \
+    ExtrinsicCalibrationImageGetRequest, \
+    ExtrinsicCalibrationImageGetResponse, \
+    ExtrinsicCalibrationImageMetadataListRequest, \
+    ExtrinsicCalibrationImageMetadataListResponse, \
+    ExtrinsicCalibrationImageMetadataUpdateRequest, \
+    ExtrinsicCalibrationResultGetActiveRequest, \
+    ExtrinsicCalibrationResultGetActiveResponse, \
+    ExtrinsicCalibrationResultGetRequest, \
+    ExtrinsicCalibrationResultGetResponse, \
+    ExtrinsicCalibrationResultMetadataListRequest, \
+    ExtrinsicCalibrationResultMetadataListResponse, \
+    ExtrinsicCalibrationResultMetadataUpdateRequest, \
     Mixer, \
     MixerFrameGetRequest, \
     MixerFrameGetResponse, \
@@ -65,7 +99,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 import logging
 import statistics
-from typing import Callable, ClassVar, Final
+from typing import Callable, ClassVar, Final, Union
 import uuid
 
 
@@ -1349,21 +1383,22 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
     to avoid duplicated code and probably copy-paste and maintenance issues.
 
     The factory needs to assign _extractor_callback, _request, and _response_type:
-    - _request indicates what request should be sent
+    - _request_type is the type that is sent, constructed using the arguments in begin()
     - _response_type is the type that is normally expected in response (non-error case)
     - _extractor_callback extracts from the MCTResponse the parameters passed to the user's callback
     """
 
-    _request: ClassVar[MCTRequest]
+    _request_type: ClassVar[type[MCTRequest]]
     _response_type: ClassVar[type[MCTResponse]]
     _extractor_callback: ClassVar[Callable[[MCTResponse], dict[str, ...]] | None]
 
-    _user_callback: Callable[[str, ...], None]
+    _user_callback: Callable
 
     def begin(
         self,
         component_labels: list[str],
-        callback: Callable[[str, ...], None] | None = None
+        callback: Callable | None = None,
+        request_args: dict[str, ...] | None = None
     ) -> None:
         self._user_callback = callback
         if len(self._pending_request_ids) > 0:
@@ -1377,11 +1412,13 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
                 severity=SeverityLabel.ERROR,
                 message=f"No inputs were provided to {__class__.__name__}")
             return
+        if request_args is None:
+            request_args = dict()
         for component_label in component_labels:
             self._send_request_series(
                 component_label=component_label,
                 requests=[
-                    self.get_request(),
+                    self._request_type(**request_args),
                     DequeueStatusMessagesRequest()],
                 callback=self._responded)
 
@@ -1396,13 +1433,14 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
         if self._report_response_series_and_errors(
             response_series=response_series,
             expected_types=[
-                EmptyResponse,
+                self.get_response_type(),
                 DequeueStatusMessagesResponse]
         ):
             return
         if self._user_callback is not None:
-            values: dict[str, ...] = self._extractor_callback()(response_series.series[0])
-            self._user_callback(response_series.responder, **values)
+            kwargs = response_series.series[0].model_dump()
+            kwargs.pop("parsable_type")
+            self._user_callback(component_label=response_series.responder, **kwargs)
         if len(self._pending_request_ids) > 0:
             return
 
@@ -1410,8 +1448,8 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
         return len(self._pending_request_ids) <= 0
 
     @classmethod
-    def get_request(cls) -> MCTRequest:
-        return cls._request
+    def get_request_type(cls) -> type[MCTRequest]:
+        return cls._request_type
 
     @classmethod
     def get_response_type(cls) -> type[MCTResponse]:
@@ -1424,7 +1462,7 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
     @staticmethod
     def create_subclass(
         class_name: str,
-        request: MCTRequest,
+        request_type: type[MCTRequest],
         response_type: type[MCTResponse],
         extractor_callback: Callable[[MCTResponse], dict[str, ...]] | None = None
     ) -> type['AbstractSingleRoundTripSequencer']:
@@ -1433,177 +1471,143 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
             class_name,
             (AbstractSingleRoundTripSequencer,),
             {
-                "_request": request,
+                "_request_type": request_type,
                 "_response_type": response_type,
                 "_extractor_callback": extractor_callback
             })
         return sequencer_class
 
-DetectorShutdownSequencer = AbstractSingleRoundTripSequencer.create_subclass(
-    class_name="DetectorShutdownSequencer",
-    request=DetectorStopRequest(),
-    response_type=EmptyResponse)
-MixerShutdownSequencer = AbstractSingleRoundTripSequencer.create_subclass(
-    class_name="MixerShutdownSequencer",
-    request=MixerStopRequest(),
-    response_type=EmptyResponse)
+DetectorShutdownSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorShutdownSequencer",
+        request_type=DetectorStopRequest,
+        response_type=EmptyResponse)
+MixerShutdownSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerShutdownSequencer",
+        request_type=MixerStopRequest,
+        response_type=EmptyResponse)
 
+DetectorCalibrationIntrinsicCalculateSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicCalculateSequencer",
+        request_type=IntrinsicCalibrationCalculateRequest,
+        response_type=IntrinsicCalibrationCalculateResponse)
+DetectorCalibrationIntrinsicDeleteStagedSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicDeleteStagedSequencer",
+        request_type=IntrinsicCalibrationDeleteStagedRequest,
+        response_type=EmptyResponse)
+DetectorCalibrationIntrinsicImageAddSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicImageAddSequencer",
+        request_type=IntrinsicCalibrationImageAddRequest,
+        response_type=IntrinsicCalibrationImageAddResponse)
+DetectorCalibrationIntrinsicImageGetSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicImageGetSequencer",
+        request_type=IntrinsicCalibrationImageGetRequest,
+        response_type=IntrinsicCalibrationImageGetResponse)
+DetectorCalibrationIntrinsicImageMetadataListSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicImageMetadataListSequencer",
+        request_type=IntrinsicCalibrationImageMetadataListRequest,
+        response_type=IntrinsicCalibrationImageMetadataListResponse)
+DetectorCalibrationIntrinsicImageMetadataUpdateSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicImageMetadataUpdateSequencer",
+        request_type=IntrinsicCalibrationImageMetadataUpdateRequest,
+        response_type=EmptyResponse)
+DetectorCalibrationIntrinsicResolutionListSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicResolutionListSequencer",
+        request_type=IntrinsicCalibrationResolutionListRequest,
+        response_type=IntrinsicCalibrationResolutionListResponse)
+DetectorCalibrationIntrinsicResultGetSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicResultGetSequencer",
+        request_type=IntrinsicCalibrationResultGetRequest,
+        response_type=IntrinsicCalibrationResultGetResponse)
+DetectorCalibrationIntrinsicResultGetActiveSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicResultGetActiveSequencer",
+        request_type=IntrinsicCalibrationResultGetActiveRequest,
+        response_type=IntrinsicCalibrationResultGetActiveResponse)
+DetectorCalibrationIntrinsicResultMetadataListSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicResultMetadataListSequencer",
+        request_type=IntrinsicCalibrationResultMetadataListRequest,
+        response_type=IntrinsicCalibrationResultMetadataListResponse)
+DetectorCalibrationIntrinsicResultMetadataUpdateSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorCalibrationIntrinsicResultMetadataUpdateSequencer",
+        request_type=IntrinsicCalibrationResultMetadataUpdateRequest,
+        response_type=EmptyResponse)
 
-# noinspection DuplicatedCode
-# class DetectorShutdownSequencer(AbstractSequencer):
-#
-#     class State(StrEnum):
-#         IDLE = "Idle"
-#         RUNNING = "Running"
-#         FINISHED = "Finished"
-#
-#     _state: State
-#     _detector_labels: list[str]
-#
-#     def __init__(
-#         self,
-#         status_message_source: StatusMessageSource,
-#         connection_router: ConnectionRouter,
-#         callback_router: CallbackRouter
-#     ):
-#         super().__init__(
-#             status_message_source=status_message_source,
-#             connection_router=connection_router,
-#             callback_router=callback_router)
-#         self._state = DetectorShutdownSequencer.State.IDLE
-#         self._detector_labels = list()
-#
-#     def begin(
-#         self,
-#         detector_labels: list[str]
-#     ) -> None:
-#         if self._state != DetectorShutdownSequencer.State.IDLE:
-#             message: str = \
-#                 f"DetectorShutdownSequencer.begin() called when in an incorrect state {self._state}. " + \
-#                 f"Try calling reset()."
-#             self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
-#             return
-#         detector_count: int = len(detector_labels)
-#         if detector_count == 0:
-#             self._status_message_source.enqueue_status_message(
-#                 severity=SeverityLabel.ERROR,
-#                 message=f"No inputs were provided to DetectorShutdownSequencer")
-#             return
-#         self._detector_labels = detector_labels
-#         self._state = DetectorShutdownSequencer.State.RUNNING
-#         self._request()
-#
-#     def reset(self) -> None:
-#         super().reset()
-#         self._state = DetectorShutdownSequencer.State.IDLE
-#
-#     def is_finished(self) -> bool:
-#         return self._state == DetectorShutdownSequencer.State.FINISHED
-#
-#     def _request(self):
-#         for detector_label in self._detector_labels:
-#             self._send_request_series(
-#                 component_label=detector_label,
-#                 requests=[
-#                     DetectorStopRequest(),
-#                     DequeueStatusMessagesRequest()],
-#                 callback=self._responded)
-#
-#     def _responded(
-#         self,
-#         response_series: MCTResponseSeries,
-#         _passthrough_parameters: dict[str, ...]
-#     ):
-#         self._status_message_source.enqueue_status_message(
-#             severity=SeverityLabel.DEBUG,
-#             message="DetectorShutdownSequencer._responded()")
-#         if self._report_response_series_and_errors(
-#             response_series=response_series,
-#             expected_types=[
-#                 EmptyResponse,
-#                 DequeueStatusMessagesResponse]
-#         ):
-#             return
-#         if len(self._pending_request_ids) > 0:
-#             return
-#         self._state = DetectorShutdownSequencer.State.FINISHED
-#
-#
-# # noinspection DuplicatedCode
-# class MixerShutdownSequencer(AbstractSequencer):
-#
-#     class State(StrEnum):
-#         IDLE = "Idle"
-#         RUNNING = "Running"
-#         FINISHED = "Finished"
-#
-#     _state: State
-#     _mixer_labels: list[str]
-#
-#     def __init__(
-#         self,
-#         status_message_source: StatusMessageSource,
-#         connection_router: ConnectionRouter,
-#         callback_router: CallbackRouter
-#     ):
-#         super().__init__(
-#             status_message_source=status_message_source,
-#             connection_router=connection_router,
-#             callback_router=callback_router)
-#         self._state = MixerShutdownSequencer.State.IDLE
-#         self._mixer_labels = list()
-#
-#     def begin(
-#         self,
-#         mixer_labels: list[str]
-#     ) -> None:
-#         if self._state != MixerShutdownSequencer.State.IDLE:
-#             message: str = \
-#                 f"MixerShutdownSequencer.begin() called when in an incorrect state {self._state}. " + \
-#                 f"Try calling reset()."
-#             self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
-#             return
-#         mixer_count: int = len(mixer_labels)
-#         if mixer_count == 0:
-#             self._status_message_source.enqueue_status_message(
-#                 severity=SeverityLabel.ERROR,
-#                 message=f"No inputs were provided to MixerShutdownSequencer")
-#             return
-#         self._mixer_labels = mixer_labels
-#         self._state = MixerShutdownSequencer.State.RUNNING
-#         self._request()
-#
-#     def reset(self) -> None:
-#         super().reset()
-#         self._state = MixerShutdownSequencer.State.IDLE
-#
-#     def is_finished(self) -> bool:
-#         return self._state == MixerShutdownSequencer.State.FINISHED
-#
-#     def _request(self):
-#         for mixer_label in self._mixer_labels:
-#             self._send_request_series(
-#                 component_label=mixer_label,
-#                 requests=[
-#                     MixerStopRequest(),
-#                     DequeueStatusMessagesRequest()],
-#                 callback=self._responded)
-#
-#     def _responded(
-#         self,
-#         response_series: MCTResponseSeries,
-#         _passthrough_parameters: dict[str, ...]
-#     ):
-#         self._status_message_source.enqueue_status_message(
-#             severity=SeverityLabel.DEBUG,
-#             message="MixerFrameGetSequencer._responded()")
-#         if self._report_response_series_and_errors(
-#             response_series=response_series,
-#             expected_types=[
-#                 EmptyResponse,
-#                 DequeueStatusMessagesResponse]
-#         ):
-#             return
-#         if len(self._pending_request_ids) > 0:
-#             return
-#         self._state = MixerShutdownSequencer.State.FINISHED
+MixerCalibrationExtrinsicCalculateSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicCalculateSequencer",
+        request_type=ExtrinsicCalibrationCalculateRequest,
+        response_type=ExtrinsicCalibrationCalculateResponse)
+MixerCalibrationExtrinsicDeleteStagedSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicDeleteStagedSequencer",
+        request_type=ExtrinsicCalibrationDeleteStagedRequest,
+        response_type=EmptyResponse)
+MixerCalibrationExtrinsicImageGetSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicImageGetSequencer",
+        request_type=ExtrinsicCalibrationImageGetRequest,
+        response_type=ExtrinsicCalibrationImageGetResponse)
+MixerCalibrationExtrinsicImageMetadataListSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicImageMetadataListSequencer",
+        request_type=ExtrinsicCalibrationImageMetadataListRequest,
+        response_type=ExtrinsicCalibrationImageMetadataListResponse)
+MixerCalibrationExtrinsicImageMetadataUpdateSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicImageMetadataUpdateSequencer",
+        request_type=ExtrinsicCalibrationImageMetadataUpdateRequest,
+        response_type=EmptyResponse)
+MixerCalibrationExtrinsicResultGetActiveSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicResultGetActiveSequencer",
+        request_type=ExtrinsicCalibrationResultGetActiveRequest,
+        response_type=ExtrinsicCalibrationResultGetActiveResponse)
+MixerCalibrationExtrinsicResultGetSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicResultGetSequencer",
+        request_type=ExtrinsicCalibrationResultGetRequest,
+        response_type=ExtrinsicCalibrationResultGetResponse)
+MixerCalibrationExtrinsicResultMetadataListSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicResultMetadataListSequencer",
+        request_type=ExtrinsicCalibrationResultMetadataListRequest,
+        response_type=ExtrinsicCalibrationResultMetadataListResponse)
+MixerCalibrationExtrinsicResultMetadataUpdateSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="MixerCalibrationExtrinsicResultMetadataUpdateSequencer",
+        request_type=ExtrinsicCalibrationResultMetadataUpdateRequest,
+        response_type=EmptyResponse)
+AnyCalibrationSequencer: type[AbstractSingleRoundTripSequencer] = Union[
+    DetectorCalibrationIntrinsicCalculateSequencer,
+    DetectorCalibrationIntrinsicDeleteStagedSequencer,
+    DetectorCalibrationIntrinsicImageAddSequencer,
+    DetectorCalibrationIntrinsicImageGetSequencer,
+    DetectorCalibrationIntrinsicImageMetadataListSequencer,
+    DetectorCalibrationIntrinsicImageMetadataUpdateSequencer,
+    DetectorCalibrationIntrinsicResolutionListSequencer,
+    DetectorCalibrationIntrinsicResultGetSequencer,
+    DetectorCalibrationIntrinsicResultGetActiveSequencer,
+    DetectorCalibrationIntrinsicResultMetadataListSequencer,
+    DetectorCalibrationIntrinsicResultMetadataUpdateSequencer,
+    MixerCalibrationExtrinsicCalculateSequencer,
+    MixerCalibrationExtrinsicDeleteStagedSequencer,
+    MixerCalibrationExtrinsicImageAddSequencer,
+    MixerCalibrationExtrinsicImageGetSequencer,
+    MixerCalibrationExtrinsicImageMetadataListSequencer,
+    MixerCalibrationExtrinsicImageMetadataUpdateSequencer,
+    MixerCalibrationExtrinsicResultGetSequencer,
+    MixerCalibrationExtrinsicResultGetActiveSequencer,
+    MixerCalibrationExtrinsicResultMetadataListSequencer,
+    MixerCalibrationExtrinsicResultMetadataUpdateSequencer]
