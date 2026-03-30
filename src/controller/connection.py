@@ -221,7 +221,9 @@ class Connection:
             series_list: list[MCTResponse] = MCTDeserializable.deserialize_series_list(
                 series_dict=response_series_dict,
                 supported_types=self._supported_response_types)
-            return MCTResponseSeries(series=series_list)
+            return MCTResponseSeries(
+                request_id=response_series_dict.get("request_id", ""),
+                series=series_list)
 
         if self._waiting_for_response and len(self._request_series_queue) <= 0:
             self._status_message_source.enqueue_status_message(
@@ -355,6 +357,9 @@ class Connection:
 
     def _update_in_normal_disconnecting_state(self) -> None:
         if self._socket is not None:
+            if self._waiting_for_response:  # TCP will not close properly unless all pending data is transmitted
+                self._socket.recv()
+                self._waiting_for_response = False
             self._socket.close()
             self._socket = None
         self._socket = None

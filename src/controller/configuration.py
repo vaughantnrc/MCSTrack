@@ -14,8 +14,8 @@ class MCTComponentConfig(BaseModel):
 
 
 class DetectorComponentConfig(MCTComponentConfig):
-    camera_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
-    annotator_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
+    camera_parameters: list[SerializeAsAny[KeyValueSimpleAny]] = Field(default_factory=list)
+    annotator_parameters: list[SerializeAsAny[KeyValueSimpleAny]] = Field(default_factory=list)
 
 
 class MixerDetectorConfig(BaseModel):

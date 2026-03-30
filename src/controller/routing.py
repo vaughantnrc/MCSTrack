@@ -4,7 +4,7 @@ from src.common import \
     MCTRequestSeries, \
     MCTResponse, \
     MCTResponseSeries, \
-    StatusMessageSource
+    StatusMessageSource, SeverityLabel
 import logging
 import uuid
 from typing import Callable
@@ -24,9 +24,14 @@ class CallbackRouter:
     Callback = tuple[CallbackFunction, dict[str, ...]]
 
     _callbacks_by_id: dict[uuid.UUID, Callback]
+    _status_message_source: StatusMessageSource
 
-    def __init__(self):
+    def __init__(
+        self,
+        status_message_source: StatusMessageSource
+    ):
         self._callbacks_by_id = dict()
+        self._status_message_source = status_message_source
 
     def add_callback(
         self,
@@ -42,7 +47,17 @@ class CallbackRouter:
         self,
         response_series: MCTResponseSeries
     ) -> None:
-        request_id: uuid.UUID = uuid.UUID(response_series.request_id)
+        request_id: uuid.UUID
+        try:
+            request_id = uuid.UUID(response_series.request_id)
+        except ValueError:
+            message: str = \
+                f"Invalid request ID {response_series.request_id} found in " + \
+                f"response series from component {response_series.responder}."
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=message)
+            return
         callback_tuple: CallbackRouter.Callback | None = self._callbacks_by_id.pop(request_id, None)
         if callback_tuple is not None:
             callback: CallbackRouter.CallbackFunction = callback_tuple[0]

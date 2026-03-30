@@ -168,7 +168,7 @@ class MCTController:
         self._mixer_live_data = dict()
         self._sinks = list()
         self._connection_router = ConnectionRouter()
-        self._callback_router = CallbackRouter()
+        self._callback_router = CallbackRouter(status_message_source=self._status_message_source)
 
     # =================================================================================================================
     #                                              HIGH-LEVEL CONTROL
@@ -508,9 +508,12 @@ class MCTController:
                 try:
                     self._callback_router.handle_callback(response_series)
                 except Exception as e:
+                    message: str = \
+                        f"Exception occurred on handling response from {response_series.responder}: " + \
+                        f"{e.__class__.__name__} {e}"
                     self._status_message_source.enqueue_status_message(
                         severity=SeverityLabel.ERROR,
-                        message=f"Exception occurred on handling response from {response_series.responder}: {e}")
+                        message=message)
 
     def _sequencer_init_args(self):
         return {

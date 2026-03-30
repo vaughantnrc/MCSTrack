@@ -73,6 +73,7 @@ logger = logging.getLogger(__name__)
 
 
 _TIME_SYNC_DEFAULT_SAMPLE_COUNT: Final[int] = 5
+_ZERO_UUID: uuid.UUID = uuid.UUID("00000000-0000-4000-8000-000000000000")
 
 
 class AbstractSequencer(abc.ABC):
@@ -111,7 +112,15 @@ class AbstractSequencer(abc.ABC):
         """
         errors_found: int = 0
         label: str = response_series.responder
-        request_id: uuid.UUID = uuid.UUID(response_series.request_id)
+        request_id: uuid.UUID
+        try:
+            request_id = uuid.UUID(response_series.request_id)
+        except ValueError:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=f"Response contained invalid request ID {response_series.request_id} from {label}.")
+            errors_found += 1
+            request_id = _ZERO_UUID
         if request_id not in self._pending_request_ids:
             self._status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
@@ -138,7 +147,7 @@ class AbstractSequencer(abc.ABC):
                         source_label=label)
                 errors_found += 1
             return errors_found
-        for response_index, response in response_series.series:
+        for response_index, response in enumerate(response_series.series):
             expected_type: type = expected_types[response_index]
             expected_type_name: str = expected_type.__name__
             if isinstance(response, DequeueStatusMessagesResponse):
@@ -191,13 +200,13 @@ class TimeSyncSequencer(AbstractSequencer):
             local_received_datetime: datetime.datetime
             def __init__(
                 self,
-                local_sent_timestamp_iso8601,
-                remote_received_timestamp_iso8601,
-                local_received_timestamp_iso8601
+                local_sent_timestamp_iso8601: str,
+                remote_received_timestamp_iso8601: str,
+                local_received_timestamp: datetime.datetime
             ):
                 self.local_sent_datetime = datetime.datetime.fromisoformat(local_sent_timestamp_iso8601)
                 self.remote_received_datetime = datetime.datetime.fromisoformat(remote_received_timestamp_iso8601)
-                self.local_received_datetime = datetime.datetime.fromisoformat(local_received_timestamp_iso8601)
+                self.local_received_datetime = local_received_timestamp
 
         samples: list[Sample]
         _network_round_delay_milliseconds: float | None
@@ -342,7 +351,7 @@ class TimeSyncSequencer(AbstractSequencer):
         response_series: MCTResponseSeries,
         _passthrough_parameters: dict[str, ...]
     ):
-        now_utc_iso8601 = uuid.uuid4()
+        now_utc_iso8601: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)
         self._status_message_source.enqueue_status_message(
             severity=SeverityLabel.DEBUG,
             message="TimeSyncSequencer._request_2_timestamp_responded()")
@@ -359,7 +368,7 @@ class TimeSyncSequencer(AbstractSequencer):
         self.data_by_component_label[component_label].samples.append(TimeSyncSequencer.ComponentData.Sample(
             local_sent_timestamp_iso8601=response.requester_timestamp_utc_iso8601,
             remote_received_timestamp_iso8601=response.responder_timestamp_utc_iso8601,
-            local_received_timestamp_iso8601=now_utc_iso8601))
+            local_received_timestamp=now_utc_iso8601))
         if len(self._pending_request_ids) > 0:
             return
         samples_collected: int = len(self.data_by_component_label[component_label].samples)
@@ -1052,7 +1061,11 @@ class MixerStartupSequencer(AbstractSequencer):
             message="MixerStartupSequencer._request_7_set_extrinsics_responded()")
         mixer_label: str = response_series.responder
         input_mixer_data: MixerStartupSequencer.InputMixerData = self._input_mixer_data_by_label[mixer_label]
-        expected_types: list[type[MCTResponse]] = [EmptyResponse] * len(input_mixer_data.detectors)
+        expected_extrinsic_sent_response_count: int = 0
+        for detector in input_mixer_data.detectors:
+            if detector.pose_mode == DetectorPoseMode.STATIC_EXTERNAL:
+                expected_extrinsic_sent_response_count += 1
+        expected_types: list[type[MCTResponse]] = [EmptyResponse] * expected_extrinsic_sent_response_count
         expected_types.append(DequeueStatusMessagesResponse)
         if self._report_response_series_and_errors(
             response_series=response_series,
@@ -1138,7 +1151,7 @@ class DetectorFrameGetSequencer(AbstractSequencer):
                 severity=SeverityLabel.ERROR,
                 message=f"No inputs were provided to DetectorFrameGetSequencer")
             return
-        if not self._include_detected and not self._include_rejected and not self._include_image:
+        if not include_detected and not include_rejected and not include_image:
             self._status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
                 message=f"No outputs are being requested from Detector frames.")
@@ -1220,7 +1233,7 @@ class MixerFrameGetSequencer(AbstractSequencer):
         def __init__(self):
             self.frame = None
             self.detector_labels_needing_frame_send = list()
-            self.detector_labels_sent_count = dict()
+            self.detector_labels_send_count_by_request = dict()
 
     _state: State
     _latest_frame_by_detector_label: dict[str, DetectorFrame]
@@ -1311,8 +1324,8 @@ class MixerFrameGetSequencer(AbstractSequencer):
         mixer_label: str = response_series.responder
         mixer_data: MixerFrameGetSequencer.OutputMixerData = self.data_by_mixer_label[mixer_label]
         request_id: uuid.UUID = uuid.UUID(response_series.request_id)
-        expected_types: list[type[MCTResponse]] = \
-            [EmptyResponse] * mixer_data.detector_labels_send_count_by_request[request_id]
+        detector_labels_send_count: int = mixer_data.detector_labels_send_count_by_request[request_id]
+        expected_types: list[type[MCTResponse]] = [EmptyResponse] * detector_labels_send_count
         expected_types.append(MixerFrameGetResponse)
         expected_types.append(DequeueStatusMessagesResponse)
         if self._report_response_series_and_errors(
@@ -1322,7 +1335,7 @@ class MixerFrameGetSequencer(AbstractSequencer):
             return
         mixer_data.detector_labels_send_count_by_request.pop(request_id)
         # noinspection PyTypeChecker
-        response: MixerFrameGetResponse = response_series.series[0]
+        response: MixerFrameGetResponse = response_series.series[detector_labels_send_count]
         mixer_data.frame = response.frame
         if self._on_frame_callback is not None:
             self._on_frame_callback(mixer_label, mixer_data)

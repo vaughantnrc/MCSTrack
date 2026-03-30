@@ -24,11 +24,13 @@ from .api import \
     PoseSolverTargetAddRequest, \
     PoseSolverTargetsClearRequest, \
     PoseSolverTargetsSetRequest, \
-    MixerQueryRequest, \
+    MixerFrameGetRequest, \
+    MixerFrameGetResponse, \
     MixerIntrinsicUpdateRequest, \
+    MixerQueryRequest, \
     MixerQueryResponse, \
     MixerStartRequest, \
-    MixerStopRequest, MixerFrameGetResponse
+    MixerStopRequest
 from src.common import \
     EmptyResponse, \
     ErrorResponse, \
@@ -370,6 +372,7 @@ class Mixer(MCTComponent):
             ExtrinsicCalibrationResultGetRequest: self.extrinsic_calibrator_result_get,
             ExtrinsicCalibrationResultMetadataListRequest: self.extrinsic_calibrator_result_metadata_list,
             ExtrinsicCalibrationResultMetadataUpdateRequest: self.extrinsic_calibrator_result_metadata_update,
+            MixerFrameGetRequest: self.mixer_frame_get,
             MixerIntrinsicUpdateRequest: self.mixer_update_intrinsic_parameters,
             MixerQueryRequest: self.mixer_query,
             MixerStartRequest: self.mixer_start,
