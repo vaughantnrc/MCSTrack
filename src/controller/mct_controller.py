@@ -112,6 +112,15 @@ class MixerLiveData:
 
 
 class MCTController:
+    """
+    This is the main class to interface with MCSTrack.
+    Typical usage is to first prepare a configuration file/data structure,
+    then provide it to the configure() function.
+    This will load and organize data internally without initiating any connections.
+    When the user is ready, start_up() can be called to begin any configured Detectors and Mixers.
+    Various data and setting can be manipulated using the other functions in this class.
+    To stop MCSTrack cleanly, call shut_down().
+    """
 
     class State(StrEnum):
         IDLE = "Idle"
@@ -160,6 +169,7 @@ class MCTController:
         send_status_messages_to_logger: bool = False
     ):
         """
+        Create the controller.
         :param controller_name: When this instance logs information, associate with this name.
         :param send_status_messages_to_logger: Log messages to python's logging module.
         """
@@ -188,7 +198,14 @@ class MCTController:
         configuration: MCTConfiguration
     ) -> bool:
         """
-        Returns True if there are no immediate errors.
+        Specify the Detectors and Mixers, their connection information (IP address), their settings,
+        what algorithms are used with what parameters,
+        what are the targets being tracked and their configurations, etc.
+        This function MUST be called before start_up().
+        If the controller is already running,
+        then shut_down() should be called first to prevent an inconsistent state.
+        :param configuration: The data structure specifying the configuration
+        :returns: True if there are no immediate errors.
         """
         if self._state != MCTController.State.IDLE:
             self._status_message_source.enqueue_status_message(
@@ -275,6 +292,11 @@ class MCTController:
         self,
         input_configuration_filepath: str
     ) -> bool:
+        """
+        Convenience function to load a configuration from a file then call configure() with its contents.
+        :param input_configuration_filepath:
+        :returns: True if there are no immediate errors.
+        """
         if not os.path.exists(input_configuration_filepath):
             self._status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
@@ -301,7 +323,11 @@ class MCTController:
 
     def start_up(self) -> bool:
         """
-        Returns True if there are no immediate errors.
+        Launch any configured Detectors and Mixers.
+        This will begin a series of interactions between the controller and the other components.
+        You can check the current status of the controller by calling get_controller_state().
+        Start up will be finished when the controller is RUNNING.
+        :returns: True if there are no immediate errors.
         """
         if self._configuration is None:
             self._status_message_source.enqueue_status_message(
@@ -324,7 +350,11 @@ class MCTController:
 
     def shut_down(self) -> bool:
         """
-        Returns True if there are no immediate errors.
+        Stop Detectors and Mixers.
+        This will begin a series of interactions between the controller and the other components.
+        You can check the current status of the controller by calling get_controller_state().
+        Shut down will be finished when the controller is IDLE.
+        :returns: True if there are no immediate errors.
         """
         if self._state != MCTController.State.RUNNING:
             self._status_message_source.enqueue_status_message(
@@ -335,6 +365,15 @@ class MCTController:
         return True
 
     def reset(self):
+        """
+        Force the controller back to its initial state.
+        Normally this should not be necessary when using configure(), start_up(), and shut_down() methods,
+        but this function is provided as a fallback in case something goes wrong.
+        This will begin a series of interactions between the controller and the other components.
+        You can check the current status of the controller by calling get_controller_state().
+        Shut down will be finished when the controller is IDLE.
+        :returns: True if there are no immediate errors.
+        """
         if self._state == MCTController.State.RUNNING:
             self._connection_router.shut_down()
         self._state = MCTController.State.IDLE
@@ -346,8 +385,17 @@ class MCTController:
         self._callback_router.reset()
         self._connection_router.reset()
 
-    # Right now this function doesn't update on its own - must be called externally and as frequently as possible
     def update(self) -> None:
+        """
+        This function is responsible for updating the internal state and data
+        of the controller based on communications with the other components.
+        It is for things that should be done frequently and regularly -
+        basically everything that should occur "per frame" in an update loop.
+        Right now the controller doesn't update on its own -
+        this function must be called externally and frequently.
+        If it does not get called, then the controller will not do anything meaningful.
+        """
+
         self._connection_router.update()
 
         if self._state == MCTController.State.IDLE:
@@ -616,6 +664,10 @@ class MCTController:
         return True
 
     def _sequencer_init_args(self):
+        """
+        Convenience function for common arguments in sequencers
+        (Sequencers assemble, send, and handle communications with other components)
+        """
         return {
             "status_message_source": self._status_message_source,
             "connection_router": self._connection_router,
