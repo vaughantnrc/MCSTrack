@@ -24,6 +24,7 @@ from .sequencing import \
     DetectorStartupSequencer, \
     MixerCalibrationExtrinsicCalculateSequencer, \
     MixerCalibrationExtrinsicDeleteStagedSequencer, \
+    MixerCalibrationExtrinsicImageAddSequencer, \
     MixerCalibrationExtrinsicImageGetSequencer, \
     MixerCalibrationExtrinsicImageMetadataListSequencer, \
     MixerCalibrationExtrinsicImageMetadataUpdateSequencer, \
@@ -42,6 +43,7 @@ from src.common import \
     DetectorPoseMode, \
     ExtrinsicCalibration, \
     ExtrinsicCalibrator, \
+    ImageFormat, \
     ImageResolution, \
     IntrinsicCalibration, \
     IntrinsicCalibrator, \
@@ -55,6 +57,7 @@ from src.common import \
     StatusMessageSource
 from src.detector import DETECTOR_RESPONSE_TYPES
 from src.mixer import MIXER_RESPONSE_TYPES
+import datetime
 from enum import StrEnum
 import hjson
 from ipaddress import IPv4Address
@@ -526,6 +529,92 @@ class MCTController:
                         severity=SeverityLabel.ERROR,
                         message=message)
 
+    def disable_detector_annotations_detected(self) -> bool:
+        """
+        Indicate to Detectors to NOT include in their frames identified annotations.
+        :returns: True if there were no immediate errors. False if unable to apply the setting.
+        """
+        if not self._state == MCTController.State.RUNNING:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Cannot change frame properties until the controller is running. Call start_up() first.")
+            return True
+        self._sequencers.detector_frame_get_sequencer.disable_annotations_detected()
+        return True
+
+    def disable_detector_annotations_rejected(self) -> bool:
+        """
+        Indicate to Detectors to NOT include in their frames unidentified annotations.
+        :returns: True if there were no immediate errors. False if unable to apply the setting.
+        """
+        if not self._state == MCTController.State.RUNNING:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Cannot change frame properties until the controller is running. Call start_up() first.")
+            return True
+        self._sequencers.detector_frame_get_sequencer.disable_annotations_detected()
+        return True
+
+    def disable_detector_image_collection(self) -> bool:
+        """
+        Indicate to Detectors that they shall NOT include in their frames its camera image.
+        :returns: True if there were no immediate errors. False if unable to apply the setting.
+        """
+        if not self._state == MCTController.State.RUNNING:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Cannot change frame properties until the controller is running. Call start_up() first.")
+            return True
+        self._sequencers.detector_frame_get_sequencer.disable_image_collection()
+        return True
+
+    def enable_detector_annotations_detected(self) -> bool:
+        """
+        Indicate to Detectors that they shall include in their frames identified annotations.
+        :returns: True if there were no immediate errors. False if unable to apply the setting.
+        """
+        if not self._state == MCTController.State.RUNNING:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Cannot change frame properties until the controller is running. Call start_up() first.")
+            return True
+        self._sequencers.detector_frame_get_sequencer.enable_annotations_detected()
+        return True
+
+    def enable_detector_annotations_rejected(self) -> bool:
+        """
+        Indicate to Detectors that they shall include in their frames unidentified annotations.
+        :returns: True if there were no immediate errors. False if unable to apply the setting.
+        """
+        if not self._state == MCTController.State.RUNNING:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Cannot change frame properties until the controller is running. Call start_up() first.")
+            return True
+        self._sequencers.detector_frame_get_sequencer.enable_annotations_rejected()
+        return True
+
+    def enable_detector_image_collection(
+        self,
+        image_format: ImageFormat = ImageFormat.FORMAT_PNG,
+        image_resolution: ImageResolution | None = None
+    ) -> bool:
+        """
+        Indicate to Detectors that they shall include in their frames their camera images.
+        :param image_format: Request images in a specific format (JPG, PNG)
+        :param image_resolution: Request Detector to scale the image to a specific resolution. None means no scaling.
+        :returns: True if there were no immediate errors. False if unable to apply the setting.
+        """
+        if not self._state == MCTController.State.RUNNING:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message="Cannot change frame properties until the controller is running. Call start_up() first.")
+            return True
+        self._sequencers.detector_frame_get_sequencer.enable_image_collection(
+            image_format=image_format,
+            image_resolution=image_resolution)
+        return True
+
     def _sequencer_init_args(self):
         return {
             "status_message_source": self._status_message_source,
@@ -975,7 +1064,7 @@ class MCTController:
     def calibrate_extrinsic_image_add(
         self,
         mixer_label: str,
-        callback: Callable[[str, str], None] | None = None
+        callback: Callable[[str, list[str]], None] | None = None
     ) -> bool:
         """
         Start a calibration-related task. Caller to is_general_sequencer_busy() returns False before additional tasks.
@@ -985,13 +1074,29 @@ class MCTController:
         :param mixer_label: label to which this shall apply
         :param callback: Callback args:
             0 - component_label: str (mixer)
-            1 - image_identifier: str
+            1 - image_identifiers: list[str]
         :returns: True if no errors immediately occurred and the request was sent.
         """
         if not self._calibration_can_proceed_plus_report_errors():
             return False
-        # TODO: This is more complex than can be captured with the general sequencer pattern used elsewhere
-        raise NotImplementedError()
+        for detector_label, detector_data in self._detector_live_data.items():
+            detector_data: DetectorLiveData
+            if detector_data.frame.image_base64 is None:
+                self._status_message_source.enqueue_status_message(
+                    severity=SeverityLabel.ERROR,
+                    message=f"Images are not available for detector {detector_label} - are images being collected?")
+                return False
+        self._sequencers.general_sequencer = \
+            MixerCalibrationExtrinsicImageAddSequencer(**self._sequencer_init_args())
+        # noinspection PyArgumentList
+        self._sequencers.general_sequencer.begin(
+            component_labels=[mixer_label],
+            image_base64_by_detector_label={
+                detector_label: detector_data.frame.image_base64
+                for detector_label, detector_data in self._detector_live_data.items()},
+            timestamp_utc_iso8601=datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            on_frame_callback=callback)
+        return True
 
     def calibrate_extrinsic_image_get(
         self,

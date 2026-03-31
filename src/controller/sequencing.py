@@ -96,7 +96,6 @@ from src.mixer import \
 import abc
 import datetime
 from dataclasses import dataclass, field
-from enum import StrEnum
 import logging
 import statistics
 from typing import Callable, ClassVar, Final, Union
@@ -129,8 +128,8 @@ class AbstractSequencer(abc.ABC):
         self._callback_router = callback_router
         self._pending_request_ids = list()
 
-    @abc.abstractmethod
-    def is_finished(self) -> bool: pass
+    def is_finished(self) -> bool:
+        return len(self._pending_request_ids) <= 0
 
     def reset(self) -> None:
         for request_id in self._pending_request_ids:
@@ -220,13 +219,6 @@ class AbstractSequencer(abc.ABC):
 
 class TimeSyncSequencer(AbstractSequencer):
 
-    class State(StrEnum):
-        INITIAL = "Initial"
-        STARTING = "Starting"
-        SYNCING = "Syncing"
-        STOPPING = "Stopping"
-        FINISHED = "Finished"
-
     class ComponentData:
         class Sample:
             local_sent_datetime: datetime.datetime
@@ -284,7 +276,6 @@ class TimeSyncSequencer(AbstractSequencer):
 
     data_by_component_label: dict[str, ComponentData]
     _sample_count: int
-    _state: State
 
     def __init__(
         self,
@@ -296,43 +287,33 @@ class TimeSyncSequencer(AbstractSequencer):
             status_message_source=status_message_source,
             connection_router=connection_router,
             callback_router=callback_router)
-        self._state = TimeSyncSequencer.State.INITIAL
-        self._sample_count = _TIME_SYNC_DEFAULT_SAMPLE_COUNT
         self.data_by_component_label = dict()
+        self.reset()
 
     def begin(
         self,
         sample_count: int,
         component_labels: list[str]
     ):
-        self._status_message_source.enqueue_status_message(
-            severity=SeverityLabel.DEBUG,
-            message="TimeSyncSequencer.begin()")
-        if self._state != TimeSyncSequencer.State.INITIAL:
-            message: str = \
-                f"TimeSyncSequencer.begin() called when in an incorrect state {self._state}. " + \
-                f"Try calling reset()."
+        if len(self._pending_request_ids) > 0:
+            message: str = f"MixerStartupSequencer.begin() called when already busy. Try waiting or calling reset()."
             self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
             return
-        self._sample_count = sample_count
         if len(component_labels) == 0:
             self._status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
                 message=f"No component labels were provided to TimeSyncSequencer")
-            self._state = TimeSyncSequencer.State.FINISHED
             return
-        self.data_by_component_label.clear()
+        self.reset()
+        self._sample_count = sample_count
         for component_label in component_labels:
             self.data_by_component_label[component_label] = TimeSyncSequencer.ComponentData()
         self._request_1_start()
 
     def reset(self):
         super().reset()
-        self._state = TimeSyncSequencer.State.INITIAL
         self.data_by_component_label.clear()
-
-    def is_finished(self) -> bool:
-        return self._state == TimeSyncSequencer.State.FINISHED
+        self._sample_count = _TIME_SYNC_DEFAULT_SAMPLE_COUNT
 
     def _request_1_start(self):
         self._status_message_source.enqueue_status_message(
@@ -345,7 +326,6 @@ class TimeSyncSequencer(AbstractSequencer):
                     TimeSyncStartRequest(),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_1_start_responded)
-        self._state = TimeSyncSequencer.State.STARTING
 
     def _request_1_start_responded(
         self,
@@ -378,7 +358,6 @@ class TimeSyncSequencer(AbstractSequencer):
                     TimestampGetRequest(requester_timestamp_utc_iso8601=now_utc_iso8601),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_2_timestamp_responded)
-        self._state = TimeSyncSequencer.State.SYNCING
 
     def _request_2_timestamp_responded(
         self,
@@ -422,7 +401,6 @@ class TimeSyncSequencer(AbstractSequencer):
                     TimeSyncStopRequest(),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_3_stop_responded)
-        self._state = TimeSyncSequencer.State.STOPPING
 
     def _request_3_stop_responded(
         self,
@@ -439,9 +417,6 @@ class TimeSyncSequencer(AbstractSequencer):
                 DequeueStatusMessagesResponse]
         ):
             return
-        if len(self._pending_request_ids) > 0:
-            return
-        self._state = TimeSyncSequencer.State.FINISHED
 
 
 # noinspection DuplicatedCode
@@ -465,16 +440,6 @@ class DetectorStartupSequencer(AbstractSequencer):
         done_set_parameters: bool = field(default=False)
         done_get_parameters: bool = field(default=False)
 
-    class State(StrEnum):
-        INITIAL = "Initial"
-        QUERYING = "Querying"
-        RESET = "Reset"
-        STARTING = "Starting"
-        SET_PARAMETERS = "SetParameters"
-        GET_PARAMETERS = "GetParameters"
-        FINISHED = "Finished"
-
-    _state: State
     _input_detector_data: list[InputDetectorData]
     data_by_detector_label: dict[str, DetectorData]
 
@@ -488,38 +453,33 @@ class DetectorStartupSequencer(AbstractSequencer):
             status_message_source=status_message_source,
             connection_router=connection_router,
             callback_router=callback_router)
-        self._state = DetectorStartupSequencer.State.INITIAL
         self._input_detector_data = list()
         self.data_by_detector_label = dict()
+        self.reset()
 
     def begin(
         self,
         detector_data: list[InputDetectorData]
     ) -> None:
-        if self._state != DetectorStartupSequencer.State.INITIAL:
-            message: str = \
-                f"DetectorStartupSequencer.begin() called when in an incorrect state {self._state}. " + \
-                f"Try calling reset()."
+        if len(self._pending_request_ids) > 0:
+            message: str = f"MixerStartupSequencer.begin() called when already busy. Try waiting or calling reset()."
             self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
-            return
         detector_count: int = len(detector_data)
         if detector_count <= 0:
             self._status_message_source.enqueue_status_message(
                 severity=SeverityLabel.ERROR,
                 message=f"No inputs were provided to DetectorStartupSequencer")
             return
+        self.reset()
         self._input_detector_data = detector_data
-        self.data_by_detector_label.clear()
         for detector in detector_data:
             self.data_by_detector_label[detector.detector_label] = DetectorStartupSequencer.DetectorData()
         self._request_1_query()
 
     def reset(self) -> None:
         super().reset()
-        self._state = DetectorStartupSequencer.State.INITIAL
-
-    def is_finished(self) -> bool:
-        return self._state == DetectorStartupSequencer.State.FINISHED
+        self._input_detector_data.clear()
+        self.data_by_detector_label.clear()
 
     def _request_1_query(self):
         self._status_message_source.enqueue_status_message(
@@ -533,7 +493,6 @@ class DetectorStartupSequencer(AbstractSequencer):
                     DetectorQueryRequest(),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_1_query_responded)
-        self._state = DetectorStartupSequencer.State.QUERYING
 
     def _request_1_query_responded(
         self,
@@ -588,7 +547,6 @@ class DetectorStartupSequencer(AbstractSequencer):
                         DetectorStopRequest(),
                         DequeueStatusMessagesRequest()],
                     callback=self._request_2_reset_responded)
-        self._state = DetectorStartupSequencer.State.RESET
 
     def _request_2_reset_responded(
         self,
@@ -630,7 +588,6 @@ class DetectorStartupSequencer(AbstractSequencer):
                         DetectorStartRequest(),
                         DequeueStatusMessagesRequest()],
                     callback=self._request_3_start_responded)
-        self._state = DetectorStartupSequencer.State.STARTING
 
     def _request_3_start_responded(
         self,
@@ -666,7 +623,6 @@ class DetectorStartupSequencer(AbstractSequencer):
                     AnnotatorParametersSetRequest(parameters=detector.annotator_parameters),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_4_set_parameters_responded)
-        self._state = DetectorStartupSequencer.State.SET_PARAMETERS
 
     def _request_4_set_parameters_responded(
         self,
@@ -704,7 +660,6 @@ class DetectorStartupSequencer(AbstractSequencer):
                     IntrinsicCalibrationResultGetActiveRequest(),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_5_get_parameters_responded)
-        self._state = DetectorStartupSequencer.State.GET_PARAMETERS
 
     def _request_5_get_parameters_responded(
         self,
@@ -735,9 +690,6 @@ class DetectorStartupSequencer(AbstractSequencer):
         calibration_response: IntrinsicCalibrationResultGetActiveResponse = response_series.series[2]
         self.data_by_detector_label[detector_label].intrinsic_calibration = calibration_response.intrinsic_calibration
         self.data_by_detector_label[detector_label].done_get_parameters = True
-        if len(self._pending_request_ids) > 0:
-            return
-        self._state = DetectorStartupSequencer.State.FINISHED
 
 
 # noinspection DuplicatedCode
@@ -767,17 +719,6 @@ class MixerStartupSequencer(AbstractSequencer):
         done_set_targets: bool = field(default=False)
         done_set_extrinsics: bool = field(default=False)
 
-    class State(StrEnum):
-        INITIAL = "Initial"
-        QUERYING = "Querying"
-        RESET = "Reset"
-        STARTING = "Starting"
-        CLEAR_EXTRINSICS = "ClearExtrinsics",
-        SET_INTRINSICS = "SetIntrinsics"
-        SET_EXTRINSICS = "SetExtrinsics"
-        FINISHED = "Finished"
-
-    _state: State
     _input_mixer_data_by_label: dict[str, InputMixerData]
     data_by_mixer_label: dict[str, OutputMixerData]
 
@@ -791,19 +732,16 @@ class MixerStartupSequencer(AbstractSequencer):
             status_message_source=status_message_source,
             connection_router=connection_router,
             callback_router=callback_router)
-        self._state = MixerStartupSequencer.State.INITIAL
-        self._input_detector_data_by_label = dict()
         self._input_mixer_data_by_label = dict()
         self.data_by_mixer_label = dict()
+        self.reset()
 
     def begin(
         self,
         mixer_data: list[InputMixerData]
     ) -> None:
-        if self._state != MixerStartupSequencer.State.INITIAL:
-            message: str = \
-                f"MixerStartupSequencer.begin() called when in an incorrect state {self._state}. " + \
-                f"Try calling reset()."
+        if len(self._pending_request_ids) > 0:
+            message: str = f"MixerStartupSequencer.begin() called when already busy. Try waiting or calling reset()."
             self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
             return
         mixer_count: int = len(mixer_data)
@@ -812,18 +750,16 @@ class MixerStartupSequencer(AbstractSequencer):
                 severity=SeverityLabel.ERROR,
                 message=f"No mixer data was provided to MixerStartupSequencer")
             return
+        self.reset()
         self._input_mixer_data_by_label = {mixer.mixer_label: mixer for mixer in mixer_data}
-        self.data_by_mixer_label.clear()
         for mixer in self._input_mixer_data_by_label.values():
             self.data_by_mixer_label[mixer.mixer_label] = MixerStartupSequencer.OutputMixerData()
         self._request_1_query()
 
     def reset(self) -> None:
         super().reset()
-        self._state = MixerStartupSequencer.State.INITIAL
-
-    def is_finished(self) -> bool:
-        return self._state == MixerStartupSequencer.State.FINISHED
+        self._input_mixer_data_by_label.clear()
+        self.data_by_mixer_label.clear()
 
     def _request_1_query(self):
         self._status_message_source.enqueue_status_message(
@@ -837,7 +773,6 @@ class MixerStartupSequencer(AbstractSequencer):
                     MixerQueryRequest(),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_1_query_responded)
-        self._state = MixerStartupSequencer.State.QUERYING
 
     def _request_1_query_responded(
         self,
@@ -892,7 +827,6 @@ class MixerStartupSequencer(AbstractSequencer):
                         MixerStopRequest(),
                         DequeueStatusMessagesRequest()],
                     callback=self._request_2_reset_responded)
-        self._state = MixerStartupSequencer.State.RESET
 
     def _request_2_reset_responded(
         self,
@@ -928,7 +862,6 @@ class MixerStartupSequencer(AbstractSequencer):
                         MixerStartRequest(),
                         DequeueStatusMessagesRequest()],
                     callback=self._request_3_start_responded)
-        self._state = MixerStartupSequencer.State.STARTING
 
     def _request_3_start_responded(
         self,
@@ -964,7 +897,6 @@ class MixerStartupSequencer(AbstractSequencer):
                     PoseSolverExtrinsicClearRequest(),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_4_clear_responded)
-        self._state = MixerStartupSequencer.State.CLEAR_EXTRINSICS
 
     def _request_4_clear_responded(
         self,
@@ -1004,7 +936,6 @@ class MixerStartupSequencer(AbstractSequencer):
                 component_label=mixer_label,
                 requests=requests,
                 callback=self._request_5_set_intrinsics_responded)
-        self._state = DetectorStartupSequencer.State.SET_PARAMETERS
 
     def _request_5_set_intrinsics_responded(
         self,
@@ -1041,7 +972,6 @@ class MixerStartupSequencer(AbstractSequencer):
                 component_label=mixer_label,
                 requests=requests,
                 callback=self._request_6_set_targets_responded)
-        self._state = DetectorStartupSequencer.State.SET_PARAMETERS
 
     def _request_6_set_targets_responded(
         self,
@@ -1083,7 +1013,6 @@ class MixerStartupSequencer(AbstractSequencer):
                 component_label=mixer_label,
                 requests=requests,
                 callback=self._request_7_set_extrinsics_responded)
-        self._state = MixerStartupSequencer.State.SET_EXTRINSICS
 
     def _request_7_set_extrinsics_responded(
         self,
@@ -1109,15 +1038,10 @@ class MixerStartupSequencer(AbstractSequencer):
         self.data_by_mixer_label[mixer_label].done_set_extrinsics = True
         if len(self._pending_request_ids) > 0:
             return
-        self._state = MixerStartupSequencer.State.FINISHED
 
 
 # noinspection DuplicatedCode
 class DetectorFrameGetSequencer(AbstractSequencer):
-
-    class State(StrEnum):
-        IDLE = "Idle"
-        RUNNING = "Running"
 
     class OutputDetectorData:
         frame: DetectorFrame | None
@@ -1125,7 +1049,6 @@ class DetectorFrameGetSequencer(AbstractSequencer):
         def __init__(self):
             self.frame = None
 
-    _state: State
     data_by_detector_label: dict[str, OutputDetectorData]
 
     _include_detected: bool
@@ -1145,14 +1068,8 @@ class DetectorFrameGetSequencer(AbstractSequencer):
             status_message_source=status_message_source,
             connection_router=connection_router,
             callback_router=callback_router)
-        self._state = DetectorFrameGetSequencer.State.IDLE
-        self._include_detected = False
-        self._include_rejected = False
-        self._include_image = False
-        self._requested_image_resolution = None
-        self._requested_image_format = ImageFormat.FORMAT_PNG
-        self._on_frame_callback = None
         self.data_by_detector_label = dict()
+        self.reset()
 
     def begin(
         self,
@@ -1173,10 +1090,8 @@ class DetectorFrameGetSequencer(AbstractSequencer):
         :param requested_image_format: Either ".png" or ".jpg".
         :param requested_image_resolution: If not None, Detectors will scale images before sending.
         """
-        if self._state != DetectorFrameGetSequencer.State.IDLE:
-            message: str = \
-                f"DetectorFrameGetSequencer.begin() called when in an incorrect state {self._state}. " + \
-                f"Try calling reset()."
+        if len(self._pending_request_ids) > 0:
+            message: str = f"MixerStartupSequencer.begin() called when already busy. Try waiting or calling reset()."
             self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
             return
         detector_count: int = len(detector_labels)
@@ -1190,7 +1105,7 @@ class DetectorFrameGetSequencer(AbstractSequencer):
                 severity=SeverityLabel.ERROR,
                 message=f"No outputs are being requested from Detector frames.")
             return
-        self.data_by_detector_label.clear()
+        self.reset()
         self._on_frame_callback = on_frame_callback
         self._include_detected = include_detected
         self._include_rejected = include_rejected
@@ -1203,14 +1118,40 @@ class DetectorFrameGetSequencer(AbstractSequencer):
                 severity=SeverityLabel.DEBUG,
                 message=f"DetectorFrameGetSequencer - starting loop for detector {detector_label}")
             self._request_frame_get(detector_label=detector_label)
-        self._state = DetectorFrameGetSequencer.State.RUNNING
+
+    def enable_annotations_detected(self) -> None:
+        self._include_detected = True
+
+    def enable_annotations_rejected(self) -> None:
+        self._include_rejected = True
+
+    def enable_image_collection(
+        self,
+        image_format: ImageFormat = ImageFormat.FORMAT_PNG,
+        image_resolution: ImageResolution | None = None
+    ) -> None:
+        self._include_image = True
+        self._requested_image_format = image_format
+        self._requested_image_resolution = image_resolution
+
+    def disable_annotations_detected(self) -> None:
+        self._include_detected = False
+
+    def disable_annotations_rejected(self) -> None:
+        self._include_rejected = False
+
+    def disable_image_collection(self) -> None:
+        self._include_image = False
 
     def reset(self) -> None:
         super().reset()
-        self._state = DetectorFrameGetSequencer.State.IDLE
-
-    def is_finished(self) -> bool:
-        return False
+        self._include_detected = False
+        self._include_rejected = False
+        self._include_image = False
+        self._requested_image_resolution = None
+        self._requested_image_format = ImageFormat.FORMAT_PNG
+        self._on_frame_callback = None
+        self.data_by_detector_label.clear()
 
     def _request_frame_get(self, detector_label: str):
         self._send_request_series(
@@ -1253,10 +1194,6 @@ class DetectorFrameGetSequencer(AbstractSequencer):
 # noinspection DuplicatedCode
 class MixerFrameGetSequencer(AbstractSequencer):
 
-    class State(StrEnum):
-        IDLE = "Idle"
-        RUNNING = "Running"
-
     class OutputMixerData:
         frame: MixerFrame | None
 
@@ -1269,7 +1206,6 @@ class MixerFrameGetSequencer(AbstractSequencer):
             self.detector_labels_needing_frame_send = list()
             self.detector_labels_send_count_by_request = dict()
 
-    _state: State
     _latest_frame_by_detector_label: dict[str, DetectorFrame]
     data_by_mixer_label: dict[str, OutputMixerData]
 
@@ -1285,20 +1221,17 @@ class MixerFrameGetSequencer(AbstractSequencer):
             status_message_source=status_message_source,
             connection_router=connection_router,
             callback_router=callback_router)
-        self._state = MixerFrameGetSequencer.State.IDLE
         self._latest_frame_by_detector_label = dict()
         self.data_by_mixer_label = dict()
-        self._on_frame_callback = None
+        self.reset()
 
     def begin(
         self,
         mixer_labels: list[str],
         on_frame_callback: Callable[[str, OutputMixerData], None] | None
     ) -> None:
-        if self._state != MixerFrameGetSequencer.State.IDLE:
-            message: str = \
-                f"MixerFrameGetSequencer.begin() called when in an incorrect state {self._state}. " + \
-                f"Try calling reset()."
+        if len(self._pending_request_ids) > 0:
+            message: str = f"MixerStartupSequencer.begin() called when already busy. Try waiting or calling reset()."
             self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
             return
         mixer_count: int = len(mixer_labels)
@@ -1307,8 +1240,7 @@ class MixerFrameGetSequencer(AbstractSequencer):
                 severity=SeverityLabel.ERROR,
                 message=f"No inputs were provided to MixerFrameGetSequencer")
             return
-        self._latest_frame_by_detector_label.clear()
-        self.data_by_mixer_label.clear()
+        self.reset()
         self._on_frame_callback = on_frame_callback
         for mixer_label in mixer_labels:
             self.data_by_mixer_label[mixer_label] = MixerFrameGetSequencer.OutputMixerData()
@@ -1316,14 +1248,12 @@ class MixerFrameGetSequencer(AbstractSequencer):
                 severity=SeverityLabel.DEBUG,
                 message=f"MixerFrameGetSequencer - starting loop for Mixer {mixer_label}")
             self._request_frame_get(mixer_label=mixer_label)
-        self._state = MixerFrameGetSequencer.State.RUNNING
 
     def reset(self) -> None:
         super().reset()
-        self._state = MixerFrameGetSequencer.State.IDLE
-
-    def is_finished(self) -> bool:
-        return False
+        self._latest_frame_by_detector_label.clear()
+        self.data_by_mixer_label.clear()
+        self._on_frame_callback = None
 
     def set_latest_detector_frame(self, detector_label: str, frame: DetectorFrame) -> None:
         self._latest_frame_by_detector_label[detector_label] = frame
@@ -1376,6 +1306,96 @@ class MixerFrameGetSequencer(AbstractSequencer):
         self._request_frame_get(mixer_label=mixer_label)
 
 
+class MixerCalibrationExtrinsicImageAddSequencer(AbstractSequencer):
+    # Inputs
+    _image_base64_by_detector_label: dict[str, str]
+    _timestamp_utc_iso8601: str
+
+    image_identifier_by_mixer_label: dict[str, str]  # Outputs
+
+    _on_frame_callback: Callable[[str, list[str]], None] | None
+
+    def __init__(
+        self,
+        status_message_source: StatusMessageSource,
+        connection_router: ConnectionRouter,
+        callback_router: CallbackRouter
+    ):
+        super().__init__(
+            status_message_source=status_message_source,
+            connection_router=connection_router,
+            callback_router=callback_router)
+        self._image_base64_by_detector_label = dict()
+        self.image_identifier_by_mixer_label = dict()
+        self.reset()
+
+    def begin(
+        self,
+        mixer_labels: list[str],
+        image_base64_by_detector_label: dict[str, str],
+        timestamp_utc_iso8601: str,
+        on_frame_callback: Callable[[str, list[str]], None] | None
+    ) -> None:
+        if len(self._pending_request_ids) > 0:
+            message: str = f"MixerStartupSequencer.begin() called when already busy. Try waiting or calling reset()."
+            self._status_message_source.enqueue_status_message(severity=SeverityLabel.ERROR, message=message)
+            return
+        mixer_count: int = len(mixer_labels)
+        if mixer_count == 0:
+            self._status_message_source.enqueue_status_message(
+                severity=SeverityLabel.ERROR,
+                message=f"No inputs were provided to MixerFrameGetSequencer")
+            return
+        self.reset()
+        self._image_base64_by_detector_label = image_base64_by_detector_label
+        self._timestamp_utc_iso8601 = timestamp_utc_iso8601
+        self._on_frame_callback = on_frame_callback
+        for mixer_label in mixer_labels:
+            requests: list[MCTRequest] = list()
+            for detector_label in self._image_base64_by_detector_label.keys():
+                requests.append(ExtrinsicCalibrationImageAddRequest(
+                    image_base64=self._image_base64_by_detector_label[detector_label],
+                    detector_label=detector_label,
+                    timestamp_utc_iso8601=self._timestamp_utc_iso8601))
+            requests.append(DequeueStatusMessagesRequest())
+            self._send_request_series(
+                component_label=mixer_label,
+                requests=requests,
+                callback=self._responded)
+
+    def reset(self) -> None:
+        super().reset()
+        self._image_base64_by_detector_label.clear()
+        self.image_identifier_by_mixer_label.clear()
+        self._timestamp_utc_iso8601 = str()
+        self._on_frame_callback = None
+
+    def _responded(
+        self,
+        response_series: MCTResponseSeries,
+        _passthrough_parameters: dict[str, ...]
+    ):
+        self._status_message_source.enqueue_status_message(
+            severity=SeverityLabel.DEBUG,
+            message="MixerFrameGetSequencer._request_frame_get_responded()")
+        mixer_label: str = response_series.responder
+        detector_count: int = len(self._image_base64_by_detector_label)
+        expected_types: list[type[MCTResponse]] = [ExtrinsicCalibrationImageAddResponse] * detector_count
+        expected_types.append(DequeueStatusMessagesResponse)
+        if self._report_response_series_and_errors(
+            response_series=response_series,
+            expected_types=expected_types
+        ):
+            return
+        image_identifiers: list[str] = list()
+        for detector_index in range(detector_count):
+            # noinspection PyTypeChecker
+            response: ExtrinsicCalibrationImageAddResponse = response_series.series[detector_index]
+            image_identifiers.append(response.image_identifier)
+        if self._on_frame_callback is not None:
+            self._on_frame_callback(mixer_label, image_identifiers)
+
+
 class AbstractSingleRoundTripSequencer(AbstractSequencer):
     """
     A common use case is to send a single message or an identical message over several connections.
@@ -1392,7 +1412,7 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
     _response_type: ClassVar[type[MCTResponse]]
     _extractor_callback: ClassVar[Callable[[MCTResponse], dict[str, ...]] | None]
 
-    _user_callback: Callable
+    _user_callback: Callable | None
 
     def begin(
         self,
@@ -1400,7 +1420,6 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
         callback: Callable | None = None,
         request_args: dict[str, ...] | None = None
     ) -> None:
-        self._user_callback = callback
         if len(self._pending_request_ids) > 0:
             message: str = \
                 f"{__class__.__name__}.begin() called when requests are already in progress."
@@ -1414,6 +1433,8 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
             return
         if request_args is None:
             request_args = dict()
+        self.reset()
+        self._user_callback = callback
         for component_label in component_labels:
             self._send_request_series(
                 component_label=component_label,
@@ -1444,8 +1465,9 @@ class AbstractSingleRoundTripSequencer(AbstractSequencer):
         if len(self._pending_request_ids) > 0:
             return
 
-    def is_finished(self) -> bool:
-        return len(self._pending_request_ids) <= 0
+    def reset(self) -> None:
+        super().reset()
+        self._user_callback = None
 
     @classmethod
     def get_request_type(cls) -> type[MCTRequest]:
@@ -1603,7 +1625,7 @@ AnyCalibrationSequencer: type[AbstractSingleRoundTripSequencer] = Union[
     DetectorCalibrationIntrinsicResultMetadataUpdateSequencer,
     MixerCalibrationExtrinsicCalculateSequencer,
     MixerCalibrationExtrinsicDeleteStagedSequencer,
-    MixerCalibrationExtrinsicImageAddSequencer,
+    MixerCalibrationExtrinsicImageAddSequencer, \
     MixerCalibrationExtrinsicImageGetSequencer,
     MixerCalibrationExtrinsicImageMetadataListSequencer,
     MixerCalibrationExtrinsicImageMetadataUpdateSequencer,
