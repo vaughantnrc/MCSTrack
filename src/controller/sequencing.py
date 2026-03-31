@@ -292,8 +292,8 @@ class TimeSyncSequencer(AbstractSequencer):
 
     def begin(
         self,
-        sample_count: int,
-        component_labels: list[str]
+        component_labels: list[str],
+        sample_count: int = _TIME_SYNC_DEFAULT_SAMPLE_COUNT
     ):
         if len(self._pending_request_ids) > 0:
             message: str = f"MixerStartupSequencer.begin() called when already busy. Try waiting or calling reset()."

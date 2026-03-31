@@ -48,7 +48,7 @@ class MainController:
             callback=_on_image_add_callback)
         while (now_time - start_time).total_seconds() < 1:
             controller.update()
-            if not controller.is_general_sequencer_busy():
+            if not controller.is_busy_with_user_task():
                 break
             now_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
@@ -61,7 +61,7 @@ class MainController:
             callback=_on_image_get_callback)
         while (now_time - start_time).total_seconds() < 1:
             controller.update()
-            if not controller.is_general_sequencer_busy():
+            if not controller.is_busy_with_user_task():
                 break
             now_time = datetime.datetime.now(tz=datetime.timezone.utc)
 

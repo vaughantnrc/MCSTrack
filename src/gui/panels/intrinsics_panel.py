@@ -393,7 +393,7 @@ class IntrinsicsPanel(BasePanel):
             IntrinsicCalibrationResultMetadataListRequest(
                 image_resolution=selected_image_resolution)])
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=selected_detector_label,
+            component_label=selected_detector_label,
             request_series=request_series)
         self._calibration_in_progress = True
         self._update_ui_controls()
@@ -407,7 +407,7 @@ class IntrinsicsPanel(BasePanel):
         detector_label: str = self._detector_selector.selector.GetStringSelection()
         request_series: MCTRequestSeries = MCTRequestSeries(series=[IntrinsicCalibrationResolutionListRequest()])
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=detector_label,
+            component_label=detector_label,
             request_series=request_series)
         self._update_ui_controls()
 
@@ -425,7 +425,7 @@ class IntrinsicsPanel(BasePanel):
             IntrinsicCalibrationResultMetadataListRequest(
                 image_resolution=selected_image_resolution)])
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=selected_detector_label,
+            component_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
 
@@ -454,7 +454,7 @@ class IntrinsicsPanel(BasePanel):
                 IntrinsicCalibrationImageGetRequest(image_identifier=image_identifier)])
             detector_label: str = self._detector_selector.selector.GetStringSelection()
             self._control_blocking_request_id = self._controller.send_custom_request(
-                connection_label=detector_label,
+                component_label=detector_label,
                 request_series=request_series)
         self._update_ui_controls()
 
@@ -477,7 +477,7 @@ class IntrinsicsPanel(BasePanel):
             IntrinsicCalibrationImageMetadataListRequest(
                 image_resolution=image_resolution)])
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=detector_label,
+            component_label=detector_label,
             request_series=request_series)
         self._update_ui_controls()
 
@@ -492,7 +492,7 @@ class IntrinsicsPanel(BasePanel):
                 IntrinsicCalibrationResultGetRequest(result_identifier=result_identifier)])
             detector_label: str = self._detector_selector.selector.GetStringSelection()
             self._control_blocking_request_id = self._controller.send_custom_request(
-                connection_label=detector_label,
+                component_label=detector_label,
                 request_series=request_series)
         self._update_ui_controls()
 
@@ -515,7 +515,7 @@ class IntrinsicsPanel(BasePanel):
             IntrinsicCalibrationResultMetadataListRequest(
                 image_resolution=image_resolution)])
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=detector_label,
+            component_label=detector_label,
             request_series=request_series)
         self._update_ui_controls()
 

@@ -280,7 +280,7 @@ class DetectorPanel(BasePanel):
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         request_series: MCTRequestSeries = MCTRequestSeries(series=[IntrinsicCalibrationImageAddRequest()])
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=selected_detector_label,
+            component_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
 
@@ -291,7 +291,7 @@ class DetectorPanel(BasePanel):
                 format=_CAPTURE_FORMAT,
                 requested_resolution=requested_resolution)])
         self._live_preview_request_id = self._controller.send_custom_request(
-            connection_label=selected_detector_label,
+            component_label=selected_detector_label,
             request_series=request_series)
 
     def begin_get_detector_parameters(self):
@@ -301,7 +301,7 @@ class DetectorPanel(BasePanel):
                 CameraParametersGetRequest(),
                 AnnotatorParametersGetRequest()])
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=selected_detector_label,
+            component_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
 
@@ -314,7 +314,7 @@ class DetectorPanel(BasePanel):
                 CameraParametersSetRequest(parameters=key_values),
                 CameraParametersGetRequest()])  # sync
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=selected_detector_label,
+            component_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
 
@@ -326,7 +326,7 @@ class DetectorPanel(BasePanel):
             AnnotatorParametersSetRequest(parameters=key_values),
             AnnotatorParametersGetRequest()])  # sync
         self._control_blocking_request_id = self._controller.send_custom_request(
-            connection_label=selected_detector_label,
+            component_label=selected_detector_label,
             request_series=request_series)
         self._update_ui_controls()
 

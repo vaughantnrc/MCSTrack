@@ -402,7 +402,7 @@ class BoardBuilderPanel(BasePanel):
                 CameraImageGetRequest(
                     format=_CAPTURE_FORMAT)])
         preview.image_request_id = self._controller.send_custom_request(
-            connection_label=preview.detector_label,
+            component_label=preview.detector_label,
             request_series=request_series)
 
     def _draw_all_corners(self, annotations, scale, frame, color):
