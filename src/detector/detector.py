@@ -1,17 +1,10 @@
 from .api import \
-    AnnotatorParametersGetRequest, \
-    AnnotatorParametersGetResponse, \
-    AnnotatorParametersSetRequest, \
-    CameraImageGetRequest, \
-    CameraImageGetResponse, \
-    CameraParametersGetRequest, \
-    CameraParametersGetResponse, \
-    CameraParametersSetRequest, \
-    CameraParametersSetResponse, \
-    CameraResolutionGetRequest, \
-    CameraResolutionGetResponse, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse, \
+    DetectorParametersGetRequest, \
+    DetectorParametersGetResponse, \
+    DetectorParametersSetRequest, \
+    DetectorParametersSetResponse, \
     DetectorQueryRequest, \
     DetectorQueryResponse, \
     DetectorStartRequest, \
@@ -116,30 +109,6 @@ class Detector(MCTComponent):
 
     def __del__(self):
         self._camera.__del__()
-
-    def annotator_parameters_get(
-        self,
-        **_kwargs
-    ) -> AnnotatorParametersGetResponse | ErrorResponse:
-        try:
-            parameters = self._annotator.get_parameters()
-        except MCTAnnotatorRuntimeError as e:
-            return ErrorResponse(message=e.message)
-        return AnnotatorParametersGetResponse(parameters=parameters)
-
-    def annotator_parameters_set(
-        self,
-        **kwargs
-    ) -> EmptyResponse | ErrorResponse:
-        request: AnnotatorParametersSetRequest = self.get_kwarg(
-            kwargs=kwargs,
-            key="request",
-            arg_type=AnnotatorParametersSetRequest)
-        try:
-            self._annotator.set_parameters(parameters=request.parameters)
-        except MCTAnnotatorRuntimeError as e:
-            return ErrorResponse(message=e.message)
-        return EmptyResponse()
 
     def calibration_calculate(
         self,
@@ -317,69 +286,6 @@ class Detector(MCTComponent):
             return ErrorResponse(message=e.public_message)
         return EmptyResponse()
 
-    def camera_image_get(
-        self,
-        **kwargs
-    ) -> CameraImageGetResponse | ErrorResponse:
-        request: CameraImageGetRequest = self.get_kwarg(
-            kwargs=kwargs,
-            key="request",
-            arg_type=CameraImageGetRequest)
-        encoded_image_base64: str
-        original_resolution: ImageResolution
-        try:
-            encoded_image_base64, original_resolution = self._camera.get_encoded_image(
-                image_format=request.format,
-                requested_resolution=request.requested_resolution)
-        except MCTCameraRuntimeError as e:
-            return ErrorResponse(message=e.message)
-        return CameraImageGetResponse(
-            format=request.format,
-            image_base64=encoded_image_base64,
-            original_resolution=original_resolution)
-
-    def camera_parameters_get(
-        self,
-        **_kwargs
-    ) -> CameraParametersGetResponse | ErrorResponse:
-        parameters: list[KeyValueMetaAbstract]
-        resolution: ImageResolution
-        try:
-            parameters = self._camera.get_parameters()
-            resolution = self._camera.get_resolution()
-        except MCTCameraRuntimeError as e:
-            return ErrorResponse(message=e.message)
-        return CameraParametersGetResponse(
-            parameters=parameters,
-            resolution=resolution)
-
-    def camera_parameters_set(
-        self,
-        **kwargs
-    ) -> CameraParametersSetResponse | ErrorResponse:
-        request: CameraParametersSetRequest = self.get_kwarg(
-            kwargs=kwargs,
-            key="request",
-            arg_type=CameraParametersSetRequest)
-        new_resolution: ImageResolution
-        try:
-            self._camera.set_parameters(parameters=request.parameters)
-            new_resolution = self._camera.get_resolution()
-        except MCTCameraRuntimeError as e:
-            return ErrorResponse(message=e.message)
-        return CameraParametersSetResponse(resolution=new_resolution)
-
-    def camera_resolution_get(
-        self,
-        **_kwargs
-    ) -> CameraResolutionGetResponse | ErrorResponse:
-        image_resolution: ImageResolution
-        try:
-            image_resolution = self._camera.get_resolution()
-        except MCTCameraRuntimeError as e:
-            return ErrorResponse(message=e.message)
-        return CameraResolutionGetResponse(resolution=image_resolution)
-
     def detector_frame_get(
         self,
         **kwargs
@@ -405,6 +311,50 @@ class Detector(MCTComponent):
         except (MCTCameraRuntimeError, MCTAnnotatorRuntimeError) as e:
             return ErrorResponse(message=e.message)
         return DetectorFrameGetResponse(frame=detector_frame)
+
+    def detector_parameters_get(
+        self,
+        **_kwargs
+    ) -> DetectorParametersGetResponse:
+        camera_resolution: ImageResolution
+        camera_parameters: list[KeyValueMetaAbstract]
+        annotator_parameters: list[KeyValueMetaAbstract]
+        try:
+            camera_resolution = self._camera.get_resolution()
+            camera_parameters = self._camera.get_parameters()
+            annotator_parameters = self._annotator.get_parameters()
+        except (MCTAnnotatorRuntimeError, MCTCameraRuntimeError) as e:
+            return ErrorResponse(message=e.message)
+        return DetectorParametersGetResponse(
+            camera_resolution=camera_resolution,
+            camera_parameters=camera_parameters,
+            annotator_parameters=annotator_parameters)
+
+    def detector_parameters_set(
+        self,
+        **kwargs
+    ) -> DetectorParametersGetResponse:
+        request: DetectorParametersSetRequest = self.get_kwarg(
+            kwargs=kwargs,
+            key="request",
+            arg_type=DetectorParametersSetRequest)
+        new_camera_resolution: ImageResolution
+        new_camera_parameters: list[KeyValueMetaAbstract]
+        new_annotator_parameters: list[KeyValueMetaAbstract]
+        try:
+            if request.camera_parameters is not None:
+                self._camera.set_parameters(parameters=request.camera_parameters)
+            if request.annotator_parameters is not None:
+                self._annotator.set_parameters(parameters=request.annotator_parameters)
+            new_camera_resolution = self._camera.get_resolution()
+            new_camera_parameters = self._camera.get_parameters()
+            new_annotator_parameters = self._annotator.get_parameters()
+        except (MCTAnnotatorRuntimeError, MCTCameraRuntimeError) as e:
+            return ErrorResponse(message=e.message)
+        return DetectorParametersSetResponse(
+            camera_resolution=new_camera_resolution,
+            camera_parameters=new_camera_parameters,
+            annotator_parameters=new_annotator_parameters)
 
     def detector_query(
         self,
@@ -441,13 +391,9 @@ class Detector(MCTComponent):
     def supported_request_methods(self) -> dict[type[MCTRequest], Callable[[dict], MCTResponse]]:
         return_value: dict[type[MCTRequest], Callable[[dict], MCTResponse]] = super().supported_request_methods()
         return_value.update({
-            AnnotatorParametersGetRequest: self.annotator_parameters_get,
-            AnnotatorParametersSetRequest: self.annotator_parameters_set,
-            CameraImageGetRequest: self.camera_image_get,
-            CameraParametersGetRequest: self.camera_parameters_get,
-            CameraParametersSetRequest: self.camera_parameters_set,
-            CameraResolutionGetRequest: self.camera_resolution_get,
             DetectorFrameGetRequest: self.detector_frame_get,
+            DetectorParametersGetRequest: self.detector_parameters_get,
+            DetectorParametersSetRequest: self.detector_parameters_set,
             DetectorQueryRequest: self.detector_query,
             DetectorStartRequest: self.detector_start,
             DetectorStopRequest: self.detector_stop,

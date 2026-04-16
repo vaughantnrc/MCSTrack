@@ -16,35 +16,11 @@ from pydantic import Field, SerializeAsAny
 from typing import Optional
 
 
-class AnnotatorParametersGetRequest(MCTRequest):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_annotator_parameters_get"
-
-    parsable_type: str = Field(default=type_identifier())
-
-
-class AnnotatorParametersGetResponse(MCTResponse):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_annotator_parameters_get"
-
-    parsable_type: str = Field(default=type_identifier())
-
-    parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
-
-
-class AnnotatorParametersSetRequest(MCTRequest):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_annotator_parameters_set"
-
-    parsable_type: str = Field(default=type_identifier())
-
-    parameters: list[SerializeAsAny[KeyValueSimpleAny]] = Field()
-
-
+# TODO: Remove
 class CameraImageGetRequest(MCTRequest):
+    """
+    Deprecated - use DetectorFrameGetRequest instead
+    """
     @staticmethod
     def type_identifier() -> str:
         return "detector_camera_image_get"
@@ -55,7 +31,11 @@ class CameraImageGetRequest(MCTRequest):
     requested_resolution: ImageResolution | None = Field(default=None)
 
 
+# TODO: Remove
 class CameraImageGetResponse(MCTResponse):
+    """
+    Deprecated - use DetectorFrameGetResponse instead
+    """
     @staticmethod
     def type_identifier() -> str:
         return "detector_camera_image_get"
@@ -65,63 +45,6 @@ class CameraImageGetResponse(MCTResponse):
     format: ImageFormat = Field()
     image_base64: str = Field()
     original_resolution: ImageResolution = Field()
-
-
-class CameraParametersGetRequest(MCTRequest):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_camera_parameters_get"
-
-    parsable_type: str = Field(default=type_identifier())
-
-
-class CameraParametersGetResponse(MCTResponse):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_camera_parameters_get"
-
-    parsable_type: str = Field(default=type_identifier())
-
-    parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
-    resolution: ImageResolution = Field()
-
-
-class CameraParametersSetRequest(MCTRequest):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_camera_parameters_set"
-
-    parsable_type: str = Field(default=type_identifier())
-
-    parameters: list[SerializeAsAny[KeyValueSimpleAny]] = Field()
-
-
-class CameraParametersSetResponse(MCTResponse):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_camera_parameters_set"
-
-    parsable_type: str = Field(default=type_identifier())
-
-    resolution: ImageResolution = Field()  # Sometimes parameter changes may result in changes of resolution
-
-
-class CameraResolutionGetRequest(MCTRequest):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_camera_resolution_get"
-
-    parsable_type: str = Field(default=type_identifier())
-
-
-class CameraResolutionGetResponse(MCTResponse):
-    @staticmethod
-    def type_identifier() -> str:
-        return "detector_camera_resolution_get"
-
-    parsable_type: str = Field(default=type_identifier())
-
-    resolution: ImageResolution = Field()
 
 
 class DetectorFrameGetRequest(MCTRequest):
@@ -146,6 +69,50 @@ class DetectorFrameGetResponse(MCTResponse):
     parsable_type: str = Field(default=type_identifier())
 
     frame: DetectorFrame = Field()
+
+
+class DetectorParametersGetRequest(MCTRequest):
+    @staticmethod
+    def type_identifier() -> str:
+        return "detector_parameters_get"
+
+    parsable_type: str = Field(default=type_identifier())
+
+
+class DetectorParametersGetResponse(MCTResponse):
+    @staticmethod
+    def type_identifier() -> str:
+        return "detector_parameters_get"
+
+    parsable_type: str = Field(default=type_identifier())
+
+    camera_resolution: ImageResolution = Field()
+    camera_parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
+    annotator_parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
+
+
+class DetectorParametersSetRequest(MCTRequest):
+    @staticmethod
+    def type_identifier() -> str:
+        return "detector_parameters_set"
+
+    parsable_type: str = Field(default=type_identifier())
+
+    camera_resolution: ImageResolution | None = Field(default=None)
+    camera_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
+    annotator_parameters: list[SerializeAsAny[KeyValueSimpleAny]] | None = Field(default=None)
+
+
+class DetectorParametersSetResponse(MCTResponse):
+    @staticmethod
+    def type_identifier() -> str:
+        return "detector_parameters_set"
+
+    parsable_type: str = Field(default=type_identifier())
+
+    camera_resolution: ImageResolution = Field()
+    camera_parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
+    annotator_parameters: list[SerializeAsAny[KeyValueMetaAny]] = Field()
 
 
 class DetectorQueryRequest(MCTRequest):
@@ -371,13 +338,11 @@ class IntrinsicCalibrationResultMetadataUpdateRequest(MCTRequest):
 
 
 DETECTOR_RESPONSE_TYPES: list[type[MCTResponse]] = [
-    AnnotatorParametersGetResponse,
     CameraImageGetResponse,
-    CameraParametersGetResponse,
-    CameraParametersSetResponse,
-    CameraResolutionGetResponse,
     DequeueStatusMessagesResponse,
     DetectorFrameGetResponse,
+    DetectorParametersGetResponse,
+    DetectorParametersSetResponse,
     DetectorQueryResponse,
     EmptyResponse,
     ErrorResponse,

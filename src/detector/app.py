@@ -1,12 +1,7 @@
 from .api import \
-    AnnotatorParametersGetResponse, \
-    AnnotatorParametersSetRequest, \
-    CameraImageGetRequest, \
-    CameraImageGetResponse, \
-    CameraParametersGetResponse, \
-    CameraResolutionGetResponse, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse, \
+    DetectorParametersGetResponse, \
     DetectorQueryResponse, \
     IntrinsicCalibrationResultGetActiveResponse
 from .detector import \
@@ -15,14 +10,11 @@ from src.common import \
     Annotator, \
     Camera, \
     EmptyResponse, \
-    ErrorResponse, \
-    ImageFormat, \
     IntrinsicCalibrator, \
     TimestampGetResponse, \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
 import asyncio
-import base64
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.websockets import WebSocket
@@ -99,16 +91,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"])
 
-    @detector_app.get("/annotator/get_parameters")
-    async def annotator_get_parameters() -> AnnotatorParametersGetResponse | ErrorResponse:
-        return detector.annotator_parameters_get()
-
-    @detector_app.post("/annotator/set_parameters")
-    async def annotator_set_parameters(
-        request: AnnotatorParametersSetRequest
-    ) -> EmptyResponse | ErrorResponse:
-        return detector.annotator_parameters_set(
-            request=request)
+    @detector_app.get("/detector/parameters_get")
+    async def camera_get_parameters() -> DetectorParametersGetResponse:
+        result: DetectorParametersGetResponse = detector.detector_parameters_get()
+        return result
 
     @detector_app.get("/detector/query")
     async def detector_query() -> DetectorQueryResponse:
@@ -149,24 +135,6 @@ def create_app() -> FastAPI:
     @detector_app.get("/calibration/get_result_active")
     async def calibration_get_result_active() -> IntrinsicCalibrationResultGetActiveResponse:
         return detector.calibration_result_get_active()
-
-    @detector_app.get("/camera/get_image")
-    async def camera_get_image() -> CameraImageGetResponse:
-        result: CameraImageGetResponse = detector.camera_image_get(
-            request=CameraImageGetRequest(format=ImageFormat.FORMAT_PNG))
-        image_bytes = base64.b64decode(result.image_base64)
-        with open("test.png", "wb") as image_file:
-            image_file.write(image_bytes)
-        return result
-
-    @detector_app.get("/camera/get_parameters")
-    async def camera_get_parameters() -> CameraParametersGetResponse:
-        result: CameraParametersGetResponse = detector.camera_parameters_get()
-        return result
-
-    @detector_app.get("/camera/get_resolution")
-    async def camera_get_resolution() -> CameraResolutionGetResponse:
-        return detector.camera_resolution_get()
 
     @detector_app.websocket("/websocket")
     async def websocket_handler(websocket: WebSocket) -> None:

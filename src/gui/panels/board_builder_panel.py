@@ -16,6 +16,7 @@ from src.common.api import \
 from src.common import \
     Annotation, \
     DetectorFrame, \
+    ImageFormat, \
     ImageResolution, \
     ImageUtils, \
     Matrix4x4, \
@@ -27,7 +28,6 @@ from src.detector.api import \
     CameraImageGetRequest, \
     CameraImageGetResponse, \
     IntrinsicCalibrationResultGetActiveResponse
-from src.gui.panels.detector_panel import _CAPTURE_FORMAT
 import cv2
 import datetime
 from io import BytesIO
@@ -86,15 +86,13 @@ class BoardBuilderPanel(BasePanel):
     live_detector_previews: list[LiveDetectorPreview]
 
     def __init__(
-            self,
-            parent: wx.Window,
-            controller: MCTController,
-            status_message_source: StatusMessageSource,
-            name: str = "BoardBuilderPanel"
+        self,
+        parent: wx.Window,
+        controller: MCTController,
+        name: str = "BoardBuilderPanel"
     ):
         super().__init__(
             parent=parent,
-            status_message_source=status_message_source,
             name=name)
 
         self._controller = controller
@@ -400,7 +398,7 @@ class BoardBuilderPanel(BasePanel):
         request_series: MCTRequestSeries = MCTRequestSeries(
             series=[
                 CameraImageGetRequest(
-                    format=_CAPTURE_FORMAT)])
+                    format=ImageFormat.FORMAT_JPG)])
         preview.image_request_id = self._controller.send_custom_request(
             component_label=preview.detector_label,
             request_series=request_series)

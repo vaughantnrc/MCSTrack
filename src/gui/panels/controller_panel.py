@@ -1,11 +1,6 @@
 from .base_panel import BasePanel
 from .specialized import \
-    ConnectionTable, \
-    LogPanel
-from src.common import \
-    DequeueStatusMessagesResponse, \
-    StatusMessage, \
-    StatusMessageSource
+    ConnectionTable
 from src.controller import \
     Connection, \
     MCTController
@@ -14,19 +9,19 @@ import wx
 import wx.grid
 
 
-_STATUS_MESSAGE_TABLE_SUBSCRIBER_LABEL: Final[str] = "status_message_table"
+_CONTROL_MIN_WIDTH_PX: Final[int] = 760
 
 
 class ControllerPanel(BasePanel):
 
     _controller: MCTController
-    _start_from_configuration_button: wx.Button
+    _load_configuration_button: wx.Button
+    _start_button: wx.Button
     _stop_button: wx.Button
     _connection_table: ConnectionTable
     _controller_status_textbox: wx.TextCtrl
-    _log_panel: LogPanel
 
-    _controller_status: str  # last status reported by MCTController
+    _controller_state: str  # last status reported by MCTController
     _connection_reports: list[Connection.Report]
     _is_updating: bool  # Some things should only trigger during explicit user events
 
@@ -34,17 +29,12 @@ class ControllerPanel(BasePanel):
         self,
         parent: wx.Window,
         controller: MCTController,
-        status_message_source: StatusMessageSource,
         name: str = "ControllerPanel"
     ):
         super().__init__(
             parent=parent,
-            status_message_source=status_message_source,
             name=name)
         self._controller = controller
-
-        self._controller.add_status_subscriber(client_identifier=_STATUS_MESSAGE_TABLE_SUBSCRIBER_LABEL)
-        self.status_message_source.add_status_subscriber(subscriber_label=_STATUS_MESSAGE_TABLE_SUBSCRIBER_LABEL)
 
         horizontal_split_sizer: wx.BoxSizer = wx.BoxSizer(orient=wx.HORIZONTAL)
 
@@ -57,6 +47,7 @@ class ControllerPanel(BasePanel):
         control_panel.SetScrollRate(
             xstep=1,
             ystep=1)
+        control_border_panel.SetMinSize(size=(_CONTROL_MIN_WIDTH_PX, 0))
         control_panel.ShowScrollbars(
             horz=wx.SHOW_SB_NEVER,
             vert=wx.SHOW_SB_ALWAYS)
@@ -67,10 +58,15 @@ class ControllerPanel(BasePanel):
             parent=control_panel,
             sizer=control_sizer)
 
-        self._start_from_configuration_button: wx.Button = self.add_control_button(
+        self._load_configuration_button: wx.Button = self.add_control_button(
             parent=control_panel,
             sizer=control_sizer,
-            label="Start From File")
+            label="Load Configuration")
+
+        self._start_button: wx.Button = self.add_control_button(
+            parent=control_panel,
+            sizer=control_sizer,
+            label="Start")
 
         self._stop_button: wx.Button = self.add_control_button(
             parent=control_panel,
@@ -107,42 +103,46 @@ class ControllerPanel(BasePanel):
             window=control_panel,
             flags=wx.SizerFlags(1).Expand())
         control_border_panel.SetSizer(sizer=control_border_box)
+
+        horizontal_split_sizer.AddStretchSpacer()
         horizontal_split_sizer.Add(
             window=control_border_panel,
-            flags=wx.SizerFlags(35).Expand())
-
-        self._log_panel = LogPanel(parent=self)
-        self._log_panel.SetBackgroundColour(colour=wx.BLACK)
-        horizontal_split_sizer.Add(
-            window=self._log_panel,
-            flags=wx.SizerFlags(65).Expand())
+            flags=wx.SizerFlags(1).Expand())
+        horizontal_split_sizer.AddStretchSpacer()
 
         self.SetSizerAndFit(sizer=horizontal_split_sizer)
 
-        self._start_from_configuration_button.Bind(
+        self._load_configuration_button.Bind(
             event=wx.EVT_BUTTON,
-            handler=self.on_start_from_configuration_pressed)
+            handler=self.on_ui_load_configuration_pressed)
+        self._start_button.Bind(
+            event=wx.EVT_BUTTON,
+            handler=self.on_ui_start_pressed)
         self._stop_button.Bind(
             event=wx.EVT_BUTTON,
-            handler=self.on_stop_pressed)
+            handler=self.on_ui_stop_pressed)
 
-        self._controller_status = str()
+        self._controller_state = str()
         self._connection_reports = list()
         self._is_updating = False
 
         self.update_controller_buttons()
 
-    def on_start_from_configuration_pressed(self, _event: wx.CommandEvent) -> None:
+    def on_ui_load_configuration_pressed(self, _event: wx.CommandEvent) -> None:
         dialog: wx.FileDialog = wx.FileDialog(
             parent=self,
             message="Select a configuration file",
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         if dialog.ShowModal() == wx.ID_CANCEL:
             return
-        self._controller.configure(dialog.GetPath())
+        self._controller.configure_from_filepath(dialog.GetPath())
         self.update_controller_buttons()
 
-    def on_stop_pressed(self, _event: wx.CommandEvent) -> None:
+    def on_ui_start_pressed(self, _event: wx.CommandEvent) -> None:
+        self._controller.start_up()
+        self.update_controller_buttons()
+
+    def on_ui_stop_pressed(self, _event: wx.CommandEvent) -> None:
         self._controller.shut_down()
         self.update_controller_buttons()
 
@@ -150,21 +150,24 @@ class ControllerPanel(BasePanel):
         super().update_loop()
         self._is_updating = True
         self.update_connection_table_display()
-        controller_status: str = self._controller.get_controller_state()
-        if controller_status != self._controller_status:
-            self._controller_status = controller_status
-            self._controller_status_textbox.SetValue(f"MCTController Status: {controller_status}")
+        controller_state: str = self._controller.get_controller_state()
+        if controller_state != self._controller_state:
+            self._controller_state = controller_state
+            self._controller_status_textbox.SetValue(f"MCTController Status: {controller_state}")
             self.update_controller_buttons()
-        self.update_loop_log_table()
         self._is_updating = False
 
     def update_controller_buttons(self):
-        self._start_from_configuration_button.Enable(enable=False)
+        self._load_configuration_button.Enable(enable=False)
+        self._start_button.Enable(enable=False)
         self._stop_button.Enable(enable=False)
-        if self._controller.is_running():
+        if self._controller_state == MCTController.State.RUNNING:
             self._stop_button.Enable(enable=True)
-        elif self._controller.is_idle():
-            self._start_from_configuration_button.Enable(enable=True)
+        elif self._controller_state == MCTController.State.INITIAL:
+            self._load_configuration_button.Enable(enable=True)
+        elif self._controller_state == MCTController.State.CONFIGURED:
+            self._load_configuration_button.Enable(enable=True)
+            self._start_button.Enable(enable=True)
 
     def update_connection_table_display(self) -> None:
         # Return if there is no change
@@ -185,12 +188,3 @@ class ControllerPanel(BasePanel):
         if selected_row_index is not None and selected_row_index >= len(self._connection_reports):
             selected_row_index = None
         self._connection_table.set_selected_row_index(selected_row_index)
-
-    def update_loop_log_table(self):
-        status_messages_response: DequeueStatusMessagesResponse = \
-            self._controller.dequeue_status_messages(
-                client_identifier=_STATUS_MESSAGE_TABLE_SUBSCRIBER_LABEL)
-        status_messages: list[StatusMessage] = status_messages_response.status_messages
-        status_messages += self.status_message_source.pop_new_status_messages(
-            subscriber_label=_STATUS_MESSAGE_TABLE_SUBSCRIBER_LABEL)
-        self._log_panel.output_status_messages(status_messages=status_messages)

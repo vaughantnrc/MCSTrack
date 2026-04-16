@@ -93,12 +93,10 @@ class ExtrinsicsPanel(BasePanel):
         self,
         parent: wx.Window,
         controller: MCTController,
-        status_message_source: StatusMessageSource,
         name: str = "IntrinsicsPanel"
     ):
         super().__init__(
             parent=parent,
-            status_message_source=status_message_source,
             name=name)
         self._controller = controller
 
@@ -323,8 +321,8 @@ class ExtrinsicsPanel(BasePanel):
             elif not isinstance(response, EmptyResponse):
                 self.handle_unknown_response(response=response)
 
-    def on_page_select(self) -> None:
-        super().on_page_select()
+    def on_ui_page_select(self) -> None:
+        super().on_ui_page_select()
         available_mixer_labels: list[str] = self._controller.get_remote_labels_mixer()
         self._mixer_selector.set_options(option_list=available_mixer_labels)
         self._update_ui_controls()

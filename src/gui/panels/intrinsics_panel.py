@@ -16,11 +16,11 @@ from src.common import \
     IntrinsicCalibrator, \
     MCTRequestSeries, \
     MCTResponse, \
-    MCTResponseSeries, \
-    StatusMessageSource
+    MCTResponseSeries
 from src.controller import \
     MCTController
 from src.detector import \
+    IntrinsicCalibrationImageAddResponse, \
     IntrinsicCalibrationCalculateRequest, \
     IntrinsicCalibrationCalculateResponse, \
     IntrinsicCalibrationDeleteStagedRequest, \
@@ -79,12 +79,10 @@ class IntrinsicsPanel(BasePanel):
         self,
         parent: wx.Window,
         controller: MCTController,
-        status_message_source: StatusMessageSource,
         name: str = "IntrinsicsPanel"
     ):
         super().__init__(
             parent=parent,
-            status_message_source=status_message_source,
             name=name)
         self._controller = controller
 
@@ -261,6 +259,11 @@ class IntrinsicsPanel(BasePanel):
             event=wx.EVT_BUTTON,
             handler=self._on_calibrate_pressed)
 
+    def begin_capture_calibration(self) -> None:
+        selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
+        self._controller.calibrate_intrinsic_image_add(
+            detector_label=selected_detector_label)  # TODO: This needs a callback, and to be called somewhere?
+
     def handle_error_response(
         self,
         response: ErrorResponse
@@ -278,7 +281,9 @@ class IntrinsicsPanel(BasePanel):
     ) -> None:
         response: MCTResponse
         for response in response_series.series:
-            if isinstance(response, IntrinsicCalibrationCalculateResponse):
+            if isinstance(response, IntrinsicCalibrationImageAddResponse):
+                self._handle_response_add_calibration_image_response(response=response)
+            elif isinstance(response, IntrinsicCalibrationCalculateResponse):
                 self._handle_response_calibrate(response=response)
             elif isinstance(response, IntrinsicCalibrationImageGetResponse):
                 self._handle_response_get_calibration_image(response=response)
@@ -295,8 +300,8 @@ class IntrinsicsPanel(BasePanel):
             elif not isinstance(response, EmptyResponse):
                 self.handle_unknown_response(response=response)
 
-    def on_page_select(self) -> None:
-        super().on_page_select()
+    def on_ui_page_select(self) -> None:
+        super().on_ui_page_select()
         selected_detector_label: str = self._detector_selector.selector.GetStringSelection()
         available_detector_labels: list[str] = self._controller.get_remote_labels_detectors()
         self._detector_selector.set_options(option_list=available_detector_labels)
@@ -317,6 +322,14 @@ class IntrinsicsPanel(BasePanel):
                 self.handle_response_series(response_series)
                 self._update_ui_controls()
         self._is_updating = False
+
+    def _handle_response_add_calibration_image_response(
+        self,
+        response: IntrinsicCalibrationImageAddResponse
+    ):
+        self.status_message_source.enqueue_status_message(
+            severity="info",
+            message=f"Added image {response.image_identifier}.")
 
     def _handle_response_calibrate(
         self,

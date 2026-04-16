@@ -6,7 +6,6 @@ from .parameters import \
     ParameterSpinboxInteger, \
     ParameterText
 from src.common import \
-    ErrorResponse, \
     KeyValueSimpleAbstract, \
     KeyValueSimpleAny, \
     KeyValueSimpleBool, \
@@ -19,7 +18,6 @@ from src.common import \
     KeyValueMetaEnum, \
     KeyValueMetaFloat, \
     KeyValueMetaInt, \
-    MCTResponse, \
     SeverityLabel, \
     StatusMessageSource
 from typing import Final
@@ -32,7 +30,6 @@ _UPDATE_INTERVAL_MILLISECONDS: Final[int] = 16
 class BasePanel(wx.Panel):
 
     panel_is_selected: bool
-    status_message_source: StatusMessageSource
     DEFAULT_SPACING_PX_VERTICAL: Final[int] = 4
     DEFAULT_SPACING_PX_LINE_TOP_BOTTOM: Final[int] = 8
 
@@ -41,19 +38,18 @@ class BasePanel(wx.Panel):
     def __init__(
         self,
         parent: wx.Window,
-        status_message_source: StatusMessageSource,
         name: str
     ):
         super().__init__(parent=parent, name=name)
         self.panel_is_selected = False
-        self.status_message_source = status_message_source
 
         self._update_loop_running = True
         wx.CallLater(_UPDATE_INTERVAL_MILLISECONDS, self.update_loop)
 
+    @staticmethod
     def populate_key_value_list_from_dynamic_ui(
-        self,
-        parameter_uis: list[ParameterBase]
+        parameter_uis: list[ParameterBase],
+        status_message_source: StatusMessageSource | None = None
     ) -> list[KeyValueSimpleAny]:
         key_values: list[KeyValueSimpleAny] = list()
         for parameter_ui in parameter_uis:
@@ -68,39 +64,41 @@ class BasePanel(wx.Panel):
             elif isinstance(parameter_ui, ParameterSpinboxInteger):
                 parameter_type = KeyValueSimpleInt
             else:
-                self.status_message_source.enqueue_status_message(
-                    severity=SeverityLabel.ERROR,
-                    message=f"Failed to determine parameter type from UI element for key {label}.")
+                if status_message_source is not None:
+                    status_message_source.enqueue_status_message(
+                        severity=SeverityLabel.ERROR,
+                        message=f"Failed to determine parameter type from UI element for key {label}.")
                 continue
             key_values.append(parameter_type(
                 key=label,
                 value=parameter_ui.get_value()))
         return key_values
 
+    @staticmethod
     def populate_dynamic_ui_from_key_value_list(
-        self,
         key_value_list: list[KeyValueMetaAny],
         containing_panel: wx.Panel,
-        containing_sizer: wx.BoxSizer
+        containing_sizer: wx.BoxSizer,
+        status_message_source: StatusMessageSource | None = None
     ) -> list[ParameterBase]:
         return_value: list[ParameterBase] = list()
         key_value: KeyValueMetaAbstract
         for key_value in key_value_list:
             if isinstance(key_value, KeyValueMetaBool):
-                return_value.append(self.add_control_checkbox(
+                return_value.append(BasePanel.add_control_checkbox(
                     parent=containing_panel,
                     sizer=containing_sizer,
                     label=key_value.key,
                     value=key_value.value))
             elif isinstance(key_value, KeyValueMetaEnum):
-                return_value.append(self.add_control_selector(
+                return_value.append(BasePanel.add_control_selector(
                     parent=containing_panel,
                     sizer=containing_sizer,
                     label=key_value.key,
                     selectable_values=key_value.allowable_values,
                     value=key_value.value))
             elif isinstance(key_value, KeyValueMetaFloat):
-                return_value.append(self.add_control_spinbox_float(
+                return_value.append(BasePanel.add_control_spinbox_float(
                     parent=containing_panel,
                     sizer=containing_sizer,
                     label=key_value.key,
@@ -110,7 +108,7 @@ class BasePanel(wx.Panel):
                     step_value=key_value.range_step,
                     digit_count=key_value.digit_count))
             elif isinstance(key_value, KeyValueMetaInt):
-                return_value.append(self.add_control_spinbox_integer(
+                return_value.append(BasePanel.add_control_spinbox_integer(
                     parent=containing_panel,
                     sizer=containing_sizer,
                     label=key_value.key,
@@ -119,40 +117,19 @@ class BasePanel(wx.Panel):
                     initial_value=key_value.value,
                     step_value=key_value.range_step))
             else:
-                self.status_message_source.enqueue_status_message(
-                    severity=SeverityLabel.ERROR,
-                    message=f"Unsupported parameter type {key_value.parsable_type} will not be handled")
+                if status_message_source is not None:
+                    status_message_source.enqueue_status_message(
+                        severity=SeverityLabel.ERROR,
+                        message=f"Unsupported parameter type {key_value.parsable_type} will not be handled")
         return return_value
 
-    def handle_error_response(
-        self,
-        response: ErrorResponse
-    ):
-        self.status_message_source.enqueue_status_message(
-            severity=SeverityLabel.ERROR,
-            message=f"Received error: {response.message}")
-
-    def handle_unknown_response(
-        self,
-        response: MCTResponse
-    ):
-        self.status_message_source.enqueue_status_message(
-            severity=SeverityLabel.ERROR,
-            message=f"Received unexpected response: {str(type(response))}")
-
-    def on_page_select(self):
-        self.status_message_source.enqueue_status_message(
-            severity=SeverityLabel.DEBUG,
-            message=f"{self.GetName()} on_page_select")
+    def on_ui_page_select(self):
         self.panel_is_selected = True
         if not self._update_loop_running:
             self._update_loop_running = True
             self.update_loop()
 
-    def on_page_deselect(self):
-        self.status_message_source.enqueue_status_message(
-            severity=SeverityLabel.DEBUG,
-            message=f"{self.GetName()} on_page_deselect")
+    def on_ui_page_deselect(self):
         self.panel_is_selected = False
 
     def update_loop(self) -> None:

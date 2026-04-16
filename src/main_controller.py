@@ -48,7 +48,7 @@ class MainController:
             callback=_on_image_add_callback)
         while (now_time - start_time).total_seconds() < 1:
             controller.update()
-            if not controller.is_busy_with_user_task():
+            if not controller.is_user_task_running():
                 break
             now_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
@@ -61,7 +61,7 @@ class MainController:
             callback=_on_image_get_callback)
         while (now_time - start_time).total_seconds() < 1:
             controller.update()
-            if not controller.is_busy_with_user_task():
+            if not controller.is_user_task_running():
                 break
             now_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
@@ -70,11 +70,11 @@ class MainController:
         logging.info("shutdown updates")
         while (now_time - start_time).total_seconds() < 1:
             controller.update()
-            if controller.get_controller_state() == MCTController.State.IDLE:
+            if controller.get_controller_state() == MCTController.State.CONFIGURED:
                 break
             now_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
-        if controller.get_controller_state() != MCTController.State.IDLE:
+        if controller.get_controller_state() != MCTController.State.CONFIGURED:
             exit(-1)
 
 

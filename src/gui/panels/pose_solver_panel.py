@@ -51,12 +51,10 @@ class PoseSolverPanel(BasePanel):
         self,
         parent: wx.Window,
         controller: MCTController,
-        status_message_source: StatusMessageSource,
         name: str = "PoseSolverPanel"
     ):
         super().__init__(
             parent=parent,
-            status_message_source=status_message_source,
             name=name)
         self._controller = controller
 
@@ -160,8 +158,8 @@ class PoseSolverPanel(BasePanel):
             elif not isinstance(response, EmptyResponse):
                 self.handle_unknown_response(response=response)
 
-    def on_page_select(self) -> None:
-        super().on_page_select()
+    def on_ui_page_select(self) -> None:
+        super().on_ui_page_select()
         selected_pose_solver_label: str = self._pose_solver_selector.selector.GetStringSelection()
         available_pose_solver_labels: list[str] = self._controller.get_remote_labels_mixer()
         self._pose_solver_selector.set_options(option_list=available_pose_solver_labels)

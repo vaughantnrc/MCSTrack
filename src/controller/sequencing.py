@@ -30,15 +30,12 @@ from src.common import \
     TimeSyncStartRequest, \
     TimeSyncStopRequest
 from src.detector import \
-    AnnotatorParametersGetRequest, \
-    AnnotatorParametersGetResponse, \
-    AnnotatorParametersSetRequest, \
-    CameraParametersGetRequest, \
-    CameraParametersGetResponse, \
-    CameraParametersSetRequest, \
-    CameraParametersSetResponse, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse, \
+    DetectorParametersGetRequest, \
+    DetectorParametersGetResponse, \
+    DetectorParametersSetRequest, \
+    DetectorParametersSetResponse, \
     DetectorQueryRequest, \
     DetectorQueryResponse, \
     DetectorStartRequest, \
@@ -619,8 +616,9 @@ class DetectorStartupSequencer(AbstractSequencer):
             self._send_request_series(
                 component_label=detector_label,
                 requests=[
-                    CameraParametersSetRequest(parameters=detector.camera_parameters),
-                    AnnotatorParametersSetRequest(parameters=detector.annotator_parameters),
+                    DetectorParametersSetRequest(
+                        camera_parameters=detector.camera_parameters,
+                        annotator_parameters=detector.annotator_parameters),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_4_set_parameters_responded)
 
@@ -635,8 +633,7 @@ class DetectorStartupSequencer(AbstractSequencer):
         if self._report_response_series_and_errors(
             response_series=response_series,
             expected_types=[
-                CameraParametersSetResponse,
-                EmptyResponse,
+                DetectorParametersSetResponse,
                 DequeueStatusMessagesResponse]
         ):
             return
@@ -655,8 +652,7 @@ class DetectorStartupSequencer(AbstractSequencer):
             self._send_request_series(
                 component_label=detector_label,
                 requests=[
-                    CameraParametersGetRequest(),
-                    AnnotatorParametersGetRequest(),
+                    DetectorParametersGetRequest(),
                     IntrinsicCalibrationResultGetActiveRequest(),
                     DequeueStatusMessagesRequest()],
                 callback=self._request_5_get_parameters_responded)
@@ -672,22 +668,19 @@ class DetectorStartupSequencer(AbstractSequencer):
         if self._report_response_series_and_errors(
             response_series=response_series,
             expected_types=[
-                CameraParametersGetResponse,
-                AnnotatorParametersGetResponse,
+                DetectorParametersGetResponse,
                 IntrinsicCalibrationResultGetActiveResponse,
                 DequeueStatusMessagesResponse]
         ):
             return
         detector_label: str = response_series.responder
         # noinspection PyTypeChecker
-        camera_response: CameraParametersGetResponse = response_series.series[0]
-        self.data_by_detector_label[detector_label].camera_parameters = camera_response.parameters
-        self.data_by_detector_label[detector_label].camera_resolution = camera_response.resolution
+        parameters_response: DetectorParametersGetResponse = response_series.series[0]
+        self.data_by_detector_label[detector_label].camera_resolution = parameters_response.camera_resolution
+        self.data_by_detector_label[detector_label].camera_parameters = parameters_response.camera_parameters
+        self.data_by_detector_label[detector_label].annotator_parameters = parameters_response.annotator_parameters
         # noinspection PyTypeChecker
-        annotator_response: AnnotatorParametersGetResponse = response_series.series[1]
-        self.data_by_detector_label[detector_label].annotator_parameters = annotator_response.parameters
-        # noinspection PyTypeChecker
-        calibration_response: IntrinsicCalibrationResultGetActiveResponse = response_series.series[2]
+        calibration_response: IntrinsicCalibrationResultGetActiveResponse = response_series.series[1]
         self.data_by_detector_label[detector_label].intrinsic_calibration = calibration_response.intrinsic_calibration
         self.data_by_detector_label[detector_label].done_get_parameters = True
 
@@ -1143,6 +1136,9 @@ class DetectorFrameGetSequencer(AbstractSequencer):
     def disable_image_collection(self) -> None:
         self._include_image = False
 
+    def includes_image(self) -> bool:
+        return self._include_image
+
     def reset(self) -> None:
         super().reset()
         self._include_detected = False
@@ -1510,6 +1506,17 @@ MixerShutdownSequencer: type[AbstractSingleRoundTripSequencer] = \
         request_type=MixerStopRequest,
         response_type=EmptyResponse)
 
+DetectorParametersGetSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorParametersGetSequencer",
+        request_type=DetectorParametersGetRequest,
+        response_type=DetectorParametersGetResponse)
+DetectorParametersSetSequencer: type[AbstractSingleRoundTripSequencer] = \
+    AbstractSingleRoundTripSequencer.create_subclass(
+        class_name="DetectorParametersSetSequencer",
+        request_type=DetectorParametersSetRequest,
+        response_type=DetectorParametersSetResponse)
+
 DetectorCalibrationIntrinsicCalculateSequencer: type[AbstractSingleRoundTripSequencer] = \
     AbstractSingleRoundTripSequencer.create_subclass(
         class_name="DetectorCalibrationIntrinsicCalculateSequencer",
@@ -1611,7 +1618,7 @@ MixerCalibrationExtrinsicResultMetadataUpdateSequencer: type[AbstractSingleRound
         class_name="MixerCalibrationExtrinsicResultMetadataUpdateSequencer",
         request_type=ExtrinsicCalibrationResultMetadataUpdateRequest,
         response_type=EmptyResponse)
-AnyCalibrationSequencer: type[AbstractSingleRoundTripSequencer] = Union[
+AnyUserInitiatedSequencer: type[AbstractSingleRoundTripSequencer] = Union[
     DetectorCalibrationIntrinsicCalculateSequencer,
     DetectorCalibrationIntrinsicDeleteStagedSequencer,
     DetectorCalibrationIntrinsicImageAddSequencer,

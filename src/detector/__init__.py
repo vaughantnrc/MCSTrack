@@ -1,17 +1,12 @@
 from .api import \
-    AnnotatorParametersGetRequest, \
-    AnnotatorParametersGetResponse, \
-    AnnotatorParametersSetRequest, \
     CameraImageGetRequest, \
     CameraImageGetResponse, \
-    CameraParametersGetRequest, \
-    CameraParametersGetResponse, \
-    CameraParametersSetRequest, \
-    CameraParametersSetResponse, \
-    CameraResolutionGetRequest, \
-    CameraResolutionGetResponse, \
     DetectorFrameGetRequest, \
     DetectorFrameGetResponse, \
+    DetectorParametersGetRequest, \
+    DetectorParametersGetResponse, \
+    DetectorParametersSetRequest, \
+    DetectorParametersSetResponse, \
     DetectorQueryRequest, \
     DetectorQueryResponse, \
     DetectorStartRequest, \
